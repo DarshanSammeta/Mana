@@ -58,12 +58,19 @@ export async function GET(req: Request) {
             sc.name = ${category} OR c.name = ${category}
           )
       )` : Prisma.empty}
-      ${(minPrice !== undefined || maxPrice !== undefined) ? Prisma.sql`AND EXISTS (
+      ${(minPrice !== undefined || maxPrice !== undefined) ? Prisma.sql`AND (
+        EXISTS (
           SELECT 1 FROM \`package\` p
           JOIN service s ON p.serviceId = s.id
           WHERE s.vendorProfileId = v.id
           AND p.price >= ${minPrice ?? 0}
           AND p.price <= ${maxPrice ?? 99999999}
+        ) OR EXISTS (
+          SELECT 1 FROM service s
+          WHERE s.vendorProfileId = v.id
+          AND s.basePrice >= ${minPrice ?? 0}
+          AND s.basePrice <= ${maxPrice ?? 99999999}
+        )
       )` : Prisma.empty}
       ${rating !== undefined ? Prisma.sql`AND (
           SELECT AVG(r.rating) FROM review r WHERE r.vendorId = v.id
@@ -96,7 +103,14 @@ export async function GET(req: Request) {
     const vendorsData = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT
         v.id,
-        (SELECT MIN(p.price) FROM \`package\` p JOIN service s ON p.serviceId = s.id WHERE s.vendorProfileId = v.id) as minPrice,
+        (
+          SELECT MIN(price_val)
+          FROM (
+            SELECT MIN(p.price) as price_val FROM \`package\` p JOIN service s ON p.serviceId = s.id WHERE s.vendorProfileId = v.id
+            UNION ALL
+            SELECT MIN(s.basePrice) as price_val FROM service s WHERE s.vendorProfileId = v.id
+          ) as all_prices
+        ) as minPrice,
         (SELECT AVG(r.rating) FROM review r WHERE r.vendorId = v.id) as avgRating,
         (SELECT COUNT(r.id) FROM review r WHERE r.vendorId = v.id) as reviewCount,
         ${(latNum !== null && lngNum !== null)
