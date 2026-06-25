@@ -1,0 +1,849 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model activitylog {
+  id        String   @id
+  userId    String
+  action    String
+  details   String?  @db.Text
+  createdAt DateTime @default(now())
+  user      user     @relation(fields: [userId], references: [id], map: "ActivityLog_userId_fkey")
+
+  @@index([userId], map: "ActivityLog_userId_fkey")
+}
+
+model auditlog {
+  id        String   @id
+  userId    String?
+  action    String
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  user      user?    @relation(fields: [userId], references: [id], map: "AuditLog_userId_fkey")
+
+  @@index([userId], map: "AuditLog_userId_fkey")
+}
+
+model availability {
+  id              String        @id
+  vendorProfileId String
+  date            DateTime
+  isAvailable     Boolean       @default(true)
+  startTime       String?
+  endTime         String?
+  bookingLimit    Int           @default(1)
+  vendorprofile   vendorprofile @relation(fields: [vendorProfileId], references: [id], map: "Availability_vendorProfileId_fkey")
+
+  @@index([vendorProfileId], map: "Availability_vendorProfileId_fkey")
+}
+
+model booking {
+  id                  String              @id
+  bookingNumber       String              @unique(map: "Booking_bookingNumber_key")
+  customerId          String
+  vendorId            String
+  status              booking_status      @default(PENDING)
+  eventName           String?
+  eventType           String?
+  eventDescription    String?             @db.Text
+  landmark            String?
+  city                String?
+  state               String?
+  pincode             String?
+  commissionRate      Decimal             @default(10.00) @db.Decimal(5, 2)
+  commissionAmount    Decimal             @default(0.00) @db.Decimal(10, 2)
+  vendorPayout        Decimal             @default(0.00) @db.Decimal(10, 2)
+  taxAmount           Decimal             @default(0.00) @db.Decimal(10, 2)
+  discountAmount      Decimal             @default(0.00) @db.Decimal(10, 2)
+  subTotal            Decimal             @default(0.00) @db.Decimal(10, 2)
+  totalAmount         Decimal             @db.Decimal(10, 2)
+  couponId            String?
+  eventDate           DateTime
+  eventTime           String?
+  eventLocation       String
+  latitude            Float?
+  longitude           Float?
+  guestCount          Int
+  specialInstructions String?             @db.Text
+  otp                 String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  coupon              coupon?             @relation(fields: [couponId], references: [id], map: "Booking_couponId_fkey")
+  user                user                @relation(fields: [customerId], references: [id], map: "Booking_customerId_fkey")
+  vendorprofile       vendorprofile       @relation(fields: [vendorId], references: [id], map: "Booking_vendorId_fkey")
+  bookingassignment   bookingassignment[]
+  bookingitem         bookingitem[]
+  bookingstatuslog    bookingstatuslog[]
+  conversation        conversation?
+  dispute             dispute?
+  eventcheckin        eventcheckin?
+  invoice             invoice?
+  message             message[]
+  payment             payment[]
+  payment_split       payment_split[]
+  refund              refund?
+  staff               staff[]
+
+  @@index([couponId], map: "Booking_couponId_fkey")
+  @@index([customerId], map: "Booking_customerId_fkey")
+  @@index([vendorId], map: "Booking_vendorId_fkey")
+}
+
+model bookingassignment {
+  id            String                   @id
+  bookingId     String
+  vendorId      String
+  status        bookingassignment_status @default(PENDING)
+  retryCount    Int                      @default(0)
+  priority      Int
+  notes         String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime
+  booking       booking                  @relation(fields: [bookingId], references: [id], map: "BookingAssignment_bookingId_fkey")
+  vendorprofile vendorprofile            @relation(fields: [vendorId], references: [id], map: "BookingAssignment_vendorId_fkey")
+
+  @@unique([bookingId, vendorId], map: "BookingAssignment_bookingId_vendorId_key")
+  @@index([vendorId], map: "BookingAssignment_vendorId_fkey")
+}
+
+model bookingitem {
+  id             String          @id
+  bookingId      String
+  serviceId      String
+  packageId      String?
+  price          Decimal         @db.Decimal(10, 2)
+  quantity       Int             @default(1)
+  booking        booking         @relation(fields: [bookingId], references: [id], map: "BookingItem_bookingId_fkey")
+  Renamedpackage Renamedpackage? @relation(fields: [packageId], references: [id], map: "BookingItem_packageId_fkey")
+  service        service         @relation(fields: [serviceId], references: [id], map: "BookingItem_serviceId_fkey")
+
+  @@index([bookingId], map: "BookingItem_bookingId_fkey")
+  @@index([packageId], map: "BookingItem_packageId_fkey")
+  @@index([serviceId], map: "BookingItem_serviceId_fkey")
+}
+
+model bookingstatuslog {
+  id        String                  @id
+  bookingId String
+  status    bookingstatuslog_status
+  notes     String?
+  createdAt DateTime                @default(now())
+  booking   booking                 @relation(fields: [bookingId], references: [id], map: "BookingStatusLog_bookingId_fkey")
+
+  @@index([bookingId], map: "BookingStatusLog_bookingId_fkey")
+}
+
+model staff {
+  id        String   @id
+  bookingId String
+  name      String
+  role      String
+  phone     String?
+  status    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  booking   booking  @relation(fields: [bookingId], references: [id], map: "Staff_bookingId_fkey")
+
+  @@index([bookingId], map: "Staff_bookingId_fkey")
+}
+
+model cart {
+  id        String     @id
+  userId    String     @unique(map: "Cart_userId_key")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  user      user       @relation(fields: [userId], references: [id], map: "Cart_userId_fkey")
+  cartitem  cartitem[]
+}
+
+model cartitem {
+  id        String   @id
+  cartId    String
+  type      String
+  targetId  String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  cart      cart     @relation(fields: [cartId], references: [id], onDelete: Cascade, map: "CartItem_cartId_fkey")
+
+  @@unique([cartId, targetId, type], map: "CartItem_cartId_targetId_type_key")
+}
+
+model category {
+  id             String        @id
+  name           String        @unique(map: "Category_name_key")
+  description    String?
+  icon           String?
+  commissionRate Decimal?      @db.Decimal(5, 2)
+  subcategory    subcategory[]
+}
+
+model conversation {
+  id                      String                    @id
+  bookingId               String?                   @unique(map: "Conversation_bookingId_key")
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime
+  booking                 booking?                  @relation(fields: [bookingId], references: [id], map: "Conversation_bookingId_fkey")
+  conversationparticipant conversationparticipant[]
+  message                 message[]
+}
+
+model conversationparticipant {
+  id             String       @id
+  conversationId String
+  userId         String
+  lastReadAt     DateTime     @default(now())
+  conversation   conversation @relation(fields: [conversationId], references: [id], map: "ConversationParticipant_conversationId_fkey")
+  user           user         @relation(fields: [userId], references: [id], map: "ConversationParticipant_userId_fkey")
+
+  @@unique([conversationId, userId], map: "ConversationParticipant_conversationId_userId_key")
+  @@index([userId], map: "ConversationParticipant_userId_fkey")
+}
+
+model coupon {
+  id               String    @id
+  code             String    @unique(map: "Coupon_code_key")
+  discountType     String
+  discountValue    Decimal   @db.Decimal(10, 2)
+  minBookingAmount Decimal?  @db.Decimal(10, 2)
+  expiryDate       DateTime
+  isActive         Boolean   @default(true)
+  booking          booking[]
+}
+
+model dispute {
+  id          String         @id
+  bookingId   String         @unique(map: "Dispute_bookingId_key")
+  raisedBy    String
+  reason      String
+  description String         @db.Text
+  evidence    Json?
+  status      dispute_status @default(OPEN)
+  resolution  String?        @db.Text
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime
+  booking     booking        @relation(fields: [bookingId], references: [id], map: "Dispute_bookingId_fkey")
+}
+
+model eventcheckin {
+  id          String    @id
+  bookingId   String    @unique(map: "EventCheckin_bookingId_key")
+  otp         String
+  generatedAt DateTime  @default(now())
+  verifiedAt  DateTime?
+  status      String    @default("PENDING")
+  booking     booking   @relation(fields: [bookingId], references: [id], map: "EventCheckin_bookingId_fkey")
+}
+
+model globalsettings {
+  id          String  @id
+  key         String  @unique(map: "GlobalSettings_key_key")
+  value       String
+  description String?
+}
+
+model invoice {
+  id            String   @id
+  bookingId     String   @unique(map: "Invoice_bookingId_key")
+  invoiceNumber String   @unique(map: "Invoice_invoiceNumber_key")
+  pdfUrl        String?
+  createdAt     DateTime @default(now())
+  booking       booking  @relation(fields: [bookingId], references: [id], map: "Invoice_bookingId_fkey")
+}
+
+model locationtrackinglog {
+  id        String   @id
+  userId    String
+  latitude  Float
+  longitude Float
+  accuracy  Float?
+  source    String?
+  createdAt DateTime @default(now())
+  user      user     @relation(fields: [userId], references: [id], map: "LocationTrackingLog_userId_fkey")
+
+  @@index([userId], map: "LocationTrackingLog_userId_fkey")
+}
+
+model message {
+  id                String              @id
+  conversationId    String
+  senderId          String
+  content           String              @db.Text
+  isRead            Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  bookingId         String?
+  booking           booking?            @relation(fields: [bookingId], references: [id], map: "Message_bookingId_fkey")
+  conversation      conversation        @relation(fields: [conversationId], references: [id], map: "Message_conversationId_fkey")
+  user              user                @relation(fields: [senderId], references: [id], map: "Message_senderId_fkey")
+  messageattachment messageattachment[]
+
+  @@index([bookingId], map: "Message_bookingId_fkey")
+  @@index([conversationId], map: "Message_conversationId_fkey")
+  @@index([senderId], map: "Message_senderId_fkey")
+}
+
+model messageattachment {
+  id        String   @id
+  messageId String
+  url       String
+  type      String
+  createdAt DateTime @default(now())
+  message   message  @relation(fields: [messageId], references: [id], map: "MessageAttachment_messageId_fkey")
+
+  @@index([messageId], map: "MessageAttachment_messageId_fkey")
+}
+
+model notification {
+  id        String   @id
+  userId    String
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+  user      user     @relation(fields: [userId], references: [id], map: "Notification_userId_fkey")
+
+  @@index([userId], map: "Notification_userId_fkey")
+}
+
+/// This model has been renamed to 'Renamedpackage' during introspection, because the original name 'package' is reserved.
+model Renamedpackage {
+  id          String        @id
+  serviceId   String
+  name        String
+  description String?       @db.Text
+  price       Decimal       @db.Decimal(10, 2)
+  inclusions  Json?
+  exclusions  Json?
+  images      Json?
+  videos      Json?
+  bookingitem bookingitem[]
+  service     service       @relation(fields: [serviceId], references: [id], map: "Package_serviceId_fkey")
+  pricingrule pricingrule[]
+
+  @@index([serviceId], map: "Package_serviceId_fkey")
+  @@map("package")
+}
+
+model payment {
+  id                String         @id
+  bookingId         String
+  amount            Decimal        @db.Decimal(10, 2)
+  currency          String         @default("INR")
+  status            payment_status @default(PENDING)
+  razorpayOrderId   String?        @unique(map: "Payment_razorpayOrderId_key")
+  razorpayPaymentId String?        @unique(map: "Payment_razorpayPaymentId_key")
+  razorpaySignature String?
+  method            String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime
+  booking           booking        @relation(fields: [bookingId], references: [id], map: "Payment_bookingId_fkey")
+  payment_split     payment_split?
+
+  @@index([bookingId], map: "Payment_bookingId_fkey")
+}
+
+model payment_split {
+  id             String        @id @default(cuid())
+  paymentId      String        @unique
+  bookingId      String
+  vendorId       String
+  customerId     String
+  totalAmount    Decimal       @db.Decimal(10, 2)
+  adminShare     Decimal       @db.Decimal(10, 2)
+  vendorShare    Decimal       @db.Decimal(10, 2)
+  commissionRate Decimal       @db.Decimal(5, 2)
+  status         String        @default("PENDING")
+  transactionId  String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  booking        booking       @relation(fields: [bookingId], references: [id])
+  customer       user          @relation(fields: [customerId], references: [id])
+  payment        payment       @relation(fields: [paymentId], references: [id])
+  vendor         vendorprofile @relation(fields: [vendorId], references: [id])
+
+  @@index([paymentId])
+  @@index([bookingId])
+  @@index([vendorId])
+  @@index([customerId])
+}
+
+model payout {
+  id            String        @id
+  vendorId      String
+  amount        Decimal       @db.Decimal(10, 2)
+  status        payout_status @default(PENDING)
+  reference     String?       @unique(map: "Payout_reference_key")
+  bankDetails   Json?
+  notes         String?
+  processedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  vendorprofile vendorprofile @relation(fields: [vendorId], references: [id], map: "Payout_vendorId_fkey")
+
+  @@index([vendorId], map: "Payout_vendorId_fkey")
+}
+
+model portfolio {
+  id              String        @id
+  vendorProfileId String
+  serviceId       String?
+  mediaUrl        String
+  mediaType       String
+  title           String?
+  description     String?
+  service         service?      @relation(fields: [serviceId], references: [id], map: "Portfolio_serviceId_fkey")
+  vendorprofile   vendorprofile @relation(fields: [vendorProfileId], references: [id], map: "Portfolio_vendorProfileId_fkey")
+
+  @@index([serviceId], map: "Portfolio_serviceId_fkey")
+  @@index([vendorProfileId], map: "Portfolio_vendorProfileId_fkey")
+}
+
+model pricingrule {
+  id             String         @id
+  packageId      String
+  minGuests      Int
+  maxGuests      Int
+  pricePerGuest  Decimal        @db.Decimal(10, 2)
+  flatFee        Decimal        @default(0.00) @db.Decimal(10, 2)
+  Renamedpackage Renamedpackage @relation(fields: [packageId], references: [id], map: "PricingRule_packageId_fkey")
+
+  @@index([packageId], map: "PricingRule_packageId_fkey")
+}
+
+model refreshtoken {
+  id         String   @id
+  token      String   @unique(map: "RefreshToken_token_key") @db.VarChar(500)
+  userId     String
+  expiryDate DateTime
+  createdAt  DateTime @default(now())
+  user       user     @relation(fields: [userId], references: [id], map: "RefreshToken_userId_fkey")
+
+  @@index([userId], map: "RefreshToken_userId_fkey")
+  @@index([expiryDate])
+}
+
+model refund {
+  id          String        @id
+  bookingId   String        @unique(map: "Refund_bookingId_key")
+  amount      Decimal       @db.Decimal(10, 2)
+  reason      String?
+  status      refund_status @default(REQUESTED)
+  processedAt DateTime?
+  createdAt   DateTime      @default(now())
+  booking     booking       @relation(fields: [bookingId], references: [id], map: "Refund_bookingId_fkey")
+}
+
+model review {
+  id             String        @id
+  userId         String
+  serviceId      String?
+  vendorId       String
+  rating         Int
+  comment        String?       @db.Text
+  images         Json?
+  vendorResponse String?       @db.Text
+  responseAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime
+  service        service?      @relation(fields: [serviceId], references: [id], map: "Review_serviceId_fkey")
+  user           user          @relation(fields: [userId], references: [id], map: "Review_userId_fkey")
+  vendorprofile  vendorprofile @relation(fields: [vendorId], references: [id], map: "Review_vendorId_fkey")
+
+  @@index([serviceId], map: "Review_serviceId_fkey")
+  @@index([userId], map: "Review_userId_fkey")
+  @@index([vendorId], map: "Review_vendorId_fkey")
+}
+
+model service {
+  id              String           @id
+  vendorProfileId String
+  serviceTypeId   String
+  title           String
+  description     String           @db.Text
+  pricingType     String           @default("PACKAGE")
+  basePrice       Decimal          @db.Decimal(10, 2)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  bookingitem     bookingitem[]
+  Renamedpackage  Renamedpackage[]
+  portfolio       portfolio[]
+  review          review[]
+  servicetype     servicetype      @relation(fields: [serviceTypeId], references: [id], map: "Service_serviceTypeId_fkey")
+  vendorprofile   vendorprofile    @relation(fields: [vendorProfileId], references: [id], map: "Service_vendorProfileId_fkey")
+
+  @@index([serviceTypeId], map: "Service_serviceTypeId_fkey")
+  @@index([vendorProfileId], map: "Service_vendorProfileId_fkey")
+}
+
+model servicetype {
+  id            String      @id
+  subcategoryId String
+  name          String
+  description   String?     @db.Text
+  service       service[]
+  subcategory   subcategory @relation(fields: [subcategoryId], references: [id], map: "ServiceType_subcategoryId_fkey")
+
+  @@index([subcategoryId], map: "ServiceType_subcategoryId_fkey")
+}
+
+model subcategory {
+  id          String        @id
+  categoryId  String
+  name        String
+  servicetype servicetype[]
+  category    category      @relation(fields: [categoryId], references: [id], map: "Subcategory_categoryId_fkey")
+
+  @@index([categoryId], map: "Subcategory_categoryId_fkey")
+}
+
+model transaction {
+  id          String             @id
+  walletId    String
+  bookingId   String?
+  amount      Decimal            @db.Decimal(10, 2)
+  type        transaction_type
+  status      transaction_status @default(COMPLETED)
+  description String?
+  reference   String?
+  createdAt   DateTime           @default(now())
+  wallet      wallet             @relation(fields: [walletId], references: [id], map: "Transaction_walletId_fkey")
+
+  @@index([walletId], map: "Transaction_walletId_fkey")
+  @@index([createdAt])
+}
+
+model user {
+  id                      String                    @id
+  email                   String                    @unique(map: "User_email_key")
+  password                String
+  fullName                String
+  mobileNumber            String                    @unique(map: "User_mobileNumber_key")
+  role                    user_role                 @default(CUSTOMER)
+  isEmailVerified         Boolean                   @default(false)
+  otp                     String?
+  otpExpiry               DateTime?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  lockUntil               DateTime?
+  loginAttempts           Int                       @default(0)
+  activitylog             activitylog[]
+  auditlog                auditlog[]
+  booking                 booking[]
+  cart                    cart?
+  conversationparticipant conversationparticipant[]
+  locationtrackinglog     locationtrackinglog[]
+  message                 message[]
+  notification            notification[]
+  payment_split           payment_split[]
+  refreshtoken            refreshtoken[]
+  review                  review[]
+  vendorprofile           vendorprofile?
+  wallet                  wallet?
+  wishlist                wishlist?
+}
+
+model vendordocument {
+  id              String                @id
+  vendorProfileId String
+  type            String
+  url             String
+  status          vendordocument_status @default(PENDING)
+  createdAt       DateTime              @default(now())
+  vendorprofile   vendorprofile         @relation(fields: [vendorProfileId], references: [id], map: "VendorDocument_vendorProfileId_fkey")
+
+  @@index([vendorProfileId], map: "VendorDocument_vendorProfileId_fkey")
+}
+
+model vendorprofile {
+  id                    String                           @id
+  userId                String                           @unique(map: "VendorProfile_userId_key")
+  businessName          String
+  description           String?                          @db.Text
+  logo                  String?
+  coverImage            String?
+  address               String?
+  city                  String?
+  state                 String?
+  zipCode               String?
+  latitude              Float?
+  longitude             Float?
+  serviceRadius         Float?
+  gstNumber             String?
+  bankDetails           Json?
+  verificationStatus    vendorprofile_verificationStatus @default(PENDING)
+  commissionRate        Decimal?                         @db.Decimal(5, 2)
+  rating                Float                            @default(0)
+  reviewCount           Int                              @default(0)
+  completionRate        Float                            @default(0)
+  responseTime          Int                              @default(0)
+  totalBookings         Int                              @default(0)
+  searchScore           Float                            @default(0)
+  availability          availability[]
+  booking               booking[]
+  bookingassignment     bookingassignment[]
+  payment_split         payment_split[]
+  payout                payout[]
+  portfolio             portfolio[]
+  recurringavailability recurringavailability[]
+  review                review[]
+  service               service[]
+  vendordocument        vendordocument[]
+  user                  user                             @relation(fields: [userId], references: [id], map: "VendorProfile_userId_fkey")
+  vendorscore           vendorscore?
+  vendorsubscription    vendorsubscription?
+  updatedAt             DateTime                         @updatedAt
+}
+
+model recurringavailability {
+  id              String        @id
+  vendorProfileId String
+  dayOfWeek       Int
+  isAvailable     Boolean       @default(true)
+  startTime       String?       @default("09:00")
+  endTime         String?       @default("18:00")
+  vendorprofile   vendorprofile @relation(fields: [vendorProfileId], references: [id], map: "RecurringAvailability_vendorProfileId_fkey")
+
+  @@unique([vendorProfileId, dayOfWeek])
+  @@index([vendorProfileId], map: "RecurringAvailability_vendorProfileId_fkey")
+}
+
+model vendorscore {
+  id                String        @id
+  vendorProfileId   String        @unique(map: "VendorScore_vendorProfileId_key")
+  ratingScore       Float         @default(0)
+  reviewScore       Float         @default(0)
+  distanceScore     Float         @default(0)
+  availabilityScore Float         @default(0)
+  completionScore   Float         @default(0)
+  finalScore        Float         @default(0)
+  updatedAt         DateTime
+  vendorprofile     vendorprofile @relation(fields: [vendorProfileId], references: [id], map: "VendorScore_vendorProfileId_fkey")
+}
+
+model wallet {
+  id               String        @id
+  userId           String?       @unique(map: "Wallet_userId_key")
+  balance          Decimal       @default(0.00) @db.Decimal(10, 2)
+  pendingBalance   Decimal       @default(0.00) @db.Decimal(10, 2)
+  withdrawable     Decimal       @default(0.00) @db.Decimal(10, 2)
+  lifetimeEarnings Decimal       @default(0.00) @db.Decimal(10, 2)
+  lifetimeSpending Decimal       @default(0.00) @db.Decimal(10, 2)
+  type             wallet_type   @default(USER)
+  transaction      transaction[]
+  user             user?         @relation(fields: [userId], references: [id], map: "Wallet_userId_fkey")
+}
+
+model webhookevent {
+  id        String   @id
+  eventId   String   @unique(map: "WebhookEvent_eventId_key")
+  source    String
+  type      String
+  payload   Json
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model wishlist {
+  id           String         @id
+  userId       String         @unique(map: "Wishlist_userId_key")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime
+  user         user           @relation(fields: [userId], references: [id], map: "Wishlist_userId_fkey")
+  wishlistitem wishlistitem[]
+}
+
+model wishlistitem {
+  id         String   @id
+  wishlistId String
+  type       String
+  targetId   String
+  createdAt  DateTime @default(now())
+  wishlist   wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade, map: "WishlistItem_wishlistId_fkey")
+
+  @@unique([wishlistId, targetId, type], map: "WishlistItem_wishlistId_targetId_type_key")
+}
+
+model passwordresettoken {
+  id        String   @id
+  token     String   @unique(map: "PasswordResetToken_token_key")
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId], map: "PasswordResetToken_userId_idx")
+}
+
+model subscriptionpayment {
+  id                 String                     @id
+  subscriptionId     String
+  amount             Decimal                    @db.Decimal(10, 2)
+  currency           String                     @default("INR")
+  razorpayOrderId    String                     @unique(map: "SubscriptionPayment_razorpayOrderId_key")
+  razorpayPaymentId  String?                    @unique(map: "SubscriptionPayment_razorpayPaymentId_key")
+  razorpaySignature  String?
+  status             subscriptionpayment_status @default(PENDING)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime
+  vendorsubscription vendorsubscription         @relation(fields: [subscriptionId], references: [id], map: "SubscriptionPayment_subscriptionId_fkey")
+
+  @@index([subscriptionId], map: "SubscriptionPayment_subscriptionId_fkey")
+}
+
+model subscriptionplan {
+  id                 String               @id
+  name               String               @unique(map: "SubscriptionPlan_name_key")
+  price              Decimal              @db.Decimal(10, 2)
+  durationMonths     Int                  @default(1)
+  listingLimit       Int                  @default(3)
+  features           Json
+  rank               Int                  @default(0)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  vendorsubscription vendorsubscription[]
+}
+
+model vendorsubscription {
+  id                  String                    @id
+  vendorProfileId     String                    @unique(map: "VendorSubscription_vendorProfileId_key")
+  planId              String
+  startDate           DateTime                  @default(now())
+  endDate             DateTime
+  status              vendorsubscription_status @default(ACTIVE)
+  autoRenew           Boolean                   @default(true)
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime
+  subscriptionpayment subscriptionpayment[]
+  subscriptionplan    subscriptionplan          @relation(fields: [planId], references: [id], map: "VendorSubscription_planId_fkey")
+  vendorprofile       vendorprofile             @relation(fields: [vendorProfileId], references: [id], map: "VendorSubscription_vendorProfileId_fkey")
+
+  @@index([planId], map: "VendorSubscription_planId_fkey")
+}
+
+enum bookingstatuslog_status {
+  PENDING
+  ACCEPTED
+  REJECTED
+  NEGOTIATING
+  CONFIRMED
+  CANCELLED
+  VENDOR_ASSIGNED
+  VENDOR_TRAVELING
+  VENDOR_ARRIVED
+  OTP_VERIFICATION_PENDING
+  EVENT_STARTED
+  EVENT_ONGOING
+  EVENT_COMPLETED
+}
+
+enum bookingassignment_status {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  REASSIGNED
+}
+
+enum payout_status {
+  PENDING
+  PROCESSING
+  RELEASED
+  FAILED
+}
+
+enum booking_status {
+  PENDING
+  ACCEPTED
+  REJECTED
+  NEGOTIATING
+  CONFIRMED
+  CANCELLED
+  VENDOR_ASSIGNED
+  VENDOR_TRAVELING
+  VENDOR_ARRIVED
+  OTP_VERIFICATION_PENDING
+  EVENT_STARTED
+  EVENT_ONGOING
+  EVENT_COMPLETED
+}
+
+enum payment_status {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum refund_status {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum transaction_type {
+  CREDIT
+  DEBIT
+  COMMISSION
+  REFUND
+  PAYOUT
+}
+
+enum vendordocument_status {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum transaction_status {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum user_role {
+  CUSTOMER
+  VENDOR
+  ADMIN
+}
+
+enum dispute_status {
+  OPEN
+  UNDER_INVESTIGATION
+  RESOLVED
+  CLOSED
+}
+
+enum wallet_type {
+  USER
+  VENDOR
+  PLATFORM
+}
+
+enum vendorprofile_verificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum vendorsubscription_status {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PAST_DUE
+}
+
+enum subscriptionpayment_status {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}

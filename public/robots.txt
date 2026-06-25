@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /vendor/dashboard/settings
+Disallow: /customer/settings
+
+Sitemap: https://manaevents.in/sitemap.xml

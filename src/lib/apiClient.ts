@@ -1,0 +1,47 @@
+import axios from "axios";
+import { useAuthStore } from "@/store/authStore";
+import { useLoadingStore } from "@/store/loadingStore";
+
+const apiClient = axios.create({
+  baseURL: "/api",
+});
+
+// Request Interceptor
+apiClient.interceptors.request.use(
+  (config) => {
+    const { accessToken } = useAuthStore.getState();
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response Interceptor for session expiration
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const { data } = await axios.post("/api/auth/refresh");
+        const { setUser, user } = useAuthStore.getState();
+        setUser(user, data.accessToken);
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        const { logout } = useAuthStore.getState();
+        logout();
+        if (typeof window !== "undefined") {
+          window.location.href = "/login?expired=true";
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient;

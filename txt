@@ -1,0 +1,11 @@
+Vendor Login
+•
+Email: vendor0@manaevents.in (up to vendor119@manaevents.in)
+•
+Password: Password@123
+Customer Login
+•
+Email: customer@manaevents.in
+•
+Password: Password@123
+The application also has a pool of other customers (e.g., customer0@example.com through customer19@example.com) all using the same password: Password@123.

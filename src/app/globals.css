@@ -1,0 +1,171 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Main Background & Surface */
+    --background: 210 40% 98%;    /* #F8FAFC */
+    --foreground: 222 47% 11%;    /* #111827 - Heading Text */
+
+    --card: 0 0% 100%;            /* #FFFFFF */
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Brand Colors */
+    --primary: 262 83% 50%;       /* #6D28D9 - Royal Purple */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 199 89% 48%;     /* #0EA5E9 - Sky Blue */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 96.1%;       /* #F1F5F9 */
+    --muted-foreground: 215 16% 47%; /* #64748B */
+
+    --accent: 38 92% 50%;         /* #F59E0B - Amber */
+    --accent-foreground: 0 0% 100%;
+
+    /* Semantic Colors */
+    --success: 161 94% 30%;       /* #10B981 */
+    --warning: 38 92% 50%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Borders & Inputs */
+    --border: 214 32% 91%;        /* #E2E8F0 */
+    --input: 214 32% 91%;
+    --ring: 262 83% 50%;
+
+    --radius: 0.75rem;            /* 12px */
+  }
+
+  .dark {
+    /* Keep light theme even in dark mode for this specific redesign request if desired,
+       but standardizing to a clean dark version of the professional palette */
+    --background: 222 47% 11%;
+    --foreground: 213 31% 91%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 213 31% 91%;
+
+    --primary: 227 92% 67%;
+    --primary-foreground: 0 0% 100%;
+
+    --border: 217.2 32.6% 17.5%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-blue-100 selection:text-blue-900;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* Navbar */
+  .nav-header {
+    @apply sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md dark:bg-slate-950/80;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Cards */
+  .premium-card {
+    @apply rounded-xl border bg-card p-6 text-card-foreground shadow-sm transition-all hover:shadow-md dark:hover:border-slate-700;
+  }
+
+  /* Hero Section */
+  .hero-gradient {
+    background: linear-gradient(135deg, #2563EB 0%, #1E293B 100%);
+  }
+
+  /* Dashboard Stats */
+  .stat-card {
+    @apply flex flex-col gap-1 rounded-xl border bg-card p-6 shadow-sm;
+  }
+
+  /* Form Elements */
+  .input-field {
+    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Tables */
+  .data-table-container {
+    @apply w-full overflow-auto rounded-lg border border-border bg-white dark:bg-slate-900;
+  }
+
+  .data-table {
+    @apply w-full caption-bottom text-sm;
+  }
+
+  .data-table-header {
+    @apply border-b bg-slate-50/50 dark:bg-slate-800/50;
+  }
+
+  /* Alerts */
+  .alert-success {
+    @apply relative w-full rounded-lg border border-success/20 bg-success/10 p-4 text-success;
+  }
+
+  .alert-warning {
+    @apply relative w-full rounded-lg border border-warning/20 bg-warning/10 p-4 text-warning;
+  }
+
+  .alert-danger {
+    @apply relative w-full rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-destructive;
+  }
+}
+
+.glass-morphism {
+  @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm dark:bg-slate-900/80 dark:border-slate-800;
+}
+
+.premium-gradient {
+  background: linear-gradient(135deg, #2563EB 0%, #1E293B 100%);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.shimmer {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(to right, #f6f7f8 4%, #edeef1 25%, #f6f7f8 36%);
+  background-size: 1000px 100%;
+}
+
+.dark .shimmer {
+  background: linear-gradient(to right, #1e293b 4%, #334155 25%, #1e293b 36%);
+  background-size: 1000px 100%;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
