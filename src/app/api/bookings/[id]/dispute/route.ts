@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
+import logger from "@/lib/logger";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
@@ -9,10 +10,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
   const payload = verifyAccessToken(token);
-  if (!payload) return NextResponse.json({ status: 403 });
+  if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
     const { reason, description, evidence } = await req.json();
+
+    if (!reason || !description) {
+      return NextResponse.json({ message: "Reason and description are required" }, { status: 400 });
+    }
 
     const booking = await prisma.booking.findUnique({
       where: { id: resolvedParams.id }
@@ -41,8 +46,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     return NextResponse.json(dispute);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    logger.error("Error raising dispute", { error, bookingId: resolvedParams.id, userId: payload.userId });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -52,7 +61,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
   const payload = verifyAccessToken(token);
-  if (!payload) return NextResponse.json({ status: 403 });
+  if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
     const dispute = await prisma.dispute.findUnique({
@@ -60,7 +69,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     });
 
     return NextResponse.json(dispute);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    logger.error("Error fetching dispute", { error, bookingId: resolvedParams.id });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
+    );
   }
 }

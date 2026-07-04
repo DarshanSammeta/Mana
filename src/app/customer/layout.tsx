@@ -1,7 +1,6 @@
 "use client";
 
 import CustomerSidebar from "@/components/customer/CustomerSidebar";
-import Navbar from "@/components/common/Navbar";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
@@ -37,9 +36,6 @@ export default function CustomerLayout({
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 text-foreground selection:bg-primary/10">
-      {/* Reusing the Global Pill-style Navbar */}
-      <Navbar />
-
       <div className="flex-1 w-full max-w-[1500px] mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8">
 
         {/* Professional Side Navigation for Account */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   Store,
@@ -21,41 +22,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuthStore } from "@/store/authStore";
+import { vendorService } from "@/services/vendor.service";
+import { toast } from "react-hot-toast";
 
 export default function VendorSettings() {
-  const { user } = useAuthStore();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("business");
   const [profile, setProfile] = useState<any>(null);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
-  const [bankDetails, setBankDetails] = useState({
-    accountHolder: "",
-    accountNumber: "",
-    bankName: "",
-    ifscCode: "",
-    accountType: "SAVINGS"
-  });
-
   const fetchProfile = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch("/api/vendor/profile", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProfile(data);
-        if (data.bankDetails) {
-          setBankDetails(data.bankDetails);
-        }
-      }
+      const data = await vendorService.getProfile();
+      setProfile(data);
     } catch (error) {
       console.error("Error fetching profile:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -66,26 +47,12 @@ export default function VendorSettings() {
   const handleSaveBankDetails = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch("/api/vendor/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ bankDetails })
-      });
-
-      if (res.ok) {
-        alert("Bank details updated successfully!");
-        fetchProfile();
-      } else {
-        const data = await res.json();
-        alert(data.message || "Failed to update bank details");
-      }
-    } catch (error) {
+      await vendorService.updateProfile({ bankDetails: profile.bankDetails });
+      toast.success("Bank details updated successfully!");
+      fetchProfile();
+    } catch (error: any) {
       console.error("Save Error:", error);
-      alert("An error occurred. Please try again.");
+      toast.error(error.response?.data?.message || "Failed to update bank details");
     } finally {
       setSaving(false);
     }
@@ -94,31 +61,17 @@ export default function VendorSettings() {
   const handleUpdateProfile = async () => {
     setUpdatingProfile(true);
     try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch("/api/vendor/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          businessName: profile.businessName,
-          description: profile.description,
-          gstNumber: profile.gstNumber,
-          city: profile.city
-        })
+      await vendorService.updateProfile({
+        businessName: profile.businessName,
+        description: profile.description,
+        gstNumber: profile.gstNumber,
+        city: profile.city
       });
-
-      if (res.ok) {
-        alert("Profile updated successfully!");
-        fetchProfile();
-      } else {
-        const data = await res.json();
-        alert(data.message || "Failed to update profile");
-      }
-    } catch (error) {
+      toast.success("Profile updated successfully!");
+      fetchProfile();
+    } catch (error: any) {
       console.error("Update Error:", error);
-      alert("An error occurred. Please try again.");
+      toast.error(error.response?.data?.message || "Failed to update profile");
     } finally {
       setUpdatingProfile(false);
     }
@@ -190,7 +143,12 @@ export default function VendorSettings() {
                     <div className="relative group">
                       <div className="h-28 w-28 rounded-[2.5rem] bg-card flex items-center justify-center border-4 border-card shadow-xl overflow-hidden">
                          {profile?.logo ? (
-                           <img src={profile.logo} alt="Logo" className="w-full h-full object-cover" />
+                           <Image
+                             src={profile.logo}
+                             alt="Logo"
+                             fill
+                             className="object-cover"
+                           />
                          ) : (
                            <Store className="h-10 w-10 text-primary/40" />
                          )}
@@ -293,8 +251,8 @@ export default function VendorSettings() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Account Holder Name</Label>
                       <Input
-                        value={bankDetails.accountHolder}
-                        onChange={(e) => setBankDetails({ ...bankDetails, accountHolder: e.target.value })}
+                        value={profile?.bankDetails?.accountHolder || ""}
+                        onChange={(e) => setProfile({ ...profile, bankDetails: { ...profile.bankDetails, accountHolder: e.target.value } })}
                         className="rounded-xl border-border bg-muted/50 font-bold"
                         placeholder="AS PER BANK RECORDS"
                       />
@@ -302,8 +260,8 @@ export default function VendorSettings() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Account Number</Label>
                       <Input
-                        value={bankDetails.accountNumber}
-                        onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value })}
+                        value={profile?.bankDetails?.accountNumber || ""}
+                        onChange={(e) => setProfile({ ...profile, bankDetails: { ...profile.bankDetails, accountNumber: e.target.value } })}
                         className="rounded-xl border-border bg-muted/50 font-bold"
                         placeholder="ENTER ACCOUNT NUMBER"
                       />
@@ -311,8 +269,8 @@ export default function VendorSettings() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Bank Name</Label>
                       <Input
-                        value={bankDetails.bankName}
-                        onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })}
+                        value={profile?.bankDetails?.bankName || ""}
+                        onChange={(e) => setProfile({ ...profile, bankDetails: { ...profile.bankDetails, bankName: e.target.value } })}
                         className="rounded-xl border-border bg-muted/50 font-bold"
                         placeholder="E.G. HDFC BANK"
                       />
@@ -320,8 +278,8 @@ export default function VendorSettings() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">IFSC Code</Label>
                       <Input
-                        value={bankDetails.ifscCode}
-                        onChange={(e) => setBankDetails({ ...bankDetails, ifscCode: e.target.value.toUpperCase() })}
+                        value={profile?.bankDetails?.ifscCode || ""}
+                        onChange={(e) => setProfile({ ...profile, bankDetails: { ...profile.bankDetails, ifscCode: e.target.value.toUpperCase() } })}
                         className="rounded-xl border-border bg-muted/50 font-bold"
                         placeholder="HDFC0001234"
                       />

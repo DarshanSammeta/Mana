@@ -1,34 +1,35 @@
-import { NextResponse } from "next/server";
+import { redis } from './redis';
+import { NextResponse } from 'next/server';
 
-const rates = new Map<string, { count: number; lastReset: number }>();
-
-export function rateLimit(ip: string, limit: number, windowMs: number) {
-  const now = Date.now();
-  const current = rates.get(ip) || { count: 0, lastReset: now };
-
-  if (now - current.lastReset > windowMs) {
-    current.count = 1;
-    current.lastReset = now;
-  } else {
-    current.count++;
-  }
-
-  rates.set(ip, current);
-
-  if (current.count > limit) {
-    return false;
-  }
-  return true;
+export interface RateLimitConfig {
+  limit: number;
+  window: number; // in seconds
 }
 
-// Memory cleaning interval (every hour)
-if (typeof window === "undefined") {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [ip, data] of rates.entries()) {
-      if (now - data.lastReset > 3600000) {
-        rates.delete(ip);
-      }
-    }
-  }, 3600000);
+export async function rateLimit(identifier: string, config: RateLimitConfig = { limit: 10, window: 60 }) {
+  const key = `ratelimit:${identifier}`;
+  const current = await redis.incr(key);
+
+  if (current === 1) {
+    await redis.expire(key, config.window);
+  }
+
+  const remaining = Math.max(0, config.limit - current);
+  const reset = await redis.ttl(key);
+
+  return {
+    success: current <= config.limit,
+    limit: config.limit,
+    remaining,
+    reset,
+  };
+}
+
+export function rateLimitResponse() {
+  return new NextResponse(JSON.stringify({ error: "Too many requests" }), {
+    status: 429,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }

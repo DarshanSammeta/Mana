@@ -1,7 +1,9 @@
 import twilio from 'twilio';
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
+import { SMS_CONFIG } from '@/config/sms';
+
+const accountSid = SMS_CONFIG.twilio.accountSid;
+const authToken = SMS_CONFIG.twilio.authToken;
 
 const getTwilioClient = () => {
   if (!accountSid || !authToken) {
@@ -21,7 +23,7 @@ export const sendSMS = async (to: string, message: string) => {
 
     const response = await client.messages.create({
       body: message,
-      from: process.env.TWILIO_PHONE_NUMBER,
+      from: SMS_CONFIG.twilio.phoneNumber,
       to: to
     });
     return response.sid;

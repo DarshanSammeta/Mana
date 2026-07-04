@@ -15,12 +15,19 @@ export async function GET(req: Request) {
     const bookings = await prisma.booking.findMany({
       where: { customerId: userId },
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        bookingNumber: true,
+        eventName: true,
+        eventDate: true,
+        status: true,
+        totalAmount: true,
+        createdAt: true,
         vendorprofile: {
           select: { businessName: true, logo: true }
         },
         bookingitem: {
-          include: {
+          select: {
             service: { select: { title: true } }
           }
         }

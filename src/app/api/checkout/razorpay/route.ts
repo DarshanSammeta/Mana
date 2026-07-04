@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { getRazorpay } from "@/lib/razorpay";
 import { verifyAccessToken } from "@/lib/auth";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
 
 export async function POST(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const payload = verifyAccessToken(token);
+    if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-  try {
     const { amount, bookingId, currency = "INR" } = await req.json();
     const razorpay = getRazorpay();
 
@@ -24,8 +26,7 @@ export async function POST(req: Request) {
     };
 
     const order = await razorpay.orders.create(options);
+    logger.info("Razorpay order created", { orderId: order.id, userId: payload.userId, bookingId });
     return NextResponse.json(order);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
-  }
+  });
 }

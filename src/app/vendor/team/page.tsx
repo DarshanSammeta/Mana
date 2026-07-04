@@ -8,11 +8,9 @@ import {
   Mail,
   Phone,
   MoreVertical,
-  CheckCircle2,
   Clock,
   Camera,
   Music,
-  Truck,
   User
 } from "lucide-react";
 import { cn } from "@/lib/utils";

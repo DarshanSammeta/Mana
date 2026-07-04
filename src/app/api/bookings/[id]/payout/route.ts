@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { calculateRevenue, getCommissionRate } from "@/lib/revenue";
+import logger from "@/lib/logger";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
@@ -48,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       // 1. Update Vendor Pending to Withdrawable (Assuming it was pending)
       // For simplicity here, we'll just credit the vendor wallet
       const vendorWallet = await tx.wallet.upsert({
-        where: { userId: booking.vendorprofile.userId },
+        where: { userId: booking.vendorprofile?.userId },
         update: {
           balance: { increment: revenue.vendorPayout },
           withdrawable: { increment: revenue.vendorPayout },
@@ -56,7 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         },
         create: {
           id: crypto.randomUUID(),
-          userId: booking.vendorprofile.userId,
+          userId: booking.vendorprofile?.userId || '',
           balance: revenue.vendorPayout,
           withdrawable: revenue.vendorPayout,
           lifetimeEarnings: revenue.vendorPayout,
@@ -139,7 +140,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     return NextResponse.json({ message: "Payout released successfully" });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    logger.error("Error releasing payout", { error, bookingId: resolvedParams.id });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
+    );
   }
 }

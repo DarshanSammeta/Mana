@@ -2,10 +2,8 @@
 
 import { motion } from "framer-motion";
 import {
-  ClipboardCheck,
   UserCheck,
   ShieldCheck,
-  MapPin,
   Key, // Replaced OtpCode with Key
   PartyPopper,
   CheckCircle2,

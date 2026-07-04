@@ -1,8 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
-  TrendingUp,
   Download,
   ArrowUpRight,
   Briefcase,
@@ -10,29 +8,28 @@ import {
   ShieldCheck,
   BarChart3,
   PieChart as PieChartIcon,
-  Calendar,
   ExternalLink,
   ChevronRight,
   Info
 } from "lucide-react";
 import CountUp from "react-countup";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  PieChart,
-  Pie
-} from "recharts";
 import { cn } from "@/lib/utils";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "@/components/vendor/TableSkeleton";
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+const ResponsiveContainer = dynamic(() => import("recharts").then((mod) => mod.ResponsiveContainer), { ssr: false });
+const BarChart = dynamic(() => import("recharts").then((mod) => mod.BarChart), { ssr: false });
+const Bar = dynamic(() => import("recharts").then((mod) => mod.Bar), { ssr: false });
+const XAxis = dynamic(() => import("recharts").then((mod) => mod.XAxis), { ssr: false });
+const YAxis = dynamic(() => import("recharts").then((mod) => mod.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import("recharts").then((mod) => mod.CartesianGrid), { ssr: false });
+const Tooltip = dynamic(() => import("recharts").then((mod) => mod.Tooltip), { ssr: false });
+const Cell = dynamic(() => import("recharts").then((mod) => mod.Cell), { ssr: false });
+const PieChart = dynamic(() => import("recharts").then((mod) => mod.PieChart), { ssr: false });
+const Pie = dynamic(() => import("recharts").then((mod) => mod.Pie), { ssr: false });
 
 const monthlyData = [
   { month: "Jan", revenue: 45000, commission: 4500 },

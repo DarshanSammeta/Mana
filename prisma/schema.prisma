@@ -12,7 +12,7 @@ model activitylog {
   id        String   @id
   userId    String
   action    String
-  details   String?  @db.Text
+  details   String?
   createdAt DateTime @default(now())
   user      user     @relation(fields: [userId], references: [id], map: "ActivityLog_userId_fkey")
 
@@ -32,14 +32,16 @@ model auditlog {
 }
 
 model availability {
-  id              String        @id
-  vendorProfileId String
-  date            DateTime
-  isAvailable     Boolean       @default(true)
-  startTime       String?
-  endTime         String?
-  bookingLimit    Int           @default(1)
-  vendorprofile   vendorprofile @relation(fields: [vendorProfileId], references: [id], map: "Availability_vendorProfileId_fkey")
+  id                String        @id
+  vendorProfileId   String
+  date              DateTime
+  isAvailable       Boolean       @default(true)
+  startTime         String?
+  endTime           String?
+  bookingLimit      Int           @default(1)
+  peakPriceModifier Decimal?      @db.Decimal(5, 2)
+  notes             String?
+  vendorprofile     vendorprofile @relation(fields: [vendorProfileId], references: [id], map: "Availability_vendorProfileId_fkey")
 
   @@index([vendorProfileId], map: "Availability_vendorProfileId_idx")
 }
@@ -52,7 +54,7 @@ model booking {
   status              booking_status      @default(PENDING)
   eventName           String?
   eventType           String?
-  eventDescription    String?             @db.Text
+  eventDescription    String?
   landmark            String?
   city                String?
   state               String?
@@ -71,10 +73,13 @@ model booking {
   latitude            Float?
   longitude           Float?
   guestCount          Int
-  specialInstructions String?             @db.Text
+  specialInstructions String?
   otp                 String?
+  idempotencyKey      String?             @unique
+  vendorConfirmedAt5d Boolean?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
+  checklist           Json?
   coupon              coupon?             @relation(fields: [couponId], references: [id], map: "Booking_couponId_fkey")
   user                user                @relation(fields: [customerId], references: [id], map: "Booking_customerId_fkey")
   vendorprofile       vendorprofile       @relation(fields: [vendorId], references: [id], map: "Booking_vendorId_fkey")
@@ -89,11 +94,15 @@ model booking {
   payment             payment[]
   payment_split       payment_split[]
   refund              refund?
+  review              review?
   staff               staff[]
 
   @@index([couponId], map: "Booking_couponId_idx")
   @@index([customerId], map: "Booking_customerId_idx")
   @@index([vendorId], map: "Booking_vendorId_idx")
+  @@index([status])
+  @@index([eventDate])
+  @@index([createdAt])
 }
 
 model bookingassignment {
@@ -176,13 +185,27 @@ model cartitem {
   @@unique([cartId, targetId, type], map: "CartItem_cartId_targetId_type_key")
 }
 
+model eventtype {
+  id          String     @id
+  name        String     @unique
+  description String?
+  image       String?
+  icon        String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  categories  category[] @relation("EventTypeToCategory")
+}
+
 model category {
   id             String        @id
   name           String        @unique(map: "Category_name_key")
   description    String?
   icon           String?
+  image          String?
   commissionRate Decimal?      @db.Decimal(5, 2)
   subcategory    subcategory[]
+  eventtypes     eventtype[]   @relation("EventTypeToCategory")
 }
 
 model conversation {
@@ -223,10 +246,10 @@ model dispute {
   bookingId   String         @unique(map: "Dispute_bookingId_key")
   raisedBy    String
   reason      String
-  description String         @db.Text
+  description String
   evidence    Json?
   status      dispute_status @default(OPEN)
-  resolution  String?        @db.Text
+  resolution  String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime
   booking     booking        @relation(fields: [bookingId], references: [id], map: "Dispute_bookingId_fkey")
@@ -275,7 +298,7 @@ model message {
   id                String              @id
   conversationId    String
   senderId          String
-  content           String              @db.Text
+  content           String
   isRead            Boolean             @default(false)
   createdAt         DateTime            @default(now())
   bookingId         String?
@@ -301,17 +324,37 @@ model messageattachment {
 }
 
 model notification {
-  id        String   @id
+  id        String                @id
   userId    String
   title     String
   message   String
-  type      String
-  isRead    Boolean  @default(false)
+  category  notification_category @default(SYSTEM)
+  priority  notification_priority @default(MEDIUM)
+  isRead    Boolean               @default(false)
   link      String?
-  createdAt DateTime @default(now())
-  user      user     @relation(fields: [userId], references: [id], map: "Notification_userId_fkey")
+  metadata  Json?
+  emailSent Boolean               @default(false)
+  pushSent  Boolean               @default(false)
+  smsSent   Boolean               @default(false)
+  createdAt DateTime              @default(now())
+  user      user                  @relation(fields: [userId], references: [id], map: "Notification_userId_fkey")
 
   @@index([userId], map: "Notification_userId_idx")
+  @@index([category])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model notification_preference {
+  id       String                @id
+  userId   String                @unique
+  category notification_category
+  email    Boolean               @default(true)
+  sms      Boolean               @default(false)
+  push     Boolean               @default(true)
+  user     user                  @relation(fields: [userId], references: [id], map: "NotificationPreference_userId_fkey")
+
+  @@unique([userId, category])
 }
 
 /// This model has been renamed to 'Renamedpackage' during introspection, because the original name 'package' is reserved.
@@ -319,7 +362,7 @@ model Renamedpackage {
   id          String        @id
   serviceId   String
   name        String
-  description String?       @db.Text
+  description String?
   price       Decimal       @db.Decimal(10, 2)
   inclusions  Json?
   exclusions  Json?
@@ -330,6 +373,7 @@ model Renamedpackage {
   pricingrule pricingrule[]
 
   @@index([serviceId], map: "Package_serviceId_idx")
+  @@index([price])
   @@map("package")
 }
 
@@ -443,24 +487,33 @@ model refund {
 }
 
 model review {
-  id             String        @id
-  userId         String
-  serviceId      String?
-  vendorId       String
-  rating         Int
-  comment        String?       @db.Text
-  images         Json?
-  vendorResponse String?       @db.Text
-  responseAt     DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime
-  service        service?      @relation(fields: [serviceId], references: [id], map: "Review_serviceId_fkey")
-  user           user          @relation(fields: [userId], references: [id], map: "Review_userId_fkey")
-  vendorprofile  vendorprofile @relation(fields: [vendorId], references: [id], map: "Review_vendorId_fkey")
+  id               String                  @id
+  userId           String
+  vendorId         String
+  bookingId        String                  @unique
+  serviceId        String?
+  rating           Int
+  comment          String?
+  images           Json?
+  videoUrl         String?
+  isVerified       Boolean                 @default(false)
+  moderationStatus review_moderationStatus @default(PENDING)
+  helpfulCount     Int                     @default(0)
+  reportCount      Int                     @default(0)
+  vendorResponse   String?
+  responseAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  booking          booking                 @relation(fields: [bookingId], references: [id], map: "Review_bookingId_fkey")
+  service          service?                @relation(fields: [serviceId], references: [id], map: "Review_serviceId_fkey")
+  user             user                    @relation(fields: [userId], references: [id], map: "Review_userId_fkey")
+  vendorprofile    vendorprofile           @relation(fields: [vendorId], references: [id], map: "Review_vendorId_fkey")
 
   @@index([serviceId], map: "Review_serviceId_idx")
   @@index([userId], map: "Review_userId_idx")
   @@index([vendorId], map: "Review_vendorId_idx")
+  @@index([bookingId], map: "Review_bookingId_idx")
+  @@index([moderationStatus])
 }
 
 model service {
@@ -468,7 +521,7 @@ model service {
   vendorProfileId String
   serviceTypeId   String
   title           String
-  description     String           @db.Text
+  description     String
   pricingType     String           @default("PACKAGE")
   basePrice       Decimal          @db.Decimal(10, 2)
   createdAt       DateTime         @default(now())
@@ -482,13 +535,15 @@ model service {
 
   @@index([serviceTypeId], map: "Service_serviceTypeId_idx")
   @@index([vendorProfileId], map: "Service_vendorProfileId_idx")
+  @@index([title])
+  @@index([basePrice])
 }
 
 model servicetype {
   id            String      @id
   subcategoryId String
   name          String
-  description   String?     @db.Text
+  description   String?
   service       service[]
   subcategory   subcategory @relation(fields: [subcategoryId], references: [id], map: "ServiceType_subcategoryId_fkey")
 
@@ -531,11 +586,13 @@ model user {
   isEmailVerified         Boolean                   @default(false)
   otp                     String?
   otpExpiry               DateTime?
+  profileImage            String?
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
   lockUntil               DateTime?
   loginAttempts           Int                       @default(0)
   activitylog             activitylog[]
+  addresses               address[]
   auditlog                auditlog[]
   booking                 booking[]
   cart                    cart?
@@ -543,12 +600,61 @@ model user {
   locationtrackinglog     locationtrackinglog[]
   message                 message[]
   notification            notification[]
+  notification_preference notification_preference?
   payment_split           payment_split[]
   refreshtoken            refreshtoken[]
   review                  review[]
   vendorprofile           vendorprofile?
   wallet                  wallet?
   wishlist                wishlist?
+
+  @@index([fullName])
+}
+
+model address {
+  id           String   @id @default(cuid())
+  userId       String
+  label        String
+  customLabel  String?
+  isDefault    Boolean  @default(false)
+  isFavorite   Boolean  @default(false)
+  fullName     String?
+  mobileNumber String?
+  street       String?
+  area         String?
+  locality     String?
+  landmark     String?
+  city         String
+  district     String?
+  state        String
+  country      String   @default("India")
+  pincode      String
+  latitude     Float
+  longitude    Float
+  timezone     String?
+  accuracy     Float?
+  source       String   @default("MANUAL")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([city])
+}
+
+model search_analytics {
+  id        String   @id @default(cuid())
+  query     String?
+  category  String?
+  city      String?
+  latitude  Float?
+  longitude Float?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([city])
+  @@index([category])
 }
 
 model vendordocument {
@@ -567,7 +673,7 @@ model vendorprofile {
   id                    String                           @id
   userId                String                           @unique(map: "VendorProfile_userId_key")
   businessName          String
-  description           String?                          @db.Text
+  description           String?
   logo                  String?
   coverImage            String?
   address               String?
@@ -576,7 +682,7 @@ model vendorprofile {
   zipCode               String?
   latitude              Float?
   longitude             Float?
-  serviceRadius         Float?
+  serviceRadius         Float?                           @default(50)
   gstNumber             String?
   bankDetails           Json?
   verificationStatus    vendorprofile_verificationStatus @default(PENDING)
@@ -587,20 +693,44 @@ model vendorprofile {
   responseTime          Int                              @default(0)
   totalBookings         Int                              @default(0)
   searchScore           Float                            @default(0)
+  featured              Boolean                          @default(false)
+  bufferTime            Int                              @default(0)
+  vacationMode          Boolean                          @default(false)
+  vacationStartDate     DateTime?
+  vacationEndDate       DateTime?
+  advanceBookingDays    Int                              @default(365)
+  minBookingNotice      Int                              @default(24)
+  createdAt             DateTime                         @default(now())
+  updatedAt             DateTime                         @updatedAt
+  baseTravelCharge      Decimal?                         @default(0.00) @db.Decimal(10, 2)
+  maxTravelDistance     Float?                           @default(100)
+  travelChargesPerKm    Decimal?                         @default(0.00) @db.Decimal(10, 2)
   availability          availability[]
   booking               booking[]
   bookingassignment     bookingassignment[]
+  expense               expense[]
   payment_split         payment_split[]
   payout                payout[]
   portfolio             portfolio[]
   recurringavailability recurringavailability[]
+  reportschedule        reportschedule?
   review                review[]
   service               service[]
   vendordocument        vendordocument[]
   user                  user                             @relation(fields: [userId], references: [id], map: "VendorProfile_userId_fkey")
   vendorscore           vendorscore?
   vendorsubscription    vendorsubscription?
-  updatedAt             DateTime                         @updatedAt
+
+  @@index([verificationStatus])
+  @@index([city])
+  @@index([rating])
+  @@index([reviewCount])
+  @@index([totalBookings])
+  @@index([businessName])
+  @@index([searchScore])
+  @@index([createdAt])
+  @@index([city, verificationStatus, rating])
+  @@index([verificationStatus, searchScore])
 }
 
 model recurringavailability {
@@ -610,6 +740,7 @@ model recurringavailability {
   isAvailable     Boolean       @default(true)
   startTime       String?       @default("09:00")
   endTime         String?       @default("18:00")
+  bookingLimit    Int           @default(1)
   vendorprofile   vendorprofile @relation(fields: [vendorProfileId], references: [id], map: "RecurringAvailability_vendorProfileId_fkey")
 
   @@unique([vendorProfileId, dayOfWeek])
@@ -726,6 +857,65 @@ model vendorsubscription {
   vendorprofile       vendorprofile             @relation(fields: [vendorProfileId], references: [id], map: "VendorSubscription_vendorProfileId_fkey")
 
   @@index([planId], map: "VendorSubscription_planId_idx")
+}
+
+model reportschedule {
+  id              String        @id @default(cuid())
+  vendorProfileId String        @unique
+  frequency       String        @default("MONTHLY")
+  format          String        @default("PDF")
+  recipientEmail  String?
+  reportTypes     Json
+  isActive        Boolean       @default(true)
+  lastRun         DateTime?
+  nextRun         DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  vendorprofile   vendorprofile @relation(fields: [vendorProfileId], references: [id])
+
+  @@index([vendorProfileId])
+  @@index([nextRun])
+}
+
+model expense {
+  id              String        @id @default(cuid())
+  vendorProfileId String
+  title           String
+  amount          Decimal       @db.Decimal(10, 2)
+  category        String
+  date            DateTime      @default(now())
+  status          String        @default("PAID")
+  reference       String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  vendorprofile   vendorprofile @relation(fields: [vendorProfileId], references: [id])
+
+  @@index([vendorProfileId])
+  @@index([category])
+  @@index([date])
+}
+
+enum notification_priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum notification_category {
+  BOOKING
+  PAYMENT
+  CHAT
+  SYSTEM
+  REVIEW
+  MARKETING
+}
+
+enum review_moderationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
 }
 
 enum bookingstatuslog_status {

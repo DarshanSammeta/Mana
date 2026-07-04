@@ -1,14 +1,28 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Decimal } from "@prisma/client/runtime/library";
+import { withErrorHandler } from "@/lib/error-handler";
+import { verifyAccessToken } from "@/lib/auth";
+import logger from "@/lib/logger";
+import { payout_status } from "@prisma/client";
+
+async function checkAdmin(req: Request) {
+  const token = req.headers.get("authorization")?.split(" ")[1];
+  if (!token) return null;
+  const payload = verifyAccessToken(token);
+  if (!payload || payload.role !== "ADMIN") return null;
+  return payload;
+}
 
 export async function GET(req: Request) {
-  try {
+  return withErrorHandler(async () => {
+    const admin = await checkAdmin(req);
+    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
 
     const payouts = await prisma.payout.findMany({
-      where: status ? { status: status as any } : {},
+      where: status ? { status: status as payout_status } : {},
       include: {
         vendorprofile: {
           select: {
@@ -26,14 +40,15 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(payouts);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }
 
 // Release/Process Payout
 export async function PATCH(req: Request) {
-  try {
+  return withErrorHandler(async () => {
+    const admin = await checkAdmin(req);
+    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
     const { payoutId, status, reference, notes } = await req.json();
 
     if (!payoutId || !status) {
@@ -62,8 +77,11 @@ export async function PATCH(req: Request) {
 
       // If released, we move money from Pending to Balance/Lifetime in Wallet
       if (status === "RELEASED") {
+         const wallet = await tx.wallet.findUnique({ where: { userId: payout.vendorprofile.userId } });
+         if (!wallet) throw new Error("Wallet not found for vendor");
+
          await tx.wallet.update({
-           where: { userId: payout.vendorprofile.userId },
+           where: { id: wallet.id },
            data: {
              pendingBalance: { decrement: p.amount },
              lifetimeEarnings: { increment: p.amount }
@@ -72,8 +90,8 @@ export async function PATCH(req: Request) {
 
          await tx.transaction.create({
            data: {
-             id: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
-             walletId: (await tx.wallet.findUnique({ where: { userId: payout.vendorprofile.userId } }))!.id,
+             id: crypto.randomUUID(),
+             walletId: wallet.id,
              amount: p.amount,
              type: "PAYOUT",
              status: "COMPLETED",
@@ -86,8 +104,8 @@ export async function PATCH(req: Request) {
       return p;
     });
 
+    logger.info("Payout updated by admin", { adminId: admin.userId, payoutId, status });
+
     return NextResponse.json(updatedPayout);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }

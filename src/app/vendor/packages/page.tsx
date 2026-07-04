@@ -1,68 +1,57 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { vendorService } from "@/services/vendor.service";
 import {
   Package,
   Plus,
   Search,
-  ChevronRight,
-  Zap,
   Layers,
   Edit2,
   Trash2,
   Copy,
-  ExternalLink,
   Filter,
-  CheckCircle2,
-  MoreVertical,
   AlertCircle
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
+interface PackageData {
+  id: string;
+  name: string;
+  price: number;
+  status: string;
+  serviceName: string;
+  inclusions: string[];
+}
+
 export default function VendorPackages() {
+  const [packages, setPackages] = useState<PackageData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1000);
-    return () => clearTimeout(timer);
-  }, []);
+    const fetchPackages = async () => {
+      try {
+        const services = await vendorService.getServices();
 
-  const packages = [
-    {
-      id: "PKG-1002",
-      name: "Luxury Wedding Gold",
-      service: "Catering",
-      price: "₹ 1,500",
-      unit: "plate",
-      items: 12,
-      status: "Active",
-      bookings: 45,
-    },
-    {
-      id: "PKG-1005",
-      name: "Corporate Lunch Elite",
-      service: "Catering",
-      price: "₹ 800",
-      unit: "plate",
-      items: 8,
-      status: "Active",
-      bookings: 128,
-    },
-    {
-      id: "PKG-1008",
-      name: "Birthday Party Basic",
-      service: "Catering",
-      price: "₹ 450",
-      unit: "plate",
-      items: 5,
-      status: "Draft",
-      bookings: 0,
-    },
-  ];
+        if (services && services.length > 0) {
+            const allPackages = await Promise.all(
+                services.map(async (service: { id: string; title: string }) => {
+                    const pkgs = await vendorService.getPackagesByService(service.id);
+                    return pkgs.map((p: any) => ({ ...p, serviceName: service.title }));
+                })
+            );
+            setPackages(allPackages.flat());
+        }
+      } catch (err) {
+        console.error("Failed to fetch packages", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPackages();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -121,7 +110,7 @@ export default function VendorPackages() {
                                 <Package className="h-5 w-5 text-primary" />
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold text-primary uppercase tracking-wider">{pkg.service}</p>
+                                <p className="text-[10px] font-bold text-primary uppercase tracking-wider">{pkg.serviceName}</p>
                                 <h3 className="text-base font-bold text-card-foreground group-hover:text-primary transition-colors line-clamp-1">{pkg.name}</h3>
                                 <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{pkg.id}</p>
                             </div>
@@ -129,8 +118,7 @@ export default function VendorPackages() {
 
                         <div className="mb-6">
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-bold text-foreground">{pkg.price}</span>
-                                <span className="text-xs text-muted-foreground font-medium">/ {pkg.unit}</span>
+                                <span className="text-2xl font-bold text-foreground">₹ {pkg.price?.toLocaleString()}</span>
                             </div>
                         </div>
 
@@ -140,14 +128,7 @@ export default function VendorPackages() {
                                     <Layers className="h-3 w-3" />
                                     <span>Deliverables</span>
                                 </div>
-                                <p className="text-sm font-bold text-foreground">{pkg.items} items</p>
-                            </div>
-                            <div className="space-y-1">
-                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                    <Zap className="h-3 w-3 text-cta" />
-                                    <span>Bookings</span>
-                                </div>
-                                <p className="text-sm font-bold text-foreground">{pkg.bookings}</p>
+                                <p className="text-sm font-bold text-foreground">{pkg.inclusions?.length || 0} items</p>
                             </div>
                         </div>
                     </div>

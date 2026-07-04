@@ -2,15 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { sendOTP } from "@/lib/sms/twilio";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
 
 export async function POST(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const payload = verifyAccessToken(token);
+    if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-  try {
     const { bookingId } = await req.json();
 
     const booking = await prisma.booking.findUnique({
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const checkin = await prisma.eventcheckin.upsert({
+    await prisma.eventcheckin.upsert({
       where: { bookingId },
       update: { otp, generatedAt: new Date(), verifiedAt: null, status: "PENDING" },
       create: { id: crypto.randomUUID(), bookingId, otp, status: "PENDING" }
@@ -35,23 +37,21 @@ export async function POST(req: Request) {
     try {
       await sendOTP(booking.user.mobileNumber, otp);
     } catch (smsError) {
-      console.error("Failed to send OTP SMS:", smsError);
+      logger.error("Failed to send OTP SMS", { error: smsError, bookingId, mobile: booking.user.mobileNumber });
     }
 
     return NextResponse.json({ message: "OTP generated and sent successfully" });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
-  }
+  });
 }
 
 export async function PATCH(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-  try {
     const { bookingId, otp } = await req.json();
 
     const checkin = await prisma.eventcheckin.findUnique({
@@ -89,7 +89,5 @@ export async function PATCH(req: Request) {
     });
 
     return NextResponse.json({ message: "OTP verified. Event started!" });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
-  }
+  });
 }

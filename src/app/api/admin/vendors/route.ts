@@ -2,21 +2,39 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
+
+async function checkAdmin(req: Request) {
+  const token = req.headers.get("authorization")?.split(" ")[1];
+  if (!token) return null;
+  const payload = verifyAccessToken(token);
+  if (!payload || payload.role !== "ADMIN") return null;
+  return payload;
+}
 
 export async function GET(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const admin = await checkAdmin(req);
+    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "ADMIN") {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
-
-  try {
     const vendors = await prisma.vendorprofile.findMany({
-      include: {
+      select: {
+        id: true,
+        businessName: true,
+        verificationStatus: true,
+        city: true,
+        state: true,
+        rating: true,
+        reviewCount: true,
         user: {
-          select: { fullName: true, email: true, mobileNumber: true }
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            mobileNumber: true,
+            createdAt: true
+          }
         }
       },
       orderBy: {
@@ -26,21 +44,14 @@ export async function GET(req: Request) {
       },
     });
     return NextResponse.json(vendors);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }
 
 export async function PATCH(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const admin = await checkAdmin(req);
+    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "ADMIN") {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
-
-  try {
     const body = await req.json();
     const { id, ...data } = body;
 
@@ -50,14 +61,14 @@ export async function PATCH(req: Request) {
     });
 
     await createAuditLog({
-      userId: payload.userId,
+      userId: admin.userId,
       action: "VENDOR_PROFILE_UPDATED",
       details: { vendorProfileId: id, updates: data },
       ipAddress: req.headers.get("x-forwarded-for") || "unknown"
     });
 
+    logger.info("Vendor profile updated by admin", { adminId: admin.userId, vendorProfileId: id, updates: data });
+
     return NextResponse.json(updatedVendor);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }

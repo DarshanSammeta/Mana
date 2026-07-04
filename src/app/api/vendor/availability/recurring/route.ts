@@ -21,9 +21,18 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(recurring);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ message }, { status: 500 });
   }
+}
+
+interface RecurringRule {
+  dayOfWeek: number;
+  isAvailable: boolean;
+  startTime: string;
+  endTime: string;
+  bookingLimit?: number;
 }
 
 export async function POST(req: Request) {
@@ -33,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { rules } = await req.json(); // Array of { dayOfWeek, isAvailable, startTime, endTime }
+    const { rules }: { rules: RecurringRule[] } = await req.json(); // Array of { dayOfWeek, isAvailable, startTime, endTime, bookingLimit }
     const profile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId }
     });
@@ -41,7 +50,7 @@ export async function POST(req: Request) {
     if (!profile) return NextResponse.json({ message: "Profile not found" }, { status: 404 });
 
     await prisma.$transaction(
-      rules.map((rule: any) =>
+      rules.map((rule) =>
         prisma.recurringavailability.upsert({
           where: {
             vendorProfileId_dayOfWeek: {
@@ -53,6 +62,7 @@ export async function POST(req: Request) {
             isAvailable: rule.isAvailable,
             startTime: rule.startTime,
             endTime: rule.endTime,
+            bookingLimit: rule.bookingLimit ?? 1,
           },
           create: {
             id: crypto.randomUUID(),
@@ -61,13 +71,15 @@ export async function POST(req: Request) {
             isAvailable: rule.isAvailable,
             startTime: rule.startTime,
             endTime: rule.endTime,
+            bookingLimit: rule.bookingLimit ?? 1,
           },
         })
       )
     );
 
     return NextResponse.json({ message: "Recurring availability updated" });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bad Request";
+    return NextResponse.json({ message }, { status: 400 });
   }
 }

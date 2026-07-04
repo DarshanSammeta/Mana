@@ -1,13 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
+import { vendorService } from "@/services";
 
 export function useSubscription() {
   return useQuery({
     queryKey: ["vendor-subscription"],
-    queryFn: async () => {
-      const res = await axios.get("/api/vendor/subscription");
-      return res.data;
-    },
+    queryFn: () => vendorService.getSubscription(),
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }

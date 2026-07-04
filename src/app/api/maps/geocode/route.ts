@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(coords);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

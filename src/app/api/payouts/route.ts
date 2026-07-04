@@ -32,9 +32,10 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(payouts);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Payouts Fetch Error:", error);
-    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ message }, { status: 500 });
   }
 }
 
@@ -127,8 +128,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ message: "Withdrawal request submitted", payout: result });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Payout Request Error:", error);
-    return NextResponse.json({ message: error.message || "Internal Server Error" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

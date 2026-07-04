@@ -1,34 +1,63 @@
-version: '3.8'
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
+
     ports:
       - "3000:3000"
-    environment:
-      - DATABASE_URL=mysql://root:password@db:3306/mana_events
-      - NODE_ENV=production
-    depends_on:
-      - db
-      - redis
 
-  db:
-    image: mysql:8.0
-    restart: always
+    env_file:
+      - .env
+
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: mana_events
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      DIRECT_URL: ${DIRECT_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      MEILISEARCH_HOST: ${MEILISEARCH_HOST:-http://meilisearch:7700}
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
+      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+      CRON_SECRET: ${CRON_SECRET}
+
+    depends_on:
+      - redis
+      - meilisearch
 
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
+    restart: unless-stopped
+
     ports:
       - "6379:6379"
 
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    restart: unless-stopped
+
+    ports:
+      - "7700:7700"
+
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_API_KEY}
+      MEILI_ENV: ${NODE_ENV:-production}
+
+    volumes:
+      - meili_data:/meili_data
+
 volumes:
-  mysql_data:
+  meili_data:

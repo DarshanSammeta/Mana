@@ -2,8 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { motion } from "framer-motion";
-import { Paperclip } from "lucide-react";
+import { Check, CheckCheck, Paperclip } from "lucide-react";
+import Image from "next/image";
 
 interface MessageBubbleProps {
   message: any;
@@ -24,14 +24,14 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
         )}
       >
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-        {message.attachments?.length > 0 && (
+        {message.messageattachment?.length > 0 && (
           <div className="mt-2 space-y-1">
-            {message.attachments.map((url: string, i: number) => {
-              const isImage = url.match(/\.(jpeg|jpg|gif|png)$/) != null;
+            {message.messageattachment.map((att: any, i: number) => {
+              const isImage = att.type === 'IMAGE' || att.url.match(/\.(jpeg|jpg|gif|png)$/) != null;
               return (
                 <a
                   key={i}
-                  href={url}
+                  href={att.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
@@ -40,7 +40,9 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
                   )}
                 >
                   {isImage ? (
-                    <img src={url} alt="attachment" className="w-full h-32 object-cover" />
+                    <div className="relative w-full h-32">
+                      <Image src={att.url} alt="attachment" fill className="object-cover" />
+                    </div>
                   ) : (
                     <div className="p-2 flex items-center gap-2 text-xs">
                       <Paperclip className="h-3 w-3" />
@@ -53,10 +55,21 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
           </div>
         )}
       </div>
-      <div className="flex items-center gap-1 mt-1 px-1">
-        <span className="text-[10px] text-gray-500 font-medium">
+      <div className="flex items-center gap-2 mt-1 px-1">
+        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
             {format(new Date(message.createdAt), "h:mm a")}
         </span>
+        {isOwn && (
+            <div className="flex">
+                {message.status === "read" || message.isRead ? (
+                    <CheckCheck className="h-3 w-3 text-blue-500" />
+                ) : message.status === "sent" ? (
+                    <CheckCheck className="h-3 w-3 text-gray-300" />
+                ) : (
+                    <Check className="h-3 w-3 text-gray-300" />
+                )}
+            </div>
+        )}
       </div>
     </div>
   );

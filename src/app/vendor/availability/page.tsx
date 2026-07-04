@@ -1,25 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Calendar as CalendarIcon,
   Save,
   Clock,
   ShieldCheck,
   AlertCircle,
-  Plus,
-  ChevronRight,
   Zap,
   Moon,
   Sun,
   Settings,
-  RefreshCw,
-  CheckCircle2,
-  XCircle
+  RefreshCw
 } from "lucide-react";
-import axios from "axios";
-import { useAuthStore } from "@/store/authStore";
+import { vendorService } from "@/services/vendor.service";
 import { toast } from "react-hot-toast";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, GlassCard } from "@/components/ui/card";
@@ -30,33 +25,65 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+interface Availability {
+  id: string;
+  vendorId: string;
+  date: string;
+  isAvailable: boolean;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+interface RecurringRule {
+  id?: string;
+  vendorId?: string;
+  dayOfWeek: number;
+  isAvailable: boolean;
+  startTime: string | null;
+  endTime: string | null;
+}
+
 export default function VendorAvailability() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [availability, setAvailability] = useState<any[]>([]);
-  const [recurringRules, setRecurringRules] = useState<any[]>([]);
+  const [availability, setAvailability] = useState<Availability[]>([]);
+  const [recurringRules, setRecurringRules] = useState<RecurringRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("calendar");
+  const [vendorSettings, setVendorSettings] = useState({
+    bufferTime: 0,
+    vacationMode: false,
+    vacationStartDate: null as string | null,
+    vacationEndDate: null as string | null,
+    minBookingNotice: 24,
+    advanceBookingDays: 365,
+  });
   const [currentDay, setCurrentDay] = useState({
     isAvailable: true,
     startTime: "09:00",
     endTime: "18:00",
   });
-  const { accessToken } = useAuthStore();
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [availRes, recurringRes] = await Promise.all([
-        axios.get("/api/vendor/availability", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        axios.get("/api/vendor/availability/recurring", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
+      const [availRes, recurringRes, profileRes] = await Promise.all([
+        vendorService.getAvailability(),
+        vendorService.getRecurringAvailability(),
+        vendorService.getProfile()
       ]);
-      setAvailability(availRes.data);
-      setRecurringRules(recurringRes.data);
-    } catch (error) {
+      setAvailability(availRes);
+      setRecurringRules(recurringRes);
+
+      const profile = profileRes;
+      setVendorSettings({
+        bufferTime: profile.bufferTime || 0,
+        vacationMode: profile.vacationMode || false,
+        vacationStartDate: profile.vacationStartDate ? new Date(profile.vacationStartDate).toISOString().split('T')[0] : null,
+        vacationEndDate: profile.vacationEndDate ? new Date(profile.vacationEndDate).toISOString().split('T')[0] : null,
+        minBookingNotice: profile.minBookingNotice || 24,
+        advanceBookingDays: profile.advanceBookingDays || 365,
+      });
+    } catch {
       toast.error("Failed to fetch data");
     } finally {
       setLoading(false);
@@ -64,8 +91,9 @@ export default function VendorAvailability() {
   };
 
   useEffect(() => {
-    if (accessToken) fetchData();
-  }, [accessToken]);
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (date) {
@@ -98,40 +126,50 @@ export default function VendorAvailability() {
   const handleSaveDay = async () => {
     if (!date) return;
     try {
-      await axios.post("/api/vendor/availability", {
+      await vendorService.updateAvailability({
         date: date.toISOString(),
         ...currentDay
-      }, {
-        headers: { Authorization: `Bearer ${accessToken}` },
       });
       toast.success("Availability updated for " + date.toLocaleDateString());
       fetchData();
-    } catch (error) {
+    } catch {
       toast.error("Update failed");
     }
   };
 
   const handleSaveRecurring = async () => {
     try {
-      await axios.post("/api/vendor/availability/recurring", {
-        rules: recurringRules
-      }, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      await vendorService.updateRecurringAvailability(recurringRules);
       toast.success("Recurring rules updated");
       fetchData();
-    } catch (error) {
+    } catch {
       toast.error("Failed to save recurring rules");
     }
   };
 
-  const updateRecurringRule = (dayOfWeek: number, field: string, value: any) => {
+  const handleSaveSettings = async () => {
+    try {
+      await vendorService.updateProfile(vendorSettings);
+      toast.success("Availability settings updated");
+      fetchData();
+    } catch {
+      toast.error("Failed to save settings");
+    }
+  };
+
+  const updateRecurringRule = (dayOfWeek: number, field: string, value: string | boolean) => {
     setRecurringRules(prev => {
         const existing = prev.find(r => r.dayOfWeek === dayOfWeek);
         if (existing) {
-            return prev.map(r => r.dayOfWeek === dayOfWeek ? { ...r, [field]: value } : r);
+            return prev.map(r => r.dayOfWeek === dayOfWeek ? { ...r, [field]: value } as RecurringRule : r);
         } else {
-            const newRule = { dayOfWeek, isAvailable: true, startTime: "09:00", endTime: "18:00", [field]: value };
+            const newRule: RecurringRule = {
+                dayOfWeek,
+                isAvailable: true,
+                startTime: "09:00",
+                endTime: "18:00",
+                [field]: value
+            } as any;
             return [...prev, newRule];
         }
     });
@@ -174,6 +212,7 @@ export default function VendorAvailability() {
         <TabsList className="bg-secondary/50 p-1 rounded-2xl mb-8">
             <TabsTrigger value="calendar" className="rounded-xl px-8 font-bold data-[state=active]:bg-primary data-[state=active]:text-white">Calendar View</TabsTrigger>
             <TabsTrigger value="recurring" className="rounded-xl px-8 font-bold data-[state=active]:bg-primary data-[state=active]:text-white">Recurring Rules</TabsTrigger>
+            <TabsTrigger value="settings" className="rounded-xl px-8 font-bold data-[state=active]:bg-primary data-[state=active]:text-white">Enterprise Settings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="calendar" className="mt-0">
@@ -346,7 +385,7 @@ export default function VendorAvailability() {
                                                 <Clock className="h-4 w-4 text-muted-foreground" />
                                                 <input
                                                     type="time"
-                                                    value={rule.startTime}
+                                                    value={rule.startTime ?? ""}
                                                     onChange={(e) => updateRecurringRule(index, 'startTime', e.target.value)}
                                                     className="bg-white border-none rounded-xl h-10 px-3 font-bold text-sm shadow-sm outline-none"
                                                 />
@@ -355,7 +394,7 @@ export default function VendorAvailability() {
                                             <div className="flex items-center gap-2">
                                                 <input
                                                     type="time"
-                                                    value={rule.endTime}
+                                                    value={rule.endTime ?? ""}
                                                     onChange={(e) => updateRecurringRule(index, 'endTime', e.target.value)}
                                                     className="bg-white border-none rounded-xl h-10 px-3 font-bold text-sm shadow-sm outline-none"
                                                 />
@@ -374,6 +413,122 @@ export default function VendorAvailability() {
                     </div>
                 </CardContent>
             </Card>
+        </TabsContent>
+
+        <TabsContent value="settings">
+            <div className="grid md:grid-cols-2 gap-8">
+                <Card className="border-none shadow-sm rounded-[2.5rem] overflow-hidden bg-white">
+                    <CardHeader className="bg-secondary/30 pb-6">
+                        <CardTitle className="flex items-center gap-2">
+                            <ShieldCheck className="h-5 w-5 text-primary" />
+                            Booking Controls
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-8 space-y-6">
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/20 border border-border/30">
+                                <div className="space-y-1">
+                                    <Label className="font-black">Vacation Mode</Label>
+                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Instantly block all new bookings</p>
+                                </div>
+                                <Switch
+                                    checked={vendorSettings.vacationMode}
+                                    onCheckedChange={(checked) => setVendorSettings({...vendorSettings, vacationMode: checked})}
+                                />
+                            </div>
+
+                            {vendorSettings.vacationMode && (
+                                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest">Start Date</Label>
+                                        <input
+                                            type="date"
+                                            value={vendorSettings.vacationStartDate || ""}
+                                            onChange={(e) => setVendorSettings({...vendorSettings, vacationStartDate: e.target.value})}
+                                            className="w-full bg-secondary/50 border-none rounded-xl h-12 px-4 font-bold outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase tracking-widest">End Date</Label>
+                                        <input
+                                            type="date"
+                                            value={vendorSettings.vacationEndDate || ""}
+                                            onChange={(e) => setVendorSettings({...vendorSettings, vacationEndDate: e.target.value})}
+                                            className="w-full bg-secondary/50 border-none rounded-xl h-12 px-4 font-bold outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label className="font-black">Minimum Booking Notice (Hours)</Label>
+                                <input
+                                    type="number"
+                                    value={vendorSettings.minBookingNotice}
+                                    onChange={(e) => setVendorSettings({...vendorSettings, minBookingNotice: parseInt(e.target.value)})}
+                                    className="w-full bg-secondary/50 border-none rounded-xl h-12 px-4 font-bold outline-none"
+                                />
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Prevent last-minute surprise bookings</p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="font-black">Advance Booking Window (Days)</Label>
+                                <input
+                                    type="number"
+                                    value={vendorSettings.advanceBookingDays}
+                                    onChange={(e) => setVendorSettings({...vendorSettings, advanceBookingDays: parseInt(e.target.value)})}
+                                    className="w-full bg-secondary/50 border-none rounded-xl h-12 px-4 font-bold outline-none"
+                                />
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">How far in advance can customers book you?</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-sm rounded-[2.5rem] overflow-hidden bg-white">
+                    <CardHeader className="bg-secondary/30 pb-6">
+                        <CardTitle className="flex items-center gap-2">
+                            <Clock className="h-5 w-5 text-primary" />
+                            Workflow Optimization
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-8 space-y-6">
+                        <div className="space-y-2">
+                            <Label className="font-black">Buffer Time (Minutes)</Label>
+                            <div className="flex items-center gap-4">
+                                <input
+                                    type="number"
+                                    value={vendorSettings.bufferTime}
+                                    onChange={(e) => setVendorSettings({...vendorSettings, bufferTime: parseInt(e.target.value)})}
+                                    className="flex-1 bg-secondary/50 border-none rounded-xl h-12 px-4 font-bold outline-none"
+                                />
+                                <span className="font-bold text-muted-foreground">mins</span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Time needed between consecutive events for prep & travel</p>
+                        </div>
+
+                        <GlassCard className="p-6 border-none bg-blue-500/5" animateHover={false}>
+                            <div className="flex gap-4">
+                                <Zap className="h-6 w-6 text-blue-500 shrink-0" />
+                                <div>
+                                    <h4 className="font-black text-blue-700">Pro Tip</h4>
+                                    <p className="text-xs text-blue-600 leading-relaxed font-medium mt-1">
+                                        Setting a 60-minute buffer time automatically prevents bookings that are too close to each other, ensuring you&apos;re never rushed.
+                                    </p>
+                                </div>
+                            </div>
+                        </GlassCard>
+
+                        <div className="pt-4">
+                            <Button className="w-full h-14 rounded-2xl gap-2 font-black text-lg shadow-xl shadow-primary/20 transition-all hover:scale-[1.02]" onClick={handleSaveSettings}>
+                                <Save className="h-5 w-5" /> Save Enterprise Settings
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         </TabsContent>
       </Tabs>
     </motion.div>

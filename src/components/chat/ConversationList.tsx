@@ -6,7 +6,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useAuthStore } from "@/store/authStore";
-import { motion } from "framer-motion";
 
 interface ConversationListProps {
   selectedId?: string;

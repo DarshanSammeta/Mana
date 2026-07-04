@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuthStore } from "@/store/authStore";
 
 export default function AuthHydrationFix({ children }: { children: React.ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);

@@ -1,19 +1,29 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
 import Link from "next/link";
-
-const locations = [
-  { name: "Hyderabad", count: "1,200+", image: "https://images.unsplash.com/photo-1595180639912-799d7a220268?w=800&auto=format&fit=crop" },
-  { name: "Bangalore", count: "950+", image: "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?w=800&auto=format&fit=crop" },
-  { name: "Chennai", count: "800+", image: "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800&auto=format&fit=crop" },
-  { name: "Mumbai", count: "1,500+", image: "https://images.unsplash.com/photo-1529253355930-ddbe423a2ac7?w=800&auto=format&fit=crop" },
-  { name: "Delhi", count: "1,800+", image: "https://images.unsplash.com/photo-1587474260584-136574528ed5?w=800&auto=format&fit=crop" },
-  { name: "Pune", count: "600+", image: "https://images.unsplash.com/photo-1594918732684-25e14b6480f2?w=800&auto=format&fit=crop" },
-  { name: "Vijayawada", count: "350+", image: "https://images.unsplash.com/photo-1621259182978-f0331524935f?w=800&auto=format&fit=crop" },
-  { name: "Visakhapatnam", count: "420+", image: "https://images.unsplash.com/photo-1626014303706-62d976375611?w=800&auto=format&fit=crop" },
-];
+import Image from "next/image";
+import { popularLocations } from "@/data/home/locations";
+import { useEffect, useState } from "react";
 
 export default function PopularLocations() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <section className="py-24 bg-secondary/20">
+        <div className="max-w-[1500px] mx-auto px-4">
+          <div className="h-[400px] w-full bg-gray-100 animate-pulse rounded-[2rem]" />
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-24 bg-secondary/20">
       <div className="max-w-[1500px] mx-auto px-4">
@@ -27,7 +37,7 @@ export default function PopularLocations() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {locations.map((loc, i) => (
+          {popularLocations.map((loc, i) => (
             <motion.div
               key={loc.name}
               initial={{ opacity: 0, scale: 0.95 }}
@@ -36,10 +46,12 @@ export default function PopularLocations() {
               transition={{ delay: i * 0.05 }}
             >
               <Link href={`/marketplace?city=${loc.name}`} className="group relative block overflow-hidden rounded-[2rem] aspect-[4/3] shadow-lg">
-                <img
+                <Image
                   src={loc.image}
                   alt={loc.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  fill
+                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  className="object-cover group-hover:scale-110 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                 <div className="absolute bottom-6 left-6 text-white">

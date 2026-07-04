@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import {
   Wallet,
   ArrowUpRight,
@@ -12,39 +12,39 @@ import {
   TrendingUp,
   ShieldCheck,
   ChevronRight,
-  Search
+  Search,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import CountUp from "react-countup";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { customerService } from "@/services";
+import { useInView } from "react-intersection-observer";
 
 export default function WalletPage() {
-  const [wallet, setWallet] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { ref, inView } = useInView();
+
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: loading,
+  } = useInfiniteQuery({
+    queryKey: ["customer-wallet"],
+    queryFn: ({ pageParam }) => customerService.getWallet(20, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
 
   useEffect(() => {
-    fetchWallet();
-  }, []);
-
-  const fetchWallet = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/customer/wallet", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setWallet(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch wallet", error);
-    } finally {
-      setLoading(false);
+    if (inView && hasNextPage) {
+      fetchNextPage();
     }
-  };
+  }, [inView, fetchNextPage, hasNextPage]);
 
   if (loading) {
     return (
@@ -58,6 +58,9 @@ export default function WalletPage() {
       </div>
     );
   }
+
+  const wallet = data?.pages[0]; // Wallet stats are on every page response, but we take first
+  const transactions = data?.pages.flatMap((page) => page.items) || [];
 
   return (
     <div className="space-y-10">
@@ -164,9 +167,9 @@ export default function WalletPage() {
          </div>
 
          <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm">
-            {wallet?.transaction?.length > 0 ? (
+            {transactions.length > 0 ? (
                <div className="divide-y divide-slate-100">
-                  {wallet.transaction.map((tx: any) => (
+                  {transactions.map((tx: any) => (
                      <div key={tx.id} className="p-6 md:p-8 flex items-center justify-between hover:bg-slate-50/50 transition-all cursor-pointer group">
                         <div className="flex items-center gap-6">
                            <div className={cn(
@@ -204,6 +207,13 @@ export default function WalletPage() {
                         </div>
                      </div>
                   ))}
+                  <div ref={ref} className="p-8 flex justify-center">
+                    {isFetchingNextPage ? (
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    ) : hasNextPage ? (
+                      <span className="text-xs font-black uppercase text-slate-400">Scroll for more</span>
+                    ) : null}
+                  </div>
                </div>
             ) : (
                <div className="py-24 text-center">

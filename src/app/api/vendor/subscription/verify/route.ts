@@ -1,3 +1,4 @@
+import { RAZORPAY_CONFIG } from "@/config/razorpay";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
 
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+      .createHmac("sha256", RAZORPAY_CONFIG.keySecret!)
       .update(body.toString())
       .digest("hex");
 

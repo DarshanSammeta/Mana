@@ -333,12 +333,12 @@ async function main() {
     }
   }
 
-  // 9. Create Bookings (100 Completed, 50 Pending, 25 Cancelled)
-  console.log("📅 Generating 175 Sample Bookings...");
+  // 9. Create Bookings (200 Completed, 100 Pending, 50 Cancelled)
+  console.log("📅 Generating 350 Sample Bookings over 6 months...");
   const bookingConfigs = [
-    { status: 'EVENT_COMPLETED', count: 100, paymentStatus: 'SUCCESS' },
-    { status: 'PENDING', count: 50, paymentStatus: 'PENDING' },
-    { status: 'CANCELLED', count: 25, paymentStatus: 'FAILED' }
+    { status: 'EVENT_COMPLETED', count: 200, paymentStatus: 'SUCCESS' },
+    { status: 'PENDING', count: 100, paymentStatus: 'PENDING' },
+    { status: 'CANCELLED', count: 50, paymentStatus: 'FAILED' }
   ];
 
   let bNum = 5000;
@@ -347,8 +347,10 @@ async function main() {
       const vendor = getRandom(vendors);
       const customer = getRandom(customers);
       const amount = 10000 + Math.floor(Math.random() * 50000);
+      const createdAt = new Date(Date.now() - (Math.random() * 180 * 24 * 60 * 60 * 1000));
+      const eventDate = new Date(createdAt.getTime() + (Math.random() * 30 * 24 * 60 * 60 * 1000));
 
-      await prisma.booking.create({
+      const booking = await prisma.booking.create({
         data: {
           id: uuidv4(),
           bookingNumber: `ME${bNum++}`,
@@ -356,9 +358,11 @@ async function main() {
           vendorId: vendor.id,
           status: config.status,
           totalAmount: amount,
-          eventDate: new Date(Date.now() + (Math.random() * 60 * 24 * 60 * 60 * 1000)),
+          subTotal: amount,
+          eventDate: eventDate,
           eventLocation: "City Events Center, Main Plaza",
           guestCount: 50 + Math.floor(Math.random() * 500),
+          createdAt: createdAt,
           updatedAt: new Date(),
           payment: {
             create: {
@@ -371,6 +375,42 @@ async function main() {
           }
         }
       });
+
+      if (config.status === 'EVENT_COMPLETED') {
+        const vendorUser = await prisma.user.findUnique({
+            where: { id: vendor.userId },
+            include: { wallet: true }
+        });
+
+        if (vendorUser && vendorUser.wallet) {
+            await prisma.transaction.create({
+                data: {
+                    id: uuidv4(),
+                    walletId: vendorUser.wallet.id,
+                    bookingId: booking.id,
+                    amount: amount,
+                    type: "CREDIT",
+                    status: "COMPLETED",
+                    description: `Revenue from booking ${booking.bookingNumber}`,
+                    createdAt: createdAt
+                }
+            });
+
+            // Platform commission
+            await prisma.transaction.create({
+              data: {
+                  id: uuidv4(),
+                  walletId: vendorUser.wallet.id,
+                  bookingId: booking.id,
+                  amount: amount * 0.1,
+                  type: "COMMISSION",
+                  status: "COMPLETED",
+                  description: `Commission for ${booking.bookingNumber}`,
+                  createdAt: createdAt
+              }
+            });
+        }
+      }
     }
   }
 

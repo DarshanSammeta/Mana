@@ -1,26 +1,26 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { inter } from "@/config/fonts";
+import { APP_CONFIG } from "@/config/app";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import Providers from "./providers";
 import PageTransition from "@/components/common/PageTransition";
+import { Suspense } from "react";
 
-const inter = Inter({ subsets: ["latin"] });
 
 export const viewport = {
   themeColor: "#6D28D9",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(APP_CONFIG.url),
   title: {
-    default: "Mana Events | Premium Event Booking Marketplace",
-    template: "%s | Mana Events"
+    default: `${APP_CONFIG.name} | Premium Event Booking Marketplace`,
+    template: `%s | ${APP_CONFIG.name}`
   },
-  description: "Book verified wedding planners, photographers, caterers and more for your perfect event.",
+  description: APP_CONFIG.description,
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -49,7 +49,8 @@ export const metadata: Metadata = {
 import NextTopLoader from 'nextjs-toploader';
 import GlobalLoadingOverlay from "@/components/common/GlobalLoadingOverlay";
 import RouteLoadingHandler from "@/components/common/RouteLoadingHandler";
-import AuthHydrationFix from "@/components/auth/AuthHydrationFix";
+import { GoogleMapsLoader } from "@/components/common/GoogleMapsLoader";
+import NavbarWrapper from "@/components/common/NavbarWrapper";
 
 export default function RootLayout({
   children,
@@ -58,26 +59,40 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://res.cloudinary.com" />
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+        <link rel="preconnect" href="https://images.unsplash.com" />
+        <link rel="dns-prefetch" href="https://images.unsplash.com" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
       <body className={inter.className}>
         <NextTopLoader
           color="#6D28D9"
           initialPosition={0.08}
           crawlSpeed={200}
           height={3}
-          crawl={true}
           showSpinner={false}
           easing="ease"
           speed={200}
-          shadow="0 0 10px #6D28D9,0 0 5px #6D28D9"
         />
         <Providers>
-          <AuthHydrationFix>
+          <div className="flex flex-col min-h-screen">
+            <NavbarWrapper />
             <GlobalLoadingOverlay />
-            <RouteLoadingHandler />
-            <PageTransition>
-              {children}
-            </PageTransition>
-          </AuthHydrationFix>
+            <Suspense fallback={null}>
+              <RouteLoadingHandler />
+            </Suspense>
+            <GoogleMapsLoader />
+            <main className="flex-1">
+              <PageTransition>
+                {children}
+              </PageTransition>
+            </main>
+            {/* Note: Footer is often page-specific in its design,
+                but for performance we can keep it here or in a sub-layout */}
+          </div>
           <Toaster />
         </Providers>
       </body>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { useAuthStore } from "@/store/authStore";
 import Navbar from "@/components/common/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,31 +11,25 @@ import {
   MapPin,
   Users,
   MessageSquare,
-  FileText,
   Download,
   Info,
   CheckCircle2,
   Package,
   ArrowRight
 } from "lucide-react";
-import axios from "axios";
+import { customerService } from "@/services/customer.service";
 import Link from "next/link";
 
 export default function EventDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { accessToken } = useAuthStore();
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (accessToken) {
-      axios.get(`/api/bookings?id=${id}`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      })
-      .then(res => setBooking(res.data))
+    customerService.getBookingById(id)
+      .then(res => setBooking(res))
       .finally(() => setLoading(false));
-    }
-  }, [id, accessToken]);
+  }, [id]);
 
   if (loading) return <div className="h-screen flex items-center justify-center">Loading event details...</div>;
   if (!booking) return <div className="h-screen flex items-center justify-center">Event not found.</div>;
@@ -129,7 +122,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                     {booking.specialInstructions && (
                         <div className="mt-4">
                             <p className="text-sm font-bold mb-1">Special Instructions:</p>
-                            <p className="text-sm text-muted-foreground p-3 bg-gray-50 rounded border italic">"{booking.specialInstructions}"</p>
+                            <p className="text-sm text-muted-foreground p-3 bg-gray-50 rounded border italic">&apos;{booking.specialInstructions}&apos;</p>
                         </div>
                     )}
                 </CardContent>

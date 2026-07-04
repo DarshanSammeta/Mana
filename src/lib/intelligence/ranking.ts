@@ -89,8 +89,10 @@ export const getRankedVendors = async (
 
   const rankedVendors = vendors.map(vendor => {
     const distance = haversineDistance(
-      { lat, lng },
-      { lat: vendor.latitude!, lng: vendor.longitude! }
+      lat,
+      lng,
+      vendor.latitude!,
+      vendor.longitude!
     );
 
     // If vendor has a service radius, respect it

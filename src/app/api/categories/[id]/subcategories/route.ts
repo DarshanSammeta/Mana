@@ -7,12 +7,28 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const vendorId = searchParams.get("vendorId");
+
     const subcategories = await prisma.subcategory.findMany({
-      where: { categoryId: id },
+      where: {
+        categoryId: id,
+        ...(vendorId ? {
+          servicetype: {
+            some: {
+              service: {
+                some: {
+                  vendorProfileId: vendorId
+                }
+              }
+            }
+          }
+        } : {})
+      },
       orderBy: { name: "asc" },
     });
     return NextResponse.json(subcategories);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Failed to fetch subcategories" }, { status: 500 });
   }
 }

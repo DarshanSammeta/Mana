@@ -1,102 +1,52 @@
 import { NextResponse } from "next/server";
+import { getMarketplaceCategories } from "@/lib/marketplace";
 import { prisma } from "@/lib/prisma";
+import { withErrorHandler } from "@/lib/error-handler";
+import { unstable_cache } from "next/cache";
 
-export async function GET() {
-  try {
-    // Optimize categories query using select instead of include to reduce payload and memory consumption
-    const categories = await prisma.category.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        icon: true,
-        description: true,
-        commissionRate: true,
-        _count: {
-          select: {
-            subcategory: {
-              where: {
-                servicetype: {
-                  some: {
-                    service: {
-                      some: {
-                        vendorprofile: {
-                          verificationStatus: "APPROVED"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        subcategory: {
-          select: {
-            id: true,
-            name: true,
-            _count: {
-              select: {
-                servicetype: {
-                  where: {
-                    service: {
-                      some: {
-                        vendorprofile: {
-                          verificationStatus: "APPROVED"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            servicetype: {
-              select: {
-                id: true,
-                name: true,
-                description: true
-              }
-            }
-          }
-        }
-      }
-    });
-
-    // Post-process to get accurate vendor counts if needed,
-    // but the above Prisma count is for subcategories/servicetypes.
-    // To get actual VENDOR count per category:
-    const categoriesWithVendorCount = await Promise.all(categories.map(async (cat) => {
-      const vendorCount = await prisma.vendorprofile.count({
+const getVendorCategories = (vendorId: string, eventTypeId: string | null) =>
+  unstable_cache(
+    async () => {
+      return prisma.category.findMany({
         where: {
-          verificationStatus: "APPROVED",
-          service: {
+          subcategory: {
             some: {
               servicetype: {
-                subcategory: {
-                  categoryId: cat.id
+                some: {
+                  service: {
+                    some: {
+                      vendorProfileId: vendorId
+                    }
+                  }
                 }
               }
             }
-          }
-        }
+          },
+          ...(eventTypeId ? {
+            eventtypes: {
+              some: { id: eventTypeId }
+            }
+          } : {})
+        },
+        orderBy: { name: "asc" }
       });
-      return { ...cat, vendorCount };
-    }));
+    },
+    [`vendor-categories-${vendorId}-${eventTypeId || 'all'}`],
+    { revalidate: 3600, tags: ['categories', `vendor-${vendorId}`] }
+  )();
 
+export async function GET(request: Request) {
+  return withErrorHandler(async () => {
+    const { searchParams } = new URL(request.url);
+    const vendorId = searchParams.get("vendorId");
+    const eventTypeId = searchParams.get("eventTypeId");
+
+    if (vendorId) {
+      const categories = await getVendorCategories(vendorId, eventTypeId);
+      return NextResponse.json(categories);
+    }
+
+    const categoriesWithVendorCount = await getMarketplaceCategories(eventTypeId || undefined);
     return NextResponse.json(categoriesWithVendorCount);
-  } catch (error: any) {
-    console.error("CRITICAL ERROR: GET /api/categories failed");
-    console.error("Error Name:", error.name);
-    console.error("Error Message:", error.message);
-    console.error("Prisma Code:", error.code);
-    console.error("Meta:", error.meta);
-    console.error("Stack Trace:", error.stack);
-
-    return NextResponse.json({
-      error: "Internal Server Error",
-      details: error.message,
-      code: error.code,
-      suggestion: error.code === 'P1001' ? "Database server is unreachable. Please ensure the Supabase/PostgreSQL database is running and the connection string is correct." : undefined
-    }, { status: 500 });
-  }
+  });
 }

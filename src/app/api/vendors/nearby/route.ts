@@ -34,22 +34,27 @@ export async function GET(req: NextRequest) {
           }
         } : {})
       },
-      include: {
+      select: {
+        id: true,
+        businessName: true,
+        logo: true,
+        city: true,
+        latitude: true,
+        longitude: true,
+        rating: true,
+        reviewCount: true,
+        coverImage: true,
         service: {
-          include: {
+          take: 1,
+          select: {
+            basePrice: true,
             servicetype: {
-              include: {
-                subcategory: {
-                  include: {
-                    category: true
-                  }
-                }
+              select: {
+                name: true
               }
-            },
-            Renamedpackage: true
+            }
           }
-        },
-        review: true
+        }
       }
     });
 
@@ -66,14 +71,9 @@ export async function GET(req: NextRequest) {
     const nearbyVendors = vendors.map(vendor => {
       const distance = getDistance(lat, lng, vendor.latitude!, vendor.longitude!);
 
-      const ratings = vendor.review.map(r => r.rating);
-      const avgRating = ratings.length > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length : 0;
-
       return {
         ...vendor,
         distance,
-        rating: avgRating,
-        reviewCount: vendor.review.length
       };
     }).filter(v => v.distance <= radius)
       .sort((a, b) => a.distance - b.distance);

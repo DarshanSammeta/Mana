@@ -16,12 +16,26 @@ export async function GET(req: Request) {
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId },
-      include: {
+      select: {
+        id: true,
+        bankDetails: true,
         user: {
-          include: {
+          select: {
             wallet: {
-              include: {
+              select: {
+                id: true,
+                lifetimeEarnings: true,
+                pendingBalance: true,
+                withdrawable: true,
                 transaction: {
+                  select: {
+                    id: true,
+                    amount: true,
+                    type: true,
+                    status: true,
+                    description: true,
+                    createdAt: true
+                  },
                   take: 20,
                   orderBy: { createdAt: "desc" },
                 }

@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
 
 export async function GET(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const payload = verifyAccessToken(token);
+    if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-  try {
     const conversations = await prisma.conversation.findMany({
       where: {
         conversationparticipant: {
@@ -18,9 +20,14 @@ export async function GET(req: Request) {
           }
         }
       },
-      include: {
+      select: {
+        id: true,
+        bookingId: true,
+        updatedAt: true,
         conversationparticipant: {
-          include: {
+          select: {
+            id: true,
+            userId: true,
             user: {
               select: {
                 id: true,
@@ -34,6 +41,13 @@ export async function GET(req: Request) {
           }
         },
         message: {
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            senderId: true,
+            isRead: true
+          },
           orderBy: { createdAt: "desc" },
           take: 1
         }
@@ -42,47 +56,45 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(conversations);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }
 
 export async function POST(req: Request) {
+  return withErrorHandler(async () => {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
     const payload = verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-    try {
-      const { bookingId, participantId } = await req.json();
+    const { bookingId, participantId } = await req.json();
 
-      // Check if conversation already exists for this booking
-      if (bookingId) {
-        const existing = await prisma.conversation.findUnique({
-          where: { bookingId },
-          include: { conversationparticipant: true }
-        });
-        if (existing) return NextResponse.json(existing);
-      }
-
-      const conversation = await prisma.conversation.create({
-        data: {
-          id: crypto.randomUUID(),
-          bookingId,
-          updatedAt: new Date(),
-          conversationparticipant: {
-            create: [
-              { id: crypto.randomUUID(), userId: payload.userId },
-              { id: crypto.randomUUID(), userId: participantId }
-            ]
-          }
-        },
+    // Check if conversation already exists for this booking
+    if (bookingId) {
+      const existing = await prisma.conversation.findUnique({
+        where: { bookingId },
         include: { conversationparticipant: true }
       });
-
-      return NextResponse.json(conversation, { status: 201 });
-    } catch (error: any) {
-      return NextResponse.json({ message: error.message }, { status: 400 });
+      if (existing) return NextResponse.json(existing);
     }
-  }
+
+    const conversation = await prisma.conversation.create({
+      data: {
+        id: crypto.randomUUID(),
+        bookingId,
+        updatedAt: new Date(),
+        conversationparticipant: {
+          create: [
+            { id: crypto.randomUUID(), userId: payload.userId },
+            { id: crypto.randomUUID(), userId: participantId }
+          ]
+        }
+      },
+      include: { conversationparticipant: true }
+    });
+
+    logger.info("New conversation created", { userId: payload.userId, participantId, bookingId });
+
+    return NextResponse.json(conversation, { status: 201 });
+  });
+}

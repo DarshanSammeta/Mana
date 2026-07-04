@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import logger from "@/lib/logger";
 
 export async function GET(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
@@ -12,16 +13,43 @@ export async function GET(req: Request) {
   try {
     const bookings = await prisma.booking.findMany({
       where: { vendorprofile: { userId: payload.userId } },
-      include: {
+      select: {
+        id: true,
+        bookingNumber: true,
+        status: true,
+        totalAmount: true,
+        eventDate: true,
+        eventTime: true,
+        eventLocation: true,
+        createdAt: true,
         user: { select: { fullName: true, mobileNumber: true, email: true } },
-        bookingitem: { include: { service: true, Renamedpackage: true } },
-        payment: true,
+        bookingitem: {
+          select: {
+            id: true,
+            price: true,
+            quantity: true,
+            service: { select: { id: true, title: true } },
+            Renamedpackage: { select: { id: true, name: true } }
+          }
+        },
+        payment: {
+          select: {
+            id: true,
+            status: true,
+            amount: true,
+            method: true
+          }
+        },
       },
       orderBy: { createdAt: "desc" }
     });
     return NextResponse.json(bookings);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    logger.error("Vendor Bookings GET Error", { error });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "An unknown error occurred" },
+      { status: 500 }
+    );
   }
 }
 
@@ -37,7 +65,11 @@ export async function PATCH(req: Request) {
 
       const booking = await prisma.booking.findUnique({
           where: { id: bookingId },
-          include: { vendorprofile: true }
+          select: {
+            vendorprofile: {
+              select: { userId: true }
+            }
+          }
       });
 
       if (!booking || booking.vendorprofile.userId !== payload.userId) {
@@ -59,7 +91,11 @@ export async function PATCH(req: Request) {
       });
 
       return NextResponse.json(updatedBooking);
-    } catch (error: any) {
-      return NextResponse.json({ message: error.message }, { status: 400 });
+    } catch (error) {
+      logger.error("Vendor Bookings PATCH Error", { error });
+      return NextResponse.json(
+        { message: error instanceof Error ? error.message : "An unknown error occurred" },
+        { status: 400 }
+      );
     }
   }

@@ -2,13 +2,13 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   ArrowLeft,
   MapPin,
   Calendar,
   Clock,
   Package,
-  User,
   Phone,
   MessageSquare,
   CheckCircle2,
@@ -16,11 +16,13 @@ import {
   RefreshCcw,
   Truck,
   Building2,
-  MoreVertical,
   Download,
   AlertCircle,
   HelpCircle,
-  ChevronRight
+  Sparkles,
+  Lock,
+  Share2,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,31 +30,97 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { customerService } from "@/services/customer.service";
+import { vendorService } from "@/services/vendor.service";
+import { toast } from "react-hot-toast";
+import { useCallback } from "react";
 
 export default function BookingDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [trackingLocation, setTrackingLocation] = useState<any>(null);
+
+  const requestPhoneOtp = async () => {
+    try {
+      await customerService.requestPhoneOtp(resolvedParams.id);
+      toast.success("OTP sent successfully!");
+    } catch {
+      toast.error("Failed to send OTP. Please try again.");
+    }
+  };
+
+  const verifyPhoneOtp = async (otp: string) => {
+    try {
+      await customerService.verifyPhoneOtp(resolvedParams.id, otp);
+      toast.success("Phone verified successfully!");
+      fetchBookingDetails();
+    } catch {
+      toast.error("Invalid OTP. Please try again.");
+    }
+  };
+
+  const fetchBookingDetails = useCallback(async () => {
+    try {
+      const data = await customerService.getBookingById(resolvedParams.id);
+      setBooking(data);
+    } catch {
+      // Error logged or handled by service
+    } finally {
+      setLoading(false);
+    }
+  }, [resolvedParams.id]);
 
   useEffect(() => {
     fetchBookingDetails();
-  }, [resolvedParams.id]);
+  }, [fetchBookingDetails]);
 
-  const fetchBookingDetails = async () => {
+  useEffect(() => {
+    if (booking?.status === "VENDOR_TRAVELING") {
+      const interval = setInterval(async () => {
+        try {
+          const location = await vendorService.getBookingLocation(resolvedParams.id);
+          setTrackingLocation(location);
+        } catch { }
+      }, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [booking?.status, resolvedParams.id]);
+
+  const handleShare = async () => {
+    const shareData = {
+      title: `Booking for ${booking.vendorprofile.businessName}`,
+      text: `Check out my event booking #${booking.bookingNumber} at Mana Events!`,
+      url: window.location.href,
+    };
+
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/customer/bookings/${resolvedParams.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setBooking(data);
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.success("Link copied to clipboard!");
       }
-    } catch (error) {
-      console.error("Failed to fetch booking details", error);
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error("Error sharing:", err);
+    }
+  };
+
+  const handleRebook = async () => {
+    try {
+      // Logic to add the same items to cart and redirect to checkout
+      for (const item of booking.bookingitem) {
+        await customerService.addToCart({
+          serviceId: item.serviceId,
+          packageId: item.packageId,
+          quantity: item.quantity
+        });
+      }
+      router.push('/customer/cart');
+      toast.success("Items added to cart for rebooking!");
+    } catch {
+      toast.error("Failed to rebook. Some services might be unavailable.");
     }
   };
 
@@ -61,55 +129,95 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
 
   const steps = [
     { label: "Booked", status: "COMPLETED", date: booking.createdAt, icon: Package },
-    { label: "Confirmed", status: ["CONFIRMED", "VENDOR_ASSIGNED", "VENDOR_TRAVELING", "VENDOR_ARRIVED", "EVENT_STARTED", "EVENT_ONGOING", "EVENT_COMPLETED"].includes(booking.status) ? "COMPLETED" : "PENDING", icon: CheckCircle2 },
-    { label: "In Transit", status: ["VENDOR_TRAVELING", "VENDOR_ARRIVED", "EVENT_STARTED", "EVENT_ONGOING", "EVENT_COMPLETED"].includes(booking.status) ? "COMPLETED" : "PENDING", icon: Truck },
+    { label: "Confirmed", status: ["CONFIRMED", "VENDOR_ASSIGNED", "VENDOR_TRAVELING", "VENDOR_ARRIVED", "OTP_VERIFICATION_PENDING", "EVENT_STARTED", "EVENT_ONGOING", "EVENT_COMPLETED"].includes(booking.status) ? "COMPLETED" : "PENDING", icon: CheckCircle2 },
+    { label: "In Transit", status: ["VENDOR_TRAVELING", "VENDOR_ARRIVED", "OTP_VERIFICATION_PENDING", "EVENT_STARTED", "EVENT_ONGOING", "EVENT_COMPLETED"].includes(booking.status) ? "COMPLETED" : "PENDING", icon: Truck },
+    { label: "Arrived", status: ["VENDOR_ARRIVED", "OTP_VERIFICATION_PENDING", "EVENT_STARTED", "EVENT_ONGOING", "EVENT_COMPLETED"].includes(booking.status) ? "COMPLETED" : "PENDING", icon: MapPin },
     { label: "Event Started", status: ["EVENT_STARTED", "EVENT_ONGOING", "EVENT_COMPLETED"].includes(booking.status) ? "COMPLETED" : "PENDING", icon: Clock3 },
     { label: "Completed", status: booking.status === "EVENT_COMPLETED" ? "COMPLETED" : "PENDING", icon: RefreshCcw },
   ];
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-10 pb-20">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full">
-            <ArrowLeft className="h-5 w-5" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div className="flex items-center gap-5">
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full h-12 w-12 hover:bg-slate-100 transition-colors border border-slate-200">
+            <ArrowLeft className="h-5 w-5 text-slate-900" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Booking Details</h1>
-            <p className="text-sm text-gray-500">Order # {booking.bookingNumber} • Placed {format(new Date(booking.createdAt), 'MMM dd, yyyy')}</p>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Booking Details</h1>
+            <p className="text-sm font-bold text-slate-500 mt-1 uppercase tracking-widest flex items-center gap-2">
+              Order #{booking.bookingNumber} <span className="h-1 w-1 rounded-full bg-slate-300"></span> Placed {format(new Date(booking.createdAt), 'MMM dd, yyyy')}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-           <Button variant="outline" className="rounded-xl border-gray-200 font-bold gap-2">
-             <Download className="h-4 w-4" /> Invoice
+        <div className="flex flex-wrap items-center gap-4">
+           {trackingLocation && (
+              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-4 py-2 font-black rounded-xl shadow-sm">
+                <MapPin className="h-4 w-4 mr-2" /> Vendor Live
+              </Badge>
+           )}
+           {booking.status === "EVENT_COMPLETED" && (
+              <Button
+                variant="outline"
+                className="rounded-xl border-slate-200 font-black h-12 px-6 gap-2 hover:bg-slate-50 transition-all shadow-sm"
+                onClick={() => window.open(`/api/invoices/${booking.id}/download`, '_blank')}
+              >
+                <Download className="h-4 w-4" /> Download Invoice
+              </Button>
+           )}
+           {booking.status === "EVENT_COMPLETED" && (
+              <Button
+                onClick={handleRebook}
+                className="bg-primary hover:bg-blue-700 text-white rounded-xl font-black h-12 px-8 shadow-xl shadow-primary/20 transition-all hover:-translate-y-0.5 gap-2"
+              >
+                <RefreshCcw className="h-4 w-4" /> Rebook Now
+              </Button>
+           )}
+           {booking.status !== "EVENT_COMPLETED" && (
+              <Button className="bg-primary hover:bg-blue-700 text-white rounded-xl font-black h-12 px-8 shadow-xl shadow-primary/20 transition-all hover:-translate-y-0.5">
+                Track Live Status
+              </Button>
+           )}
+           <Button
+              variant="outline"
+              size="icon"
+              className="rounded-xl h-12 w-12 border-slate-200 shadow-sm"
+              onClick={() => window.print()}
+            >
+              <Printer className="h-5 w-5 text-slate-600" />
            </Button>
-           <Button className="bg-purple-600 hover:bg-purple-700 rounded-xl font-bold">
-             Track Vendor
+           <Button
+              variant="outline"
+              size="icon"
+              className="rounded-xl h-12 w-12 border-slate-200 shadow-sm"
+              onClick={handleShare}
+            >
+              <Share2 className="h-5 w-5 text-slate-600" />
            </Button>
         </div>
       </div>
 
       {/* Timeline (Amazon/Delivery Style) */}
-      <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm">
-         <div className="relative flex justify-between">
+      <div className="bg-white border border-slate-200 rounded-[2.5rem] p-10 shadow-2xl shadow-slate-200/50">
+         <div className="relative flex justify-between max-w-5xl mx-auto">
             {/* Connection Line */}
-            <div className="absolute top-5 left-0 right-0 h-0.5 bg-gray-100 -z-0" />
+            <div className="absolute top-6 left-10 right-10 h-[2px] bg-slate-100 -z-0" />
 
             {steps.map((step, idx) => {
               const Icon = step.icon;
               const isCompleted = step.status === "COMPLETED";
               return (
-                <div key={idx} className="relative z-10 flex flex-col items-center gap-3 text-center">
+                <div key={idx} className="relative z-10 flex flex-col items-center gap-4 text-center group">
                    <div className={cn(
-                      "h-10 w-10 rounded-full flex items-center justify-center border-4 border-white transition-all duration-500 shadow-md",
-                      isCompleted ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-400"
+                      "h-14 w-14 rounded-2xl flex items-center justify-center border-4 border-white transition-all duration-500 shadow-xl",
+                      isCompleted ? "bg-primary text-white scale-110" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
                    )}>
-                      <Icon className="h-4 w-4" />
+                      <Icon className={cn("h-6 w-6", isCompleted ? "animate-pulse" : "")} />
                    </div>
-                   <div>
-                      <p className={cn("text-xs font-black uppercase tracking-tighter", isCompleted ? "text-gray-900" : "text-gray-400")}>{step.label}</p>
-                      {step.date && <p className="text-[10px] text-gray-400 mt-0.5">{format(new Date(step.date), 'hh:mm a')}</p>}
+                   <div className="space-y-1">
+                      <p className={cn("text-[10px] font-black uppercase tracking-widest", isCompleted ? "text-slate-900" : "text-slate-400")}>{step.label}</p>
+                      {step.date && <p className="text-[11px] font-bold text-slate-400">{format(new Date(step.date), 'hh:mm a')}</p>}
                    </div>
                 </div>
               );
@@ -117,69 +225,94 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
          </div>
       </div>
 
-      <div className="grid lg:grid-cols-12 gap-8">
+      <div className="grid lg:grid-cols-12 gap-10">
          {/* Left Column: Details */}
-         <div className="lg:col-span-8 space-y-8">
-            <section className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
-               <div className="p-6 border-b border-gray-50 bg-gray-50/50 flex items-center justify-between">
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                     <Building2 className="h-5 w-5 text-purple-600" /> Vendor Information
+         <div className="lg:col-span-8 space-y-10">
+            <section className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+               <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+                  <h3 className="font-black text-slate-900 flex items-center gap-3 uppercase tracking-widest text-xs">
+                     <Building2 className="h-5 w-5 text-primary" /> Vendor Profile
                   </h3>
-                  <Link href={`/marketplace/vendor/${booking.vendorprofile.id}`} className="text-xs font-black text-purple-600 uppercase hover:underline">
-                    View Profile
+                  <Link href={`/marketplace/vendor/${booking.vendorprofile.id}`} className="text-xs font-black text-primary uppercase hover:underline tracking-widest">
+                    View Business Profile
                   </Link>
                </div>
-               <div className="p-6 flex gap-6">
-                  <div className="h-20 w-20 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+               <div className="p-8 flex flex-col sm:flex-row gap-8">
+                  <div className="h-28 w-28 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 shadow-inner overflow-hidden relative">
                      {booking.vendorprofile.logo ? (
-                        <img src={booking.vendorprofile.logo} className="h-full w-full object-cover rounded-2xl" />
+                        <Image
+                          src={booking.vendorprofile.logo}
+                          alt={booking.vendorprofile.businessName}
+                          fill
+                          className="object-cover"
+                        />
                      ) : (
-                        <User className="h-10 w-10 text-gray-200" />
+                        <div className="text-3xl font-black text-slate-200">{booking.vendorprofile.businessName[0]}</div>
                      )}
                   </div>
                   <div className="flex-1">
-                     <div className="flex items-center justify-between">
-                        <h4 className="text-xl font-black text-gray-900">{booking.vendorprofile.businessName}</h4>
-                        <div className="flex gap-2">
-                           <Button size="sm" variant="outline" className="rounded-xl h-9 w-9 p-0 border-gray-200">
-                              <Phone className="h-4 w-4 text-gray-600" />
+                     {!booking.customerPhoneVerified && (
+                        <div className="mb-6 bg-amber-50 p-5 rounded-2xl border border-amber-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                           <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                <AlertCircle className="h-5 w-5 text-amber-600" />
+                              </div>
+                              <div>
+                                 <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Verification Required</p>
+                                 <Button variant="link" className="p-0 h-auto text-xs text-amber-600 font-black" onClick={requestPhoneOtp}>Request SMS OTP</Button>
+                              </div>
+                           </div>
+                           <input
+                              placeholder="000000"
+                              maxLength={6}
+                              className="w-full sm:w-32 bg-white border border-amber-200 rounded-xl px-4 py-3 text-center font-black text-lg tracking-[0.2em] focus:ring-2 focus:ring-amber-200 outline-none shadow-sm"
+                              onChange={(e) => { if(e.target.value.length === 6) verifyPhoneOtp(e.target.value); }}
+                           />
+                        </div>
+                     )}
+                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{booking.vendorprofile.businessName}</h4>
+                        <div className="flex gap-3">
+                           <Button variant="outline" className="rounded-xl h-12 w-12 p-0 border-slate-200 hover:bg-slate-50 shadow-sm">
+                              <Phone className="h-5 w-5 text-slate-600" />
                            </Button>
-                           <Button size="sm" variant="outline" className="rounded-xl h-9 w-9 p-0 border-gray-200">
-                              <MessageSquare className="h-4 w-4 text-gray-600" />
+                           <Button variant="outline" className="rounded-xl h-12 w-12 p-0 border-slate-200 hover:bg-slate-50 shadow-sm">
+                              <MessageSquare className="h-5 w-5 text-slate-600" />
                            </Button>
                         </div>
                      </div>
-                     <p className="text-sm text-gray-500 mt-1 max-w-md">{booking.vendorprofile.description}</p>
-                     <div className="flex items-center gap-4 mt-4">
-                        <Badge variant="outline" className="rounded-full text-[10px] font-bold border-purple-100 text-purple-600">PREMIUM PARTNER</Badge>
-                        <Badge variant="outline" className="rounded-full text-[10px] font-bold border-blue-100 text-blue-600">VERIFIED</Badge>
+                     <p className="text-base text-slate-500 font-medium leading-relaxed max-w-2xl">{booking.vendorprofile.description}</p>
+                     <div className="flex items-center gap-4 mt-6">
+                        <Badge className="rounded-lg text-[10px] font-black tracking-widest px-3 py-1.5 bg-indigo-50 text-indigo-700 border-none shadow-sm uppercase">Premium Partner</Badge>
+                        <Badge className="rounded-lg text-[10px] font-black tracking-widest px-3 py-1.5 bg-emerald-50 text-emerald-700 border-none shadow-sm uppercase">Verified</Badge>
                      </div>
                   </div>
                </div>
             </section>
 
-            <section className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
-               <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                  <h3 className="font-bold text-gray-900">Event Services</h3>
-                  <span className="text-xs font-bold text-gray-400">Items: {booking.bookingitem.length}</span>
+            <section className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+               <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                  <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Included Services</h3>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-2 py-1 rounded border border-slate-100 shadow-sm">Quantity: {booking.bookingitem.length}</span>
                </div>
-               <div className="divide-y divide-gray-50">
+               <div className="divide-y divide-slate-100">
                   {booking.bookingitem.map((item: any, i: number) => (
-                     <div key={i} className="p-6 flex justify-between items-center group">
-                        <div className="flex gap-4">
-                           <div className="h-12 w-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
-                              <Package className="h-6 w-6" />
+                     <div key={i} className="p-8 flex justify-between items-center group hover:bg-slate-50/30 transition-colors">
+                        <div className="flex gap-6">
+                           <div className="h-16 w-16 rounded-2xl bg-primary/5 flex items-center justify-center text-primary shrink-0 border border-primary/10 group-hover:scale-105 transition-transform">
+                              <Package className="h-8 w-8" />
                            </div>
-                           <div>
-                              <p className="font-bold text-gray-900">{item.service.title}</p>
+                           <div className="space-y-1">
+                              <p className="font-black text-lg text-slate-900 tracking-tight">{item.service.title}</p>
                               {item.Renamedpackage && (
-                                 <p className="text-xs text-gray-500">Package: {item.Renamedpackage.name}</p>
+                                 <p className="text-sm text-slate-500 font-medium">Plan: <span className="text-slate-900 font-bold">{item.Renamedpackage.name}</span></p>
                               )}
-                              <p className="text-[10px] font-bold text-purple-600 uppercase mt-1">Qty: {item.quantity}</p>
+                              <p className="text-[10px] font-black text-primary uppercase tracking-widest mt-2 bg-blue-50 inline-block px-2 py-0.5 rounded">Unit Price: ₹{Number(item.price).toLocaleString()}</p>
                            </div>
                         </div>
                         <div className="text-right">
-                           <p className="font-black text-gray-900">₹{Number(item.price).toLocaleString()}</p>
+                           <p className="font-black text-2xl text-slate-900">₹{Number(item.price * item.quantity).toLocaleString()}</p>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Qty: {item.quantity}</p>
                         </div>
                      </div>
                   ))}
@@ -188,84 +321,96 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
          </div>
 
          {/* Right Column: Event & Payment */}
-         <div className="lg:col-span-4 space-y-6">
-            <div className="bg-gray-900 text-white rounded-3xl p-6 shadow-xl shadow-purple-100">
-               <h3 className="text-sm font-black uppercase tracking-widest text-purple-300 mb-6">Event Details</h3>
-               <div className="space-y-6">
-                  <div className="flex gap-4">
-                     <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                        <Calendar className="h-5 w-5" />
+         <div className="lg:col-span-4 space-y-8">
+            <div className="bg-slate-900 text-white rounded-[2rem] p-8 shadow-2xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Sparkles className="h-20 w-20 text-white" />
+               </div>
+               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary mb-8">Event Logistics</h3>
+               <div className="space-y-8">
+                  <div className="flex gap-5 items-start">
+                     <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0 border border-white/5 shadow-inner">
+                        <Calendar className="h-6 w-6 text-primary" />
                      </div>
                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Event Date</p>
-                        <p className="font-bold">{format(new Date(booking.eventDate), 'MMMM dd, yyyy')}</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Schedule Date</p>
+                        <p className="text-lg font-black tracking-tight">{format(new Date(booking.eventDate), 'MMMM dd, yyyy')}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">{format(new Date(booking.eventDate), 'EEEE')}</p>
                      </div>
                   </div>
-                  <div className="flex gap-4">
-                     <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                        <Clock className="h-5 w-5" />
+                  <div className="flex gap-5 items-start">
+                     <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0 border border-white/5 shadow-inner">
+                        <Clock className="h-6 w-6 text-primary" />
                      </div>
                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Time & Duration</p>
-                        <p className="font-bold">{booking.eventTime || '06:00 PM onwards'}</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Time Window</p>
+                        <p className="text-lg font-black tracking-tight">{booking.eventTime || '06:00 PM onwards'}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">Standard Evening Slot</p>
                      </div>
                   </div>
-                  <div className="flex gap-4">
-                     <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                        <MapPin className="h-5 w-5" />
+                  <div className="flex gap-5 items-start">
+                     <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0 border border-white/5 shadow-inner">
+                        <MapPin className="h-6 w-6 text-primary" />
                      </div>
-                     <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Event Location</p>
-                        <p className="font-bold text-sm leading-relaxed">{booking.eventLocation}</p>
+                     <div className="flex-1">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Service Destination</p>
+                        <p className="text-sm font-bold leading-relaxed text-slate-200">{booking.eventLocation}</p>
+                        <p className="text-[10px] font-black text-primary mt-2 uppercase tracking-tighter hover:underline cursor-pointer">Open in Google Maps →</p>
                      </div>
                   </div>
                </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
-               <h3 className="font-bold text-gray-900 mb-6">Payment Summary</h3>
-               <div className="space-y-4">
-                  <div className="flex justify-between text-sm">
-                     <span className="text-gray-500">Subtotal</span>
-                     <span className="font-bold text-gray-900">₹{Number(booking.subTotal).toLocaleString()}</span>
+            <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-xl relative overflow-hidden">
+               <div className="absolute top-0 left-0 w-full h-2 bg-primary opacity-10"></div>
+               <h3 className="font-black text-slate-900 mb-8 uppercase tracking-widest text-xs">Financial Summary</h3>
+               <div className="space-y-5">
+                  <div className="flex justify-between text-sm font-medium">
+                     <span className="text-slate-500">Service Subtotal</span>
+                     <span className="font-black text-slate-900">₹{Number(booking.subTotal).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                     <span className="text-gray-500">Service Fee</span>
-                     <span className="font-bold text-gray-900">₹{Number(booking.commissionAmount).toLocaleString()}</span>
+                  <div className="flex justify-between text-sm font-medium">
+                     <span className="text-slate-500">Platform Convenience Fee</span>
+                     <span className="font-black text-slate-900">₹{Number(booking.commissionAmount).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                     <span className="text-gray-500">GST (18%)</span>
-                     <span className="font-bold text-gray-900">₹{Number(booking.taxAmount).toLocaleString()}</span>
+                  <div className="flex justify-between text-sm font-medium">
+                     <span className="text-slate-500">Taxes & GST (18%)</span>
+                     <span className="font-black text-slate-900">₹{Number(booking.taxAmount).toLocaleString()}</span>
                   </div>
                   {Number(booking.discountAmount) > 0 && (
-                     <div className="flex justify-between text-sm text-green-600 font-bold">
-                        <span>Discount</span>
+                     <div className="flex justify-between text-sm text-emerald-600 font-black bg-emerald-50 p-3 rounded-xl">
+                        <span>Promotional Discount</span>
                         <span>-₹{Number(booking.discountAmount).toLocaleString()}</span>
                      </div>
                   )}
-                  <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                     <span className="font-black text-gray-900">Total Paid</span>
-                     <span className="text-xl font-black text-purple-600">₹{Number(booking.totalAmount).toLocaleString()}</span>
+                  <div className="pt-6 border-t border-slate-100 flex justify-between items-center">
+                     <span className="font-black text-slate-900 tracking-tight">Total Transaction</span>
+                     <span className="text-3xl font-black text-primary">₹{Number(booking.totalAmount).toLocaleString()}</span>
                   </div>
                </div>
 
-               <div className="mt-8 p-4 bg-purple-50 rounded-2xl flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center">
-                     <AlertCircle className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <div>
-                     <p className="text-[10px] font-black text-purple-600 uppercase">OTP for verification</p>
-                     <p className="text-lg font-black tracking-widest text-purple-900">{booking.otp || '----'}</p>
-                  </div>
-               </div>
+               {booking.status === "OTP_VERIFICATION_PENDING" && (
+                 <div className="mt-10 p-6 bg-primary rounded-2xl flex items-center gap-5 shadow-2xl shadow-primary/30 relative overflow-hidden group">
+                    <div className="absolute -right-5 -bottom-5 opacity-20 group-hover:scale-110 transition-transform">
+                       <Lock className="h-20 w-20 text-white" />
+                    </div>
+                    <div className="h-14 w-14 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md">
+                       <AlertCircle className="h-8 w-8 text-white" />
+                    </div>
+                    <div className="relative z-10">
+                       <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-1">Service Verification OTP</p>
+                       <p className="text-3xl font-black tracking-[0.3em] text-white">{booking.otp || '----'}</p>
+                    </div>
+                 </div>
+               )}
             </div>
 
-            <div className="space-y-3">
-               <Button variant="outline" className="w-full rounded-2xl h-12 border-gray-200 font-bold text-gray-600">
-                  <HelpCircle className="h-4 w-4 mr-2" /> Need help with this booking?
+            <div className="space-y-4">
+               <Button variant="outline" className="w-full rounded-2xl h-14 border-slate-200 font-black text-slate-600 hover:bg-slate-50 transition-all shadow-sm gap-2">
+                  <HelpCircle className="h-5 w-5 text-primary" /> Need Assistance?
                </Button>
-               <Button variant="ghost" className="w-full rounded-2xl h-12 text-rose-600 hover:bg-rose-50 font-bold">
-                  Cancel Booking
+               <Button variant="ghost" className="w-full rounded-2xl h-14 text-rose-600 hover:bg-rose-50 font-black transition-all">
+                  Cancel Booking Request
                </Button>
             </div>
          </div>

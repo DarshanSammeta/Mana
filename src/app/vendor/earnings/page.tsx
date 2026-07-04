@@ -6,17 +6,15 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   DollarSign,
-  Calendar,
   Download,
-  Filter,
   TrendingUp,
   ArrowRight,
   Wallet,
   Clock,
-  CheckCircle2,
   ChevronRight,
   FileText,
-  Table as TableIcon
+  Table as TableIcon,
+  Loader2
 } from "lucide-react";
 import { TableSkeleton } from "@/components/vendor/TableSkeleton";
 import { Card, CardContent, CardHeader, CardTitle, GlassCard } from "@/components/ui/card";
@@ -46,55 +44,79 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { vendorService } from "@/services/vendor.service";
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInView } from "react-intersection-observer";
 
 export default function EarningsPage() {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const queryClient = useQueryClient();
+  const { ref, inView } = useInView();
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const { socket } = useSocketStore();
 
-  const fetchData = async () => {
-    try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch("/api/vendor/earnings", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+  const { data: earningsData, isLoading: loading } = useQuery({
+    queryKey: ['vendor-earnings'],
+    queryFn: () => vendorService.getEarnings(),
+  });
 
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data.summary);
-        setTransactions(data.transactions);
-      }
-    } catch (error) {
-      console.error("Error fetching earnings data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: transactionData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: transactionsLoading,
+  } = useInfiniteQuery({
+    queryKey: ['vendor-transactions-earnings'],
+    queryFn: ({ pageParam }) => vendorService.getTransactions(10, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (inView && hasNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, fetchNextPage, hasNextPage]);
 
   useEffect(() => {
     if (!socket) return;
-
-    socket.on("wallet:updated", (data) => {
-      console.log("Wallet update received:", data);
-      toast.success(`Wallet Updated: ₹${data.amount} (${data.type})`, {
-        icon: '💰',
-        style: { borderRadius: '16px', background: '#333', color: '#fff' }
-      });
-      fetchData(); // Refresh data
+    socket.on("wallet:updated", (data: { amount: number }) => {
+      toast.success(`Wallet Updated: ₹${data.amount}`, { icon: '💰' });
+      queryClient.invalidateQueries({ queryKey: ['vendor-earnings'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-transactions-earnings'] });
     });
+    return () => { socket.off("wallet:updated"); };
+  }, [socket, queryClient]);
 
-    return () => {
-      socket.off("wallet:updated");
-    };
-  }, [socket]);
+  const withdrawMutation = useMutation({
+    mutationFn: (amount: number) => vendorService.requestPayout(amount),
+    onSuccess: () => {
+        toast.success("Withdrawal request submitted successfully!");
+        setWithdrawAmount("");
+        setIsWithdrawDialogOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['vendor-earnings'] });
+    },
+    onError: (error: { response?: { data?: { message?: string } } }) => {
+        toast.error(error.response?.data?.message || "An error occurred.");
+    }
+  });
+
+  const handleWithdraw = () => {
+    const amount = parseFloat(withdrawAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    if (amount > (earningsData?.summary?.withdrawableRevenue || 0)) {
+      toast.error("Insufficient balance");
+      return;
+    }
+    withdrawMutation.mutate(amount);
+  };
+
+  const stats = earningsData?.summary;
+  const transactions = transactionData?.pages.flatMap(page => page.items) || [];
 
   const statCards = [
     { title: "Total Revenue", value: stats?.totalRevenue || 0, icon: DollarSign, color: "text-success", bg: "bg-success/10", trend: "+12.5%" },
@@ -119,52 +141,6 @@ export default function EarningsPage() {
     a.href = url;
     a.download = "earnings-report.xlsx";
     a.click();
-  };
-
-  const handleWithdraw = async () => {
-    if (!withdrawAmount || isNaN(Number(withdrawAmount))) {
-      toast.error("Please enter a valid amount");
-      return;
-    }
-
-    const amount = parseFloat(withdrawAmount);
-    if (amount <= 0) {
-      toast.error("Amount must be greater than 0");
-      return;
-    }
-
-    if (amount > (stats?.withdrawableRevenue || 0)) {
-      toast.error("Insufficient withdrawable balance");
-      return;
-    }
-
-    setIsWithdrawing(true);
-    try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch("/api/payouts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ amount })
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        toast.success("Withdrawal request submitted successfully!");
-        setWithdrawAmount("");
-        setIsWithdrawDialogOpen(false);
-        fetchData(); // Refresh stats and transactions
-      } else {
-        toast.error(data.message || "Failed to submit withdrawal request");
-      }
-    } catch (error) {
-      console.error("Withdrawal Error:", error);
-      toast.error("An error occurred. Please try again.");
-    } finally {
-      setIsWithdrawing(false);
-    }
   };
 
   const container = {
@@ -256,10 +232,10 @@ export default function EarningsPage() {
                 <DialogFooter>
                   <Button
                     onClick={handleWithdraw}
-                    disabled={isWithdrawing || !withdrawAmount}
+                    disabled={withdrawMutation.isPending || !withdrawAmount}
                     className="w-full rounded-2xl h-12 font-black text-lg shadow-xl shadow-primary/20"
                   >
-                    {isWithdrawing ? "Processing..." : "Confirm Withdrawal"}
+                    {withdrawMutation.isPending ? "Processing..." : "Confirm Withdrawal"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -312,103 +288,104 @@ export default function EarningsPage() {
             <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold flex items-center gap-2">
                     Recent Transactions
-                    <span className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">32</span>
                 </h3>
-                <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" className="rounded-xl">
-                        <Filter className="h-4 w-4 mr-2" />
-                        Filter
-                    </Button>
-                </div>
             </div>
 
             <div className="space-y-4">
-              <table className="w-full">
-                <tbody className="divide-y divide-border/50">
-                  {loading ? (
+                  {transactionsLoading ? (
                     <TableSkeleton rows={5} columns={1} />
                   ) : transactions.length === 0 ? (
-                    <tr>
-                      <td className="text-center py-10 text-muted-foreground">No transactions found</td>
-                    </tr>
-                  ) : transactions.map((tx: any) => {
-                    const split = tx.booking?.payment?.find((p: any) => p.payment_split)?.payment_split;
+                    <div className="text-center py-10 text-muted-foreground bg-card rounded-2xl border border-dashed border-border">No transactions found</div>
+                  ) : (
+                    <>
+                      {transactions.map((tx: {
+                        id: string;
+                        type: string;
+                        description: string;
+                        amount: number;
+                        createdAt: string;
+                        status: string;
+                        booking?: {
+                          bookingNumber: string;
+                          payment?: { payment_split: any }[];
+                        };
+                      }) => {
+                        const split = tx.booking?.payment?.find((p: any) => p.payment_split)?.payment_split;
 
-                    return (
-                      <tr key={tx.id}>
-                        <td className="py-2">
-                          <Card className="border border-border shadow-sm hover:shadow-xl bg-card overflow-hidden transition-all">
-                            <div className="p-4">
-                              <div className="flex items-center gap-4">
-                                <div className={cn(
-                                    "h-12 w-12 rounded-2xl flex items-center justify-center",
-                                    tx.type === "CREDIT" || tx.type === "COMMISSION" ? "bg-success/10" : "bg-destructive/10"
-                                )}>
-                                    {tx.type === "CREDIT" || tx.type === "COMMISSION" ?
-                                        <ArrowDownLeft className={cn("h-6 w-6", "text-success")} /> :
-                                        <ArrowUpRight className="h-6 w-6 text-destructive" />
-                                    }
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h4 className="font-bold text-foreground truncate">
-                                          {tx.description}
-                                          {tx.booking?.bookingNumber && <span className="ml-2 text-[10px] text-primary bg-primary/5 px-2 py-0.5 rounded-full">#{tx.booking.bookingNumber}</span>}
-                                        </h4>
-                                        <span className={cn(
-                                            "text-lg font-black",
-                                            tx.type === "CREDIT" || tx.type === "COMMISSION" ? "text-success" : "text-destructive"
-                                        )}>
-                                            {tx.type === "CREDIT" || tx.type === "COMMISSION" ? "+" : "-"}₹{Number(tx.amount).toLocaleString()}
-                                        </span>
+                        return (
+                              <Card key={tx.id} className="border border-border shadow-sm hover:shadow-xl bg-card overflow-hidden transition-all mb-4">
+                                <div className="p-4">
+                                  <div className="flex items-center gap-4">
+                                    <div className={cn(
+                                        "h-12 w-12 rounded-2xl flex items-center justify-center",
+                                        tx.type === "CREDIT" || tx.type === "COMMISSION" ? "bg-success/10" : "bg-destructive/10"
+                                    )}>
+                                        {tx.type === "CREDIT" || tx.type === "COMMISSION" ?
+                                            <ArrowDownLeft className={cn("h-6 w-6", "text-success")} /> :
+                                            <ArrowUpRight className="h-6 w-6 text-destructive" />
+                                        }
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{tx.type}</p>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-[10px] font-bold text-muted-foreground/60">{new Date(tx.createdAt).toLocaleDateString()}</span>
-                                            <Badge className={cn(
-                                                "text-[10px] uppercase tracking-tighter px-2 py-0 border-none",
-                                                tx.status === "COMPLETED" ? "bg-success/10 text-success" : (tx.status === "PENDING" ? "bg-amber-100 text-amber-700" : "bg-destructive/10 text-destructive")
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <h4 className="font-bold text-foreground truncate">
+                                              {tx.description}
+                                              {tx.booking?.bookingNumber && <span className="ml-2 text-[10px] text-primary bg-primary/5 px-2 py-0.5 rounded-full">#{tx.booking.bookingNumber}</span>}
+                                            </h4>
+                                            <span className={cn(
+                                                "text-lg font-black",
+                                                tx.type === "CREDIT" || tx.type === "COMMISSION" ? "text-success" : "text-destructive"
                                             )}>
-                                                {tx.status}
-                                            </Badge>
+                                                {tx.type === "CREDIT" || tx.type === "COMMISSION" ? "+" : "-"}₹{Number(tx.amount).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{tx.type}</p>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[10px] font-bold text-muted-foreground/60">{new Date(tx.createdAt).toLocaleDateString()}</span>
+                                                <Badge className={cn(
+                                                    "text-[10px] uppercase tracking-tighter px-2 py-0 border-none",
+                                                    tx.status === "COMPLETED" ? "bg-success/10 text-success" : (tx.status === "PENDING" ? "bg-amber-100 text-amber-700" : "bg-destructive/10 text-destructive")
+                                                )}>
+                                                    {tx.status}
+                                                </Badge>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                              </div>
+                                  </div>
 
-                              {split && (
-                                <div className="mt-4 pt-4 border-t border-dashed border-border flex flex-wrap justify-between items-center gap-4">
-                                  <div className="flex gap-4">
-                                    <div className="space-y-0.5">
-                                      <p className="text-[8px] font-black text-muted-foreground uppercase">Base Amount</p>
-                                      <p className="text-xs font-bold">₹{Number(split.totalAmount).toLocaleString('en-IN')}</p>
+                                  {split && (
+                                    <div className="mt-4 pt-4 border-t border-dashed border-border flex flex-wrap justify-between items-center gap-4">
+                                      <div className="flex gap-4">
+                                        <div className="space-y-0.5">
+                                          <p className="text-[8px] font-black text-muted-foreground uppercase">Base Amount</p>
+                                          <p className="text-xs font-bold">₹{Number(split.totalAmount).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                          <p className="text-[8px] font-black text-muted-foreground uppercase">Platform Fee ({Number(split.commissionRate)}%)</p>
+                                          <p className="text-xs font-bold text-destructive">-₹{Number(split.adminShare).toLocaleString('en-IN')}</p>
+                                        </div>
+                                      </div>
+                                      <div className="bg-success/5 px-3 py-1.5 rounded-xl border border-success/10">
+                                        <p className="text-[8px] font-black text-success uppercase">Your Net Share</p>
+                                        <p className="text-sm font-black text-success">₹{Number(split.vendorShare).toLocaleString('en-IN')}</p>
+                                      </div>
                                     </div>
-                                    <div className="space-y-0.5">
-                                      <p className="text-[8px] font-black text-muted-foreground uppercase">Platform Fee ({Number(split.commissionRate)}%)</p>
-                                      <p className="text-xs font-bold text-destructive">-₹{Number(split.adminShare).toLocaleString('en-IN')}</p>
-                                    </div>
-                                  </div>
-                                  <div className="bg-success/5 px-3 py-1.5 rounded-xl border border-success/10">
-                                    <p className="text-[8px] font-black text-success uppercase">Your Net Share</p>
-                                    <p className="text-sm font-black text-success">₹{Number(split.vendorShare).toLocaleString('en-IN')}</p>
-                                  </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </Card>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                              </Card>
+                        );
+                      })}
+                      <div ref={ref} className="py-4 flex justify-center">
+                        {isFetchingNextPage ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        ) : hasNextPage ? (
+                          <span className="text-xs font-black uppercase text-muted-foreground/40">Load more</span>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
             </div>
-
-            <Button variant="outline" className="w-full rounded-2xl font-bold border-dashed mt-6 h-12">
-                View All Transaction History
-            </Button>
           </motion.div>
         </div>
 
@@ -438,7 +415,7 @@ export default function EarningsPage() {
                             </div>
                         </div>
                         <p className="text-primary-foreground/90 text-sm leading-relaxed">
-                            You're ₹ 12,000 away from your best month ever. Keep it up!
+                            You&apos;re ₹ 12,000 away from your best month ever. Keep it up!
                         </p>
                     </CardContent>
                 </GlassCard>

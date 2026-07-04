@@ -2,10 +2,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
-import { Star, MapPin, ExternalLink, ShieldCheck } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Star, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import Image from 'next/image';
+import { optimizeImage } from '@/lib/cloudinary';
+import { MAPS_CONFIG } from '@/config/maps';
 
 const mapContainerStyle = {
   width: '100%',
@@ -29,7 +31,7 @@ interface VendorMapViewProps {
 export function VendorMapView({ vendors, center }: VendorMapViewProps) {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: MAPS_CONFIG.apiKey || '',
   });
 
   const [selectedVendor, setSelectedVendor] = useState<any>(null);
@@ -70,10 +72,12 @@ export function VendorMapView({ vendors, center }: VendorMapViewProps) {
           >
             <div className="p-1 max-w-[240px] font-sans">
               <div className="relative h-24 mb-2 rounded-md overflow-hidden">
-                <img
-                  src={selectedVendor.coverImage || "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800"}
-                  className="w-full h-full object-cover"
+                <Image
+                  src={optimizeImage(selectedVendor.coverImage, 'thumbnail') || "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800"}
+                  fill
+                  className="object-cover"
                   alt={selectedVendor.businessName}
+                  sizes="240px"
                 />
                 {selectedVendor.verificationStatus === "APPROVED" && (
                     <div className="absolute top-1 right-1">

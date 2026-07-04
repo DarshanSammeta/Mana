@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, Search } from 'lucide-react';
+import { MAPS_CONFIG } from '@/config/maps';
 
 interface LocationPickerProps {
   onLocationSelect: (location: { address: string; lat: number; lng: number }) => void;
@@ -25,7 +26,7 @@ const center = {
 export const LocationPicker: React.FC<LocationPickerProps> = ({ onLocationSelect, initialLocation }) => {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: MAPS_CONFIG.apiKey || '',
     libraries: ['places'],
   });
 

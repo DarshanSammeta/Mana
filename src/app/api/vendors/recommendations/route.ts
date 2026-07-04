@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const eventType = searchParams.get('eventType');
   const city = searchParams.get('city');
 
   try {
@@ -12,7 +11,15 @@ export async function GET(req: NextRequest) {
       where: { verificationStatus: 'APPROVED' },
       orderBy: { rating: 'desc' },
       take: 4,
-      include: { user: { select: { fullName: true } } }
+      select: {
+        id: true,
+        businessName: true,
+        logo: true,
+        city: true,
+        rating: true,
+        reviewCount: true,
+        coverImage: true,
+      }
     });
 
     // 2. "Near You" (Simplified to city-based if no lat/lng)
@@ -20,7 +27,15 @@ export async function GET(req: NextRequest) {
       where: { city, verificationStatus: 'APPROVED' },
       orderBy: { totalBookings: 'desc' },
       take: 4,
-      include: { user: { select: { fullName: true } } }
+      select: {
+        id: true,
+        businessName: true,
+        logo: true,
+        city: true,
+        rating: true,
+        reviewCount: true,
+        coverImage: true,
+      }
     }) : [];
 
     // 3. "Best Value" (Based on bookings and rating balance)
@@ -31,7 +46,15 @@ export async function GET(req: NextRequest) {
         { rating: 'desc' }
       ],
       take: 4,
-      include: { user: { select: { fullName: true } } }
+      select: {
+        id: true,
+        businessName: true,
+        logo: true,
+        city: true,
+        rating: true,
+        reviewCount: true,
+        coverImage: true,
+      }
     });
 
     return NextResponse.json({
@@ -39,7 +62,7 @@ export async function GET(req: NextRequest) {
       nearYou,
       bestValue
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch recommendations' }, { status: 500 });
   }
 }

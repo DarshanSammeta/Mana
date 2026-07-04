@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 
+import Image from "next/image";
+
 const slides = [
   {
     image: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=2069&auto=format&fit=crop",
@@ -56,10 +58,13 @@ export function MarketplaceHero() {
         >
           {/* Background Image with Professional Gradient */}
           <div className="relative w-full h-full">
-             <img
+             <Image
                 src={slides[current].image}
+                fill
                 className="w-full h-full object-cover opacity-60"
                 alt="Hero"
+                priority={current === 0}
+                sizes="100vw"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-[#1E293B]/80 via-[#1E293B]/40 to-transparent z-10" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#1E293B] via-transparent to-transparent z-10" />
@@ -91,7 +96,7 @@ export function MarketplaceHero() {
                    {slides[current].subtitle}
                  </h2>
                  <p className="text-lg md:text-xl text-[#94A3B8] mb-10 font-medium max-w-lg leading-relaxed">
-                   Book top-rated {slides[current].title.toLowerCase()} for your next event with Mana's secure marketplace.
+                   Book top-rated {slides[current].title.toLowerCase()} for your next event with Mana&apos;s secure marketplace.
                  </p>
                </motion.div>
 

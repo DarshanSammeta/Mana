@@ -1,95 +1,72 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import {
   Bell,
   Check,
-  Trash2,
   Calendar,
   CreditCard,
   MessageSquare,
   Zap,
-  Info,
-  Clock,
   MoreVertical,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "react-hot-toast";
+import { notificationService } from "@/services/notification.service";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInView } from "react-intersection-observer";
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { ref, inView } = useInView();
+
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    status,
+  } = useInfiniteQuery({
+    queryKey: ['notifications'],
+    queryFn: ({ pageParam }) => notificationService.getNotifications(20, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
 
   useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const fetchNotifications = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/customer/notifications", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch notifications", error);
-    } finally {
-      setLoading(false);
+    if (inView && hasNextPage) {
+      fetchNextPage();
     }
-  };
+  }, [inView, fetchNextPage, hasNextPage]);
 
-  const markAsRead = async (id: string) => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/customer/notifications", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ id })
-      });
-      if (res.ok) {
-        setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
-      }
-    } catch (error) {
-      console.error("Failed to mark notification as read", error);
-    }
-  };
+  const markAsReadMutation = useMutation({
+    mutationFn: (id: string) => notificationService.markAsRead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
 
-  const markAllAsRead = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/customer/notifications", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ readAll: true })
-      });
-      if (res.ok) {
-        setNotifications(notifications.map(n => ({ ...n, isRead: true })));
-        toast.success("All notifications marked as read");
-      }
-    } catch (error) {
+  const markAllAsReadMutation = useMutation({
+    mutationFn: () => notificationService.markAllAsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success("All notifications marked as read");
+    },
+    onError: () => {
       toast.error("Failed to update notifications");
     }
-  };
+  });
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -101,6 +78,7 @@ export default function NotificationsPage() {
     }
   };
 
+  const notifications = data?.pages.flatMap((page) => page.items) || [];
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
@@ -114,16 +92,17 @@ export default function NotificationsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={markAllAsRead}
+            onClick={() => markAllAsReadMutation.mutate()}
+            disabled={markAllAsReadMutation.isPending}
             className="text-primary border-primary/20 hover:bg-primary/5 font-bold"
           >
-            <Check className="h-4 w-4 mr-2" />
+            {markAllAsReadMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
             Mark all as read
           </Button>
         )}
       </div>
 
-      {loading ? (
+      {status === 'pending' ? (
         <div className="space-y-4">
           {[1, 2, 3, 4, 5].map(i => (
             <Skeleton key={i} className="h-24 w-full rounded-xl" />
@@ -138,10 +117,10 @@ export default function NotificationsPage() {
                 <div
                   key={notification.id}
                   className={cn(
-                    "p-5 flex gap-4 transition-colors relative group",
+                    "p-5 flex gap-4 transition-colors relative group cursor-pointer",
                     !notification.isRead ? "bg-primary/5" : "hover:bg-muted/30"
                   )}
-                  onClick={() => !notification.isRead && markAsRead(notification.id)}
+                  onClick={() => !notification.isRead && markAsReadMutation.mutate(notification.id)}
                 >
                   <div className={cn(
                     "h-12 w-12 rounded-2xl shrink-0 flex items-center justify-center",
@@ -195,6 +174,14 @@ export default function NotificationsPage() {
               );
             })}
           </div>
+
+          <div ref={ref} className="p-4 flex justify-center">
+            {isFetchingNextPage ? (
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            ) : hasNextPage ? (
+              <span className="text-sm text-muted-foreground">Load more</span>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="text-center py-24 bg-muted/50 rounded-2xl border-2 border-dashed border-border">
@@ -203,7 +190,7 @@ export default function NotificationsPage() {
           </div>
           <h3 className="text-xl font-bold text-foreground">All caught up!</h3>
           <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-            You don't have any notifications at the moment. We'll let you know when something important happens.
+            You don&apos;t have any notifications at the moment. We&apos;ll let you know when something important happens.
           </p>
         </div>
       )}

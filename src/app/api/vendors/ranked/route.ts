@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   try {
     const rankedVendors = await getRankedVendors(lat, lng, category, radius);
     return NextResponse.json(rankedVendors);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Ranking failed' }, { status: 500 });
   }
 }

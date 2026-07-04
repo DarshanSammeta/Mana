@@ -9,17 +9,15 @@ export async function GET(req: Request) {
   const payload = verifyAccessToken(token);
   if (!payload) return NextResponse.json({ status: 403 });
 
+  const { searchParams } = new URL(req.url);
+  const limit = parseInt(searchParams.get("limit") || "20");
+  const cursor = searchParams.get("cursor");
+
   try {
     const userId = payload.userId;
 
     const wallet = await prisma.wallet.findUnique({
       where: { userId },
-      include: {
-        transaction: {
-          orderBy: { createdAt: 'desc' },
-          take: 20
-        }
-      }
     });
 
     if (!wallet) {
@@ -34,13 +32,30 @@ export async function GET(req: Request) {
           lifetimeEarnings: 0,
           lifetimeSpending: 0,
           type: 'USER'
-        },
-        include: { transaction: true }
+        }
       });
-      return NextResponse.json(newWallet);
+      return NextResponse.json({ ...newWallet, items: [], nextCursor: null });
     }
 
-    return NextResponse.json(wallet);
+    const transactions = await prisma.transaction.findMany({
+      where: { walletId: wallet.id },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      cursor: cursor ? { id: cursor } : undefined,
+      skip: cursor ? 1 : 0,
+    });
+
+    let nextCursor: typeof cursor | undefined = undefined;
+    if (transactions.length > limit) {
+      const nextItem = transactions.pop();
+      nextCursor = nextItem?.id;
+    }
+
+    return NextResponse.json({
+        ...wallet,
+        items: transactions,
+        nextCursor
+    });
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }

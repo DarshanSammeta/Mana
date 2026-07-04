@@ -1,51 +1,20 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { getAuthPayload } from "@/lib/auth";
+import { getVendorSubscription } from "@/lib/vendor";
 
 export async function GET(req: Request) {
   try {
-    const token = req.headers.get("authorization")?.split(" ")[1];
-    if (!token) {
+    const payload = await getAuthPayload(req);
+    if (!payload || payload.role !== "VENDOR") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const payload = verifyAccessToken(token);
-    if (!payload || payload.role !== "VENDOR") {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    }
-
-    const vendorProfile = await prisma.vendorprofile.findUnique({
-      where: { userId: payload.userId },
-      include: {
-        vendorsubscription: {
-          include: {
-            subscriptionplan: true,
-          },
-        },
-      },
-    });
-
-    if (!vendorProfile) {
+    const data = await getVendorSubscription(payload.userId);
+    if (!data) {
       return NextResponse.json({ message: "Vendor profile not found" }, { status: 404 });
     }
 
-    const [plans, serviceCount] = await Promise.all([
-      prisma.subscriptionplan.findMany({
-        orderBy: { rank: 'asc' }
-      }),
-      prisma.service.count({
-        where: { vendorProfileId: vendorProfile.id }
-      })
-    ]);
-
-    return NextResponse.json({
-      currentSubscription: vendorProfile.vendorsubscription,
-      plans,
-      usage: {
-        services: serviceCount,
-        limit: vendorProfile.vendorsubscription?.subscriptionplan.listingLimit || 3
-      }
-    });
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Subscription GET error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

@@ -38,8 +38,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(pkg, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bad Request";
+    return NextResponse.json({ message }, { status: 400 });
   }
 }
 
@@ -55,7 +56,8 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(packages);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

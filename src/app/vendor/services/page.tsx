@@ -14,15 +14,12 @@ import {
   ArrowRight,
   Search,
   Filter,
-  ExternalLink,
-  MoreVertical,
   Layers,
   CheckCircle2,
   AlertCircle
 } from "lucide-react";
-import axios from "axios";
+import { vendorService } from "@/services/vendor.service";
 import Link from "next/link";
-import { useAuthStore } from "@/store/authStore";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -34,15 +31,28 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/common/EmptyState";
 
+interface ServiceData {
+  id: string;
+  title: string;
+  description: string;
+  basePrice: number;
+  packages: any[];
+  servicetype: {
+    subcategory: {
+      category: {
+        name: string;
+        eventtypes: { id: string; name: string }[];
+      };
+    };
+  };
+}
+
 export default function VendorServices() {
-  const [services, setServices] = useState<any[]>([]);
+  const [services, setServices] = useState<ServiceData[]>([]);
   const [loading, setLoading] = useState(true);
-  const { accessToken } = useAuthStore();
   const { toast } = useToast();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -50,24 +60,39 @@ export default function VendorServices() {
 
   const fetchServices = async () => {
     try {
+      setLoading(true);
       const [servicesRes, categoriesRes] = await Promise.all([
-        axios.get("/api/vendor/services", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        axios.get("/api/categories")
+        vendorService.getServices(),
+        vendorService.getCategories()
       ]);
-      setServices(servicesRes.data);
-      setCategories(categoriesRes.data);
-    } catch (error) {
+      setServices(servicesRes);
+      setCategories(categoriesRes);
+
+      const rating = servicesRes.length > 0
+        ? servicesRes.reduce((acc: number, s: any) => acc + (s.review?.reduce((a: number, r: any) => a + r.rating, 0) || 0), 0) / (servicesRes.reduce((acc: number, s: any) => acc + (s.review?.length || 0), 0) || 1)
+        : 4.8;
+
+      setStats({
+        activeListings: servicesRes.length,
+        totalPackages: servicesRes.reduce((acc: number, s: any) => acc + (s.Renamedpackage?.length || 0), 0),
+        avgRating: rating.toFixed(1)
+      });
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch data" });
     } finally {
       setLoading(false);
     }
   };
 
+  const [stats, setStats] = useState({
+    activeListings: 0,
+    totalPackages: 0,
+    avgRating: "0.0"
+  });
+
   useEffect(() => {
-    if (accessToken) fetchServices();
-  }, [accessToken]);
+    fetchServices();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [newService, setNewService] = useState({
     title: "",
@@ -82,13 +107,11 @@ export default function VendorServices() {
   const handleAddService = async () => {
     try {
       setLoading(true);
-      await axios.post("/api/vendor/services", newService, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      await vendorService.addService(newService);
       toast({ title: "Success", description: "Service added successfully" });
       fetchServices();
       setNewService({ title: "", description: "", basePrice: "", pricingType: "PACKAGE", categoryId: "", subcategoryId: "", serviceTypeId: "" });
-    } catch (error) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to add service" });
     } finally {
       setLoading(false);
@@ -98,12 +121,10 @@ export default function VendorServices() {
   const handleDeleteService = async (id: string) => {
     if (!confirm("Are you sure? This will delete all packages under this service.")) return;
     try {
-      await axios.delete(`/api/vendor/services/${id}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      await vendorService.deleteService(id);
       toast({ title: "Success", description: "Service deleted" });
       fetchServices();
-    } catch (error) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "Delete failed" });
     }
   };
@@ -207,7 +228,7 @@ export default function VendorServices() {
             </div>
             <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Active Listings</p>
-                <p className="text-2xl font-bold text-foreground">{services.length}</p>
+                <p className="text-2xl font-bold text-foreground">{stats.activeListings}</p>
             </div>
         </div>
         <div className="bg-card p-5 border border-border rounded-2xl shadow-sm flex items-center gap-4">
@@ -216,7 +237,7 @@ export default function VendorServices() {
             </div>
             <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Packages</p>
-                <p className="text-2xl font-bold text-foreground">{services.reduce((acc: number, s: any) => acc + (s.packages?.length || 0), 0)}</p>
+                <p className="text-2xl font-bold text-foreground">{stats.totalPackages}</p>
             </div>
         </div>
         <div className="bg-card p-5 border border-border rounded-2xl shadow-sm flex items-center gap-4">
@@ -225,7 +246,7 @@ export default function VendorServices() {
             </div>
             <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Avg. Rating</p>
-                <p className="text-2xl font-bold text-foreground">4.8</p>
+                <p className="text-2xl font-bold text-foreground">{stats.avgRating}</p>
             </div>
         </div>
       </div>
@@ -260,8 +281,15 @@ export default function VendorServices() {
             <div key={service.id} className="bg-card border border-border rounded-2xl shadow-sm hover:border-primary/30 transition-all flex flex-col md:flex-row group overflow-hidden">
                 <div className="w-full md:w-56 h-48 md:h-auto bg-muted relative shrink-0">
                     <ImageIcon className="absolute inset-0 m-auto h-12 w-12 text-muted-foreground/30 group-hover:scale-110 transition-transform duration-500" />
-                    <div className="absolute top-3 left-3 px-2.5 py-1 bg-card/90 backdrop-blur-sm border border-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-primary shadow-sm">
-                        {service.category?.name || "Service"}
+                    <div className="absolute top-3 left-3 flex flex-col gap-1">
+                        {service.servicetype?.subcategory?.category?.eventtypes?.map((et: any) => (
+                            <div key={et.id} className="px-2.5 py-1 bg-primary/90 backdrop-blur-sm border border-primary/20 rounded-lg text-[8px] font-black uppercase tracking-widest text-white shadow-sm w-fit">
+                                {et.name}
+                            </div>
+                        ))}
+                        <div className="px-2.5 py-1 bg-card/90 backdrop-blur-sm border border-border rounded-lg text-[10px] font-bold uppercase tracking-wider text-primary shadow-sm w-fit">
+                            {service.servicetype?.subcategory?.category?.name || "Service"}
+                        </div>
                     </div>
                 </div>
                 <div className="flex-1 p-6 flex flex-col">
@@ -279,7 +307,11 @@ export default function VendorServices() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 rounded-xl border border-border hover:bg-muted hover:text-primary transition-all"><Edit className="h-4 w-4" /></button>
+                            <Link href={`/vendor/services/${service.id}`}>
+                                <button className="p-2 rounded-xl border border-border hover:bg-muted hover:text-primary transition-all">
+                                    <Edit className="h-4 w-4" />
+                                </button>
+                            </Link>
                             <button
                                 className="p-2 rounded-xl border border-border hover:bg-destructive/10 hover:text-destructive transition-all"
                                 onClick={() => handleDeleteService(service.id)}

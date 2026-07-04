@@ -1,8 +1,10 @@
 import { MetadataRoute } from 'next';
 import { prisma } from '@/lib/prisma';
 
+import { APP_CONFIG } from '@/config/app';
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://manaevents.in';
+  const baseUrl = APP_CONFIG.url;
 
   try {
     // Fetch all vendors to include in sitemap

@@ -3,22 +3,18 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import {
-  Wallet,
   ArrowUpRight,
   ArrowDownLeft,
   Clock,
   CreditCard,
   ShieldCheck,
   History,
-  Download,
-  AlertCircle,
-  ChevronRight,
-  Info,
-  Banknote,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Loader2,
+  Info,
+  Banknote
 } from "lucide-react";
-import { generateEarningsCSV } from "@/lib/reports";
 import CountUp from "react-countup";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -26,92 +22,85 @@ import toast from "react-hot-toast";
 import { useSocketStore } from "@/store/socketStore";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "@/components/vendor/TableSkeleton";
+import { vendorService } from "@/services/vendor.service";
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInView } from "react-intersection-observer";
 
 export default function VendorWallet() {
-  const [wallet, setWallet] = useState<any>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [withdrawalHistory, setWithdrawalHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { ref, inView } = useInView();
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { socket } = useSocketStore();
 
-  const fetchWalletData = async () => {
-    try {
-      const token = localStorage.getItem("accessToken");
-      const [walletRes, transRes, payoutRes] = await Promise.all([
-        fetch("/api/wallet", {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch("/api/wallet/transactions", {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch("/api/payouts", {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
+  const { data: wallet, isLoading: walletLoading } = useQuery({
+    queryKey: ['vendor-wallet'],
+    queryFn: () => vendorService.getWallet(),
+  });
 
-      if (walletRes.ok) setWallet(await walletRes.json());
-      if (transRes.ok) setTransactions(await transRes.json());
-      if (payoutRes.ok) setWithdrawalHistory(await payoutRes.json());
-    } catch (error) {
-      console.error("Failed to fetch wallet data");
-      toast.error("Failed to load financial data");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: payoutHistory = [] } = useQuery({
+    queryKey: ['vendor-payouts'],
+    queryFn: () => vendorService.getPayouts(),
+  });
+
+  const {
+    data: transactionData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: transactionsLoading,
+  } = useInfiniteQuery({
+    queryKey: ['vendor-transactions'],
+    queryFn: ({ pageParam }) => vendorService.getTransactions(10, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    fetchWalletData();
-  }, []);
+    if (inView && hasNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, fetchNextPage, hasNextPage]);
 
   useEffect(() => {
     if (!socket) return;
-    socket.on("wallet:updated", () => fetchWalletData());
+    socket.on("wallet:updated", () => {
+        queryClient.invalidateQueries({ queryKey: ['vendor-wallet'] });
+        queryClient.invalidateQueries({ queryKey: ['vendor-transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['vendor-payouts'] });
+    });
     return () => { socket.off("wallet:updated"); };
-  }, [socket]);
+  }, [socket, queryClient]);
 
-  const handleWithdraw = async () => {
+  const withdrawMutation = useMutation({
+    mutationFn: (amount: number) => vendorService.requestPayout(amount),
+    onSuccess: () => {
+        toast.success("Withdrawal request submitted");
+        setIsWithdrawModalOpen(false);
+        setWithdrawAmount("");
+        queryClient.invalidateQueries({ queryKey: ['vendor-wallet'] });
+        queryClient.invalidateQueries({ queryKey: ['vendor-payouts'] });
+    },
+    onError: (error: any) => {
+        toast.error(error.response?.data?.message || "Withdrawal failed");
+    }
+  });
+
+  const handleWithdraw = () => {
     if (!withdrawAmount || isNaN(Number(withdrawAmount))) {
       toast.error("Please enter a valid amount");
       return;
     }
-
     const amount = Number(withdrawAmount);
     if (amount > (Number(wallet?.withdrawable) || 0)) {
       toast.error("Insufficient withdrawable balance");
       return;
     }
-
-    setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch("/api/payouts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ amount })
-      });
-
-      if (res.ok) {
-        toast.success("Withdrawal request submitted");
-        setIsWithdrawModalOpen(false);
-        setWithdrawAmount("");
-        fetchWalletData();
-      } else {
-        const data = await res.json();
-        toast.error(data.message || "Withdrawal failed");
-      }
-    } catch (error) {
-      toast.error("Something went wrong");
-    } finally {
-      setIsSubmitting(false);
-    }
+    withdrawMutation.mutate(amount);
   };
+
+  const transactions = transactionData?.pages.flatMap(page => page.items) || [];
 
   const handleExportCSV = async () => {
     if (transactions.length === 0) {
@@ -119,6 +108,7 @@ export default function VendorWallet() {
       return;
     }
     try {
+      const { generateEarningsCSV } = await import("@/lib/reports");
       const blob = await generateEarningsCSV(transactions);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -128,7 +118,7 @@ export default function VendorWallet() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch {
       toast.error("Failed to export CSV");
     }
   };
@@ -176,7 +166,7 @@ export default function VendorWallet() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {loading ? (
+        {walletLoading ? (
             [1, 2, 3].map(i => (
                 <div key={i} className="bg-card p-8 rounded-[32px] border border-border/50 shadow-sm">
                     <Skeleton className="h-4 w-24 mb-6" />
@@ -224,43 +214,56 @@ export default function VendorWallet() {
             </div>
 
             <div className="space-y-4">
-                {loading ? (
+                {transactionsLoading ? (
                     <TableSkeleton rows={5} columns={3} />
                 ) : transactions.length === 0 ? (
                     <div className="text-center py-20 bg-secondary/10 rounded-[32px] border border-dashed border-border">
                         <p className="text-muted-foreground font-bold italic">No transactions recorded yet.</p>
                     </div>
-                ) : transactions.map((tx) => (
-                    <div key={tx.id} className="p-6 bg-card rounded-3xl border border-border/50 flex items-center justify-between group hover:border-primary/10 transition-all">
-                        <div className="flex items-center gap-5">
-                            <div className={cn(
-                                "h-14 w-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110",
-                                tx.type === 'CREDIT' ? "bg-success/10" : "bg-destructive/10"
-                            )}>
-                                {tx.type === 'CREDIT' ? <ArrowDownLeft className="h-6 w-6 text-success" /> : <ArrowUpRight className="h-6 w-6 text-destructive" />}
-                            </div>
-                            <div>
-                                <h4 className="font-black text-foreground">{tx.description}</h4>
-                                <div className="flex items-center gap-3 mt-1">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(tx.createdAt), "dd MMM, yyyy • HH:mm")}</span>
-                                    <span className={cn(
-                                        "text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter",
-                                        tx.status === 'COMPLETED' ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"
-                                    )}>{tx.status}</span>
+                ) : (
+                    <>
+                        {transactions.map((tx) => (
+                            <div key={tx.id} className="p-6 bg-card rounded-3xl border border-border/50 flex items-center justify-between group hover:border-primary/10 transition-all">
+                                <div className="flex items-center gap-5">
+                                    <div className={cn(
+                                        "h-14 w-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110",
+                                        tx.type === 'CREDIT' ? "bg-success/10" : "bg-destructive/10"
+                                    )}>
+                                        {tx.type === 'CREDIT' ? <ArrowDownLeft className="h-6 w-6 text-success" /> : <ArrowUpRight className="h-6 w-6 text-destructive" />}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-foreground">{tx.description}</h4>
+                                        <div className="flex items-center gap-3 mt-1">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(tx.createdAt), "dd MMM, yyyy • HH:mm")}</span>
+                                            <span className={cn(
+                                                "text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter",
+                                                tx.status === 'COMPLETED' ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"
+                                            )}>{tx.status}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className={cn(
+                                        "text-xl font-black",
+                                        tx.type === 'CREDIT' ? "text-success" : "text-destructive"
+                                    )}>
+                                        {tx.type === 'CREDIT' ? '+' : '-'}₹{Number(tx.amount).toLocaleString('en-IN')}
+                                    </p>
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1 tracking-widest">{tx.type}</p>
                                 </div>
                             </div>
+                        ))}
+                        <div ref={ref} className="py-4 flex justify-center">
+                            {isFetchingNextPage ? (
+                                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                            ) : hasNextPage ? (
+                                <span className="text-xs font-black uppercase text-muted-foreground/40">Scroll for more</span>
+                            ) : (
+                                <span className="text-xs font-black uppercase text-muted-foreground/40">End of history</span>
+                            )}
                         </div>
-                        <div className="text-right">
-                            <p className={cn(
-                                "text-xl font-black",
-                                tx.type === 'CREDIT' ? "text-success" : "text-destructive"
-                            )}>
-                                {tx.type === 'CREDIT' ? '+' : '-'}₹{Number(tx.amount).toLocaleString('en-IN')}
-                            </p>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1 tracking-widest">{tx.type}</p>
-                        </div>
-                    </div>
-                ))}
+                    </>
+                )}
             </div>
         </div>
 
@@ -268,7 +271,7 @@ export default function VendorWallet() {
             <div>
                 <h3 className="text-xl font-black mb-6">Payout History</h3>
                 <div className="space-y-4">
-                    {withdrawalHistory.slice(0, 5).map((wd, i) => (
+                    {payoutHistory.slice(0, 5).map((wd: any, i: number) => (
                         <div key={i} className="p-5 bg-card rounded-3xl border border-border/50 flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className="h-10 w-10 rounded-xl bg-secondary flex items-center justify-center">
@@ -285,7 +288,7 @@ export default function VendorWallet() {
                             )}>{wd.status}</span>
                         </div>
                     ))}
-                    {withdrawalHistory.length === 0 && <p className="text-center text-xs text-muted-foreground py-4 font-bold italic">No payouts requested.</p>}
+                    {payoutHistory.length === 0 && <p className="text-center text-xs text-muted-foreground py-4 font-bold italic">No payouts requested.</p>}
                 </div>
             </div>
 
@@ -360,10 +363,10 @@ export default function VendorWallet() {
 
                 <button
                     onClick={handleWithdraw}
-                    disabled={isSubmitting || !withdrawAmount}
+                    disabled={withdrawMutation.isPending || !withdrawAmount}
                     className="w-full py-5 bg-primary text-white rounded-[24px] font-black text-lg shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
-                    {isSubmitting ? "Processing Request..." : "Confirm Withdrawal"}
+                    {withdrawMutation.isPending ? "Processing Request..." : "Confirm Withdrawal"}
                 </button>
               </div>
             </motion.div>

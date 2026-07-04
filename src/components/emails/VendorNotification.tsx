@@ -1,4 +1,5 @@
 import React from 'react';
+import { APP_CONFIG } from '@/config/app';
 
 interface VendorNotificationEmailProps {
   vendorName: string;
@@ -31,7 +32,7 @@ export const VendorNotificationEmail = ({
     <p>Please log in to your Seller Central dashboard to accept or decline this request within the next 4 hours.</p>
 
     <a
-      href={`${process.env.NEXT_PUBLIC_APP_URL}/vendor/dashboard`}
+      href={`${APP_CONFIG.url}/vendor/dashboard`}
       style={{
         display: 'inline-block',
         backgroundColor: '#2563EB',

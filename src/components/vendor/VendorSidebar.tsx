@@ -1,54 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import NavLink from "../common/NavLink";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
-  Store,
-  Package,
-  Calendar,
-  MessageSquare,
-  CreditCard,
-  Star,
-  Settings,
-  Image as ImageIcon,
-  FileCheck,
-  Sparkles,
   LogOut,
-  Users,
-  Briefcase,
-  Wallet,
-  FileText,
-  Bell,
-  PlusCircle,
-  Layers,
-  Users2,
-  BarChart3,
-  CalendarDays
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuthStore } from "@/store/authStore";
 import { useState } from "react";
 
-const menuItems = [
-  { name: "Dashboard", icon: LayoutDashboard, href: "/vendor/dashboard" },
-  { name: "My Services", icon: Store, href: "/vendor/services" },
-  { name: "Bookings", icon: FileCheck, href: "/vendor/bookings" },
-  { name: "Availability", icon: CalendarDays, href: "/vendor/availability" },
-  { name: "Earnings", icon: Briefcase, href: "/vendor/earnings" },
-  { name: "Transactions", icon: CreditCard, href: "/vendor/wallet" },
-  { name: "Messages", icon: MessageSquare, href: "/vendor/messages" },
-  { name: "Reviews", icon: Star, href: "/vendor/reviews" },
-  { name: "Notifications", icon: Bell, href: "/vendor/notifications" },
-  { name: "Settings", icon: Settings, href: "/vendor/settings" },
-];
+import { VENDOR_SIDEBAR_MENU } from "@/data/dashboard/vendor-sidebar";
 
 export default function VendorSidebar() {
   const pathname = usePathname();
   const { logout } = useAuthStore();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, _setIsCollapsed] = useState(false);
 
   return (
     <motion.div
@@ -57,7 +24,7 @@ export default function VendorSidebar() {
       className="hidden lg:flex flex-col bg-white h-full border-r border-slate-200 transition-all duration-300"
     >
       <div className="flex-1 py-6 space-y-1 overflow-y-auto px-4 custom-scrollbar">
-        {menuItems.map((item) => {
+        {VENDOR_SIDEBAR_MENU.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link

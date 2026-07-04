@@ -2,20 +2,17 @@
 
 import { useState } from "react";
 import {
-  CreditCard,
   Plus,
   Trash2,
   ShieldCheck,
-  Lock,
-  ChevronRight,
-  Info
+  Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export default function PaymentsPage() {
-  const [cards, setCards] = useState([
+  const [cards] = useState([
     { id: 1, type: "VISA", last4: "4242", expiry: "12/26", isDefault: true, brand: "HDFC Bank" },
     { id: 2, type: "MASTERCARD", last4: "8890", expiry: "09/25", isDefault: false, brand: "ICICI Bank" },
   ]);

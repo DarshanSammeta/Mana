@@ -1,15 +1,13 @@
+import { APP_CONFIG } from "@/config/app";
 import { Metadata } from "next";
 import VendorProfileClient from "./VendorProfileClient";
-import axios from "axios";
+import { getVendorById, getEventTypes, getMarketplaceCategories } from "@/lib/marketplace";
 
 async function getVendorData(id: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   try {
-    const res = await fetch(`${baseUrl}/api/marketplace/${id}`, { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    return res.json();
+    return await getVendorById(id);
   } catch (error) {
-    console.error("Error fetching vendor data for metadata:", error);
+    console.error("Error fetching vendor data:", error);
     return null;
   }
 }
@@ -27,10 +25,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const title = `${vendor.businessName} | ${vendor.city} Event Professional`;
   const description = vendor.description || `Book ${vendor.businessName} for your next event in ${vendor.city}. Verified professionals on Mana Events.`;
+  const baseUrl = APP_CONFIG.url;
 
   return {
     title,
     description,
+    alternates: {
+      canonical: `${baseUrl}/marketplace/vendor/${resolvedParams.id}`,
+    },
     openGraph: {
       title,
       description,
@@ -48,7 +50,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function VendorProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
-  const data = await getVendorData(resolvedParams.id);
+  const [data, eventTypes, categories] = await Promise.all([
+    getVendorData(resolvedParams.id),
+    getEventTypes(),
+    getMarketplaceCategories()
+  ]);
 
   if (!data?.vendor) {
     return (
@@ -59,5 +65,12 @@ export default async function VendorProfilePage({ params }: { params: Promise<{ 
     );
   }
 
-  return <VendorProfileClient vendor={data.vendor} similarVendors={data.similarVendors || []} />;
+  return (
+    <VendorProfileClient
+      vendor={data.vendor}
+      similarVendors={data.similarVendors || []}
+      initialEventTypes={eventTypes}
+      initialCategories={categories}
+    />
+  );
 }

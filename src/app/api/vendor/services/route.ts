@@ -1,64 +1,106 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthPayload } from "@/lib/auth";
+import { verifyAccessToken } from "@/lib/auth";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
+import { revalidateTag } from "next/cache";
 
 export async function GET(request: Request) {
-  const payload = await getAuthPayload(request);
-  if (!payload || payload.role !== "VENDOR") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  return withErrorHandler(async () => {
+    const token = request.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  try {
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
     const vendorProfile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId }
     });
 
     if (!vendorProfile) {
-      return NextResponse.json({ error: "Vendor profile not found" }, { status: 404 });
+      return NextResponse.json({ message: "Vendor profile not found" }, { status: 404 });
     }
 
     const services = await prisma.service.findMany({
       where: { vendorProfileId: vendorProfile.id },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        basePrice: true,
+        pricingType: true,
+        serviceTypeId: true,
         servicetype: {
-          include: {
+          select: {
+            id: true,
+            name: true,
             subcategory: {
-              include: {
-                category: true
+              select: {
+                id: true,
+                name: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                    eventtypes: {
+                      select: {
+                        id: true,
+                        name: true
+                      }
+                    }
+                  }
+                }
               }
             }
           }
         },
-        Renamedpackage: true
+        Renamedpackage: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            inclusions: true
+          }
+        }
       }
     });
     return NextResponse.json(services);
-  } catch (error) {
-    console.error("GET Services Error:", error);
-    return NextResponse.json({ error: "Failed to fetch services" }, { status: 500 });
-  }
+  });
 }
 
 export async function POST(request: Request) {
-  const payload = await getAuthPayload(request);
-  if (!payload || payload.role !== "VENDOR") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  return withErrorHandler(async () => {
+    const token = request.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  try {
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId },
-      include: {
+      select: {
+        id: true,
         vendorsubscription: {
-          include: { subscriptionplan: true }
+          select: {
+            subscriptionplan: {
+              select: {
+                listingLimit: true
+              }
+            }
+          }
         }
       }
     });
 
     if (!vendorProfile) {
-      return NextResponse.json({ error: "Vendor profile not found" }, { status: 404 });
+      return NextResponse.json({ message: "Vendor profile not found" }, { status: 404 });
     }
 
     // Check Listing Limit
@@ -69,7 +111,6 @@ export async function POST(request: Request) {
     const limit = vendorProfile.vendorsubscription?.subscriptionplan.listingLimit ?? 3;
     if (limit !== -1 && currentServiceCount >= limit) {
       return NextResponse.json({
-        error: "Listing limit reached",
         message: `Your current plan allows only ${limit} listings. Please upgrade to add more.`
       }, { status: 403 });
     }
@@ -83,13 +124,42 @@ export async function POST(request: Request) {
         description: body.description,
         basePrice: body.basePrice,
         pricingType: body.pricingType,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        portfolio: {
+          create: (body.images || []).map((url: string) => ({
+            id: crypto.randomUUID(),
+            vendorProfileId: vendorProfile.id,
+            mediaUrl: url,
+            mediaType: "IMAGE",
+            title: body.title
+          }))
+        }
+      },
+      select: {
+        id: true,
+        vendorProfileId: true,
+        serviceTypeId: true,
+        title: true,
+        description: true,
+        basePrice: true,
+        pricingType: true,
+        updatedAt: true,
+        portfolio: {
+          select: {
+            id: true,
+            mediaUrl: true,
+            mediaType: true,
+            title: true
+          }
+        }
       }
     });
-    return NextResponse.json(service);
-  } catch (error) {
-    console.error("POST Service Error:", error);
-    return NextResponse.json({ error: "Failed to create service" }, { status: 500 });
-  }
-}
 
+    revalidateTag('vendors');
+    revalidateTag('marketplace');
+
+    logger.info("New service created by vendor", { vendorId: vendorProfile.id, serviceId: service.id });
+
+    return NextResponse.json(service);
+  });
+}

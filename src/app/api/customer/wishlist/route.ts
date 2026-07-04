@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
 
 export async function GET(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "CUSTOMER") return NextResponse.json({ status: 403 });
-
-  try {
-    const userId = payload.userId;
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "CUSTOMER") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const wishlist = await prisma.wishlist.findUnique({
-      where: { userId },
+      where: { userId: payload.userId },
       include: {
         wishlistitem: true
       }
@@ -50,9 +50,19 @@ export async function GET(req: Request) {
       }),
       prisma.service.findMany({
         where: { id: { in: serviceIds } },
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          basePrice: true,
+          pricingType: true,
           vendorprofile: {
-            select: { businessName: true, logo: true }
+            select: {
+              id: true,
+              businessName: true,
+              logo: true,
+              city: true
+            }
           }
         }
       })
@@ -68,63 +78,61 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(itemsWithDetails);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }
 
 export async function POST(req: Request) {
+  return withErrorHandler(async () => {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
     const payload = verifyAccessToken(token);
-    if (!payload) return NextResponse.json({ status: 403 });
+    if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-    try {
-      const { targetId, type } = await req.json();
-      const userId = payload.userId;
+    const { targetId, type } = await req.json();
+    const userId = payload.userId;
 
-      let wishlist = await prisma.wishlist.findUnique({
-        where: { userId }
-      });
+    let wishlist = await prisma.wishlist.findUnique({
+      where: { userId }
+    });
 
-      if (!wishlist) {
-        wishlist = await prisma.wishlist.create({
-          data: {
-            userId,
-            id: `wish_${userId.substring(0, 8)}`,
-            updatedAt: new Date()
-          }
-        });
-      }
-
-      const existing = await prisma.wishlistitem.findUnique({
-        where: {
-          wishlistId_targetId_type: {
-            wishlistId: wishlist.id,
-            targetId,
-            type
-          }
+    if (!wishlist) {
+      wishlist = await prisma.wishlist.create({
+        data: {
+          userId,
+          id: `wish_${userId.substring(0, 8)}`,
+          updatedAt: new Date()
         }
       });
-
-      if (existing) {
-        await prisma.wishlistitem.delete({
-          where: { id: existing.id }
-        });
-        return NextResponse.json({ action: 'removed' });
-      } else {
-        await prisma.wishlistitem.create({
-          data: {
-            id: `wi_${Math.random().toString(36).substring(2, 9)}`,
-            wishlistId: wishlist.id,
-            targetId,
-            type
-          }
-        });
-        return NextResponse.json({ action: 'added' });
-      }
-    } catch (error: any) {
-      return NextResponse.json({ message: error.message }, { status: 500 });
     }
-  }
+
+    const existing = await prisma.wishlistitem.findUnique({
+      where: {
+        wishlistId_targetId_type: {
+          wishlistId: wishlist.id,
+          targetId,
+          type
+        }
+      }
+    });
+
+    if (existing) {
+      await prisma.wishlistitem.delete({
+        where: { id: existing.id }
+      });
+      logger.info("Item removed from wishlist", { userId, targetId, type });
+      return NextResponse.json({ action: 'removed' });
+    } else {
+      await prisma.wishlistitem.create({
+        data: {
+          id: crypto.randomUUID(),
+          wishlistId: wishlist.id,
+          targetId,
+          type
+        }
+      });
+      logger.info("Item added to wishlist", { userId, targetId, type });
+      return NextResponse.json({ action: 'added' });
+    }
+  });
+}

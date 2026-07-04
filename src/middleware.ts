@@ -14,8 +14,12 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/register") ||
     pathname.startsWith("/marketplace") ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/socket") ||
     pathname.startsWith("/api/marketplace") ||
     pathname.startsWith("/api/categories") ||
+    pathname.startsWith("/api/search") ||
+    pathname.startsWith("/api/event-types") ||
+    pathname.startsWith("/api/cities") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico") ||
     pathname.startsWith("/manifest.json") ||
@@ -63,21 +67,24 @@ export async function middleware(req: NextRequest) {
   }
 
   // Role-based access control
+  if (pathname.startsWith("/admin") && payload.role !== "ADMIN") {
+    const url = new URL("/", req.url);
+    url.searchParams.set("error", "access_denied");
+    return NextResponse.redirect(url);
+  }
+
   if (pathname.startsWith("/vendor") && payload.role !== "VENDOR") {
     const url = new URL("/", req.url);
     url.searchParams.set("error", "access_denied");
     return NextResponse.redirect(url);
   }
 
-  // Allow both roles to access common protected routes like /bookings, /profile, etc.
-  // But if there are specific /customer routes:
-  if (pathname.startsWith("/customer") && payload.role !== "CUSTOMER") {
-    // Some vendors might want to see their own bookings as a customer?
-    // But per requirements, let's keep it strict if needed.
-    // However, usually vendors are also customers.
-    // The prompt says "Only vendors can access /vendor/*".
-    // It doesn't explicitly say "Only customers can access /customer/*".
-    // But it says "If customer tries [vendor routes]: Redirect to / Show: Access denied."
+  if (pathname.startsWith("/customer") && payload.role !== "CUSTOMER" && payload.role !== "VENDOR") {
+    // Both Customers and Vendors (who might be buying) can access /customer routes usually,
+    // but if we want strict CUSTOMER-only:
+    const url = new URL("/", req.url);
+    url.searchParams.set("error", "access_denied");
+    return NextResponse.redirect(url);
   }
 
   const response = NextResponse.next();
@@ -87,16 +94,17 @@ export async function middleware(req: NextRequest) {
   response.headers.set("Pragma", "no-cache");
   response.headers.set("Expires", "0");
 
-  response.headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://res.cloudinary.com https://maps.gstatic.com https://maps.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; connect-src 'self' https://api.razorpay.com https://maps.googleapis.com;");
+  response.headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://res.cloudinary.com https://images.unsplash.com https://picsum.photos https://maps.gstatic.com https://maps.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; connect-src 'self' ws: wss: https://api.razorpay.com https://maps.googleapis.com;");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
   response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  response.headers.set("X-XSS-Protection", "1; mode=block");
 
   return response;
 }
 
 export const config = {
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api/auth|api/socket|_next/static|_next/image|favicon.ico).*)"],
 };

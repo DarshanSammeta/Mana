@@ -1,47 +1,143 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
+import { revalidateTag } from "next/cache";
 
 export async function GET(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "VENDOR") {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
 
-  try {
     const profile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId },
-      include: {
+      select: {
+        id: true,
+        businessName: true,
+        description: true,
+        logo: true,
+        coverImage: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        latitude: true,
+        longitude: true,
+        serviceRadius: true,
+        verificationStatus: true,
+        rating: true,
+        reviewCount: true,
+        gstNumber: true,
+        bankDetails: true,
+        bufferTime: true,
+        vacationMode: true,
+        vacationStartDate: true,
+        vacationEndDate: true,
+        minBookingNotice: true,
+        advanceBookingDays: true,
         service: {
-          include: {
-            Renamedpackage: true,
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            pricingType: true,
+            basePrice: true,
+            serviceTypeId: true,
+            Renamedpackage: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                price: true,
+                inclusions: true,
+              },
+            },
           },
         },
-        portfolio: true,
-        availability: true,
-        vendordocument: true,
+        portfolio: {
+          select: {
+            id: true,
+            mediaUrl: true,
+            mediaType: true,
+            title: true,
+          },
+        },
+        availability: {
+          select: {
+            id: true,
+            date: true,
+            isAvailable: true,
+          },
+          where: {
+            date: { gte: new Date() },
+          },
+          take: 30,
+        },
+        vendordocument: {
+          select: {
+            id: true,
+            type: true,
+            url: true,
+            status: true,
+          },
+        },
       },
     });
 
+    if (!profile) {
+      return NextResponse.json({ message: "Profile not found" }, { status: 404 });
+    }
+
     return NextResponse.json(profile);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
+}
+
+export async function PATCH(req: Request) {
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await req.json();
+
+    const profile = await prisma.vendorprofile.update({
+      where: { userId: payload.userId },
+      data: {
+        bufferTime: body.bufferTime,
+        vacationMode: body.vacationMode,
+        vacationStartDate: body.vacationStartDate ? new Date(body.vacationStartDate) : null,
+        vacationEndDate: body.vacationEndDate ? new Date(body.vacationEndDate) : null,
+        minBookingNotice: body.minBookingNotice,
+        advanceBookingDays: body.advanceBookingDays,
+      },
+    });
+
+    revalidateTag('vendors');
+    logger.info("Vendor settings updated", { userId: payload.userId });
+    return NextResponse.json(profile);
+  });
 }
 
 export async function PUT(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "VENDOR") {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
 
-  try {
     const body = await req.json();
 
     // Perform update in a transaction if subcategoryIds are provided to create initial services
@@ -101,8 +197,11 @@ export async function PUT(req: Request) {
       return profile;
     });
 
+    // Revalidate marketplace data
+    revalidateTag('vendors');
+    revalidateTag('marketplace');
+
+    logger.info("Vendor profile updated", { userId: payload.userId, vendorId: result.id });
     return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }

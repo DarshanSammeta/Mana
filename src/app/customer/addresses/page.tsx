@@ -2,28 +2,17 @@
 
 import { useState, useEffect } from "react";
 import {
-  MapPin,
   Plus,
-  MoreVertical,
   Trash2,
   Edit2,
   Home,
   Briefcase,
   User,
-  CheckCircle2,
   Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { toast } from "react-hot-toast";
 
 export default function AddressesPage() {
   const [addresses, setAddresses] = useState<any[]>([]);

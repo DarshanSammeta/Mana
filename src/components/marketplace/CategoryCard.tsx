@@ -1,7 +1,7 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
 
 interface CategoryCardProps {
   title: string;
@@ -18,10 +18,12 @@ export function CategoryCard({ title, items, footerLabel, footerLink }: Category
         {items.slice(0, 4).map((item, idx) => (
           <Link key={idx} href={item.link} className="group flex flex-col cursor-pointer">
             <div className="aspect-square relative overflow-hidden bg-slate-50 mb-1">
-              <img
+              <Image
                 src={item.image}
                 alt={item.name}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:opacity-90"
+                fill
+                sizes="(max-width: 768px) 50vw, 25vw"
+                className="object-cover transition-transform duration-500 group-hover:opacity-90"
               />
             </div>
             <span className="text-[12px] font-medium text-slate-900 line-clamp-1">{item.name}</span>

@@ -1,46 +1,26 @@
-import { ShieldCheck, Zap, Award, Headset, CheckCircle, Star } from "lucide-react";
-import { motion } from "framer-motion";
+"use client";
 
-const features = [
-  {
-    icon: ShieldCheck,
-    title: "Verified Vendors",
-    description: "Every vendor on our platform undergoes a rigorous background check and verification process.",
-    color: "bg-blue-500/10 text-blue-500"
-  },
-  {
-    icon: Award,
-    title: "Best Price Guarantee",
-    description: "Get the best market rates for all event services without any hidden charges or middleman fees.",
-    color: "bg-amber-500/10 text-amber-500"
-  },
-  {
-    icon: Zap,
-    title: "Instant Booking",
-    description: "Check real-time availability and book your favorite vendors instantly with a few clicks.",
-    color: "bg-purple-500/10 text-purple-500"
-  },
-  {
-    icon: CheckCircle,
-    title: "Secure Payments",
-    description: "Your money is safe with us. We use industry-standard encryption for all financial transactions.",
-    color: "bg-green-500/10 text-green-500"
-  },
-  {
-    icon: Star,
-    title: "Trusted Reviews",
-    description: "Read authentic reviews from real customers who have actually used the services.",
-    color: "bg-red-500/10 text-red-500"
-  },
-  {
-    icon: Headset,
-    title: "24/7 Support",
-    description: "Our dedicated support team is available around the clock to help you with any queries.",
-    color: "bg-cyan-500/10 text-cyan-500"
-  }
-];
+import { motion } from "framer-motion";
+import { whyChooseUsFeatures } from "@/data/home/features";
+import { useEffect, useState } from "react";
 
 export default function WhyChooseUs() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <section className="py-24 bg-background">
+        <div className="max-w-[1500px] mx-auto px-4">
+          <div className="h-[400px] w-full bg-gray-100 animate-pulse rounded-[2rem]" />
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-24 bg-background">
       <div className="max-w-[1500px] mx-auto px-4">
@@ -52,7 +32,7 @@ export default function WhyChooseUs() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((feature, i) => (
+          {whyChooseUsFeatures.map((feature, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 20 }}

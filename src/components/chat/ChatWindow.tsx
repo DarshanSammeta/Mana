@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react";
-import { useMessages, useSendMessage } from "@/hooks/chat/useChat";
+import { useState, useRef } from "react";
+import { useMessages, useSendMessage, useTyping } from "@/hooks/chat/useChat";
 import { MessageBubble } from "./MessageBubble";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Paperclip, MoreVertical, Phone, Video, Smile, Image as ImageIcon } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+import { useSocketStore } from "@/store/socketStore";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ChatWindowProps {
@@ -16,22 +16,34 @@ interface ChatWindowProps {
 
 export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
   const [content, setContent] = useState("");
-  const { data: messages, isLoading } = useMessages(conversationId);
-  const { mutate: sendMessage } = useSendMessage();
-  const { user } = useAuthStore();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage
+  } = useMessages(conversationId);
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      const scrollContainer = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollContainer) {
-        scrollContainer.scrollTo({
-          top: scrollContainer.scrollHeight,
-          behavior: 'smooth'
-        });
-      }
-    }
-  }, [messages]);
+  const messages = data?.pages.flatMap((page) => page.items) || [];
+
+  const { mutate: sendMessage } = useSendMessage();
+  const { setTyping } = useTyping(conversationId);
+  const { user } = useAuthStore();
+  const { typingUsers } = useSocketStore();
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const observerTarget = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isOtherTyping = Array.from(typingUsers[conversationId] || []).some(id => id !== user?.id);
+
+  const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    setTyping(true);
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+        setTyping(false);
+    }, 2000);
+  };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +54,7 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
       content,
     });
     setContent("");
+    setTyping(false);
   };
 
   if (isLoading) return (
@@ -91,6 +104,12 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
       {/* Messages */}
       <ScrollArea className="flex-1 px-4 py-4 bg-slate-50" ref={scrollRef}>
         <div className="flex flex-col gap-2 max-w-4xl mx-auto">
+            <div ref={observerTarget} className="h-4 w-full" />
+            {isFetchingNextPage && (
+                <div className="flex justify-center p-4">
+                    <div className="h-4 w-4 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                </div>
+            )}
             <div className="flex justify-center mb-6">
                 <span className="px-3 py-1 rounded-full bg-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                     Event Day Coordination
@@ -111,6 +130,20 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
                     </motion.div>
                 ))}
             </AnimatePresence>
+
+            {isOtherTyping && (
+                <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 ml-2 mb-4"
+                >
+                    <div className="flex gap-1 bg-gray-100 px-3 py-2 rounded-2xl rounded-bl-none">
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
+                    </div>
+                </motion.div>
+            )}
         </div>
       </ScrollArea>
 
@@ -124,7 +157,7 @@ export const ChatWindow = ({ conversationId }: ChatWindowProps) => {
               placeholder="Send a message to coordinate..."
               value={content}
               rows={1}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={handleTyping}
               onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { autoAssignVendor } from '@/lib/intelligence/assignment';
+import { withErrorHandler } from '@/lib/error-handler';
 
 export async function POST(req: NextRequest) {
-  try {
+  return withErrorHandler(async () => {
     const { bookingId } = await req.json();
 
     if (!bookingId) {
-      return NextResponse.json({ error: 'Booking ID required' }, { status: 400 });
+      return NextResponse.json({ message: 'Booking ID required' }, { status: 400 });
     }
 
     const assignment = await autoAssignVendor(bookingId);
@@ -22,8 +23,5 @@ export async function POST(req: NextRequest) {
       message: 'Vendor assigned successfully',
       assignment
     });
-  } catch (error: any) {
-    console.error('Auto-assignment error:', error);
-    return NextResponse.json({ error: error.message || 'Assignment failed' }, { status: 500 });
-  }
+  });
 }

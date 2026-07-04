@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import logger from "@/lib/logger";
 
 export async function POST(req: Request) {
   try {
@@ -84,8 +85,11 @@ export async function POST(req: Request) {
       message: "Withdrawal request submitted successfully",
       balance: result.updatedWallet.balance,
     });
-  } catch (error: any) {
-    console.error("Withdrawal Error:", error);
-    return NextResponse.json({ message: error.message || "Internal Server Error" }, { status: 500 });
+  } catch (error) {
+    logger.error("Withdrawal Error", { error });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

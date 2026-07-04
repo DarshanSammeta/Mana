@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
-    const { date, isAvailable, startTime, endTime } = await req.json();
+    const { date, isAvailable, startTime, endTime, bookingLimit } = await req.json();
 
     const profile = await prisma.vendorprofile.findUnique({ where: { userId: payload.userId } });
     if (!profile) return NextResponse.json({ message: "Profile not found" }, { status: 404 });
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     if (existing) {
         await prisma.availability.update({
             where: { id: existing.id },
-            data: { isAvailable, startTime, endTime }
+            data: { isAvailable, startTime, endTime, bookingLimit: bookingLimit ?? existing.bookingLimit }
         });
     } else {
         await prisma.availability.create({
@@ -38,7 +38,8 @@ export async function POST(req: Request) {
                 date: targetDate,
                 isAvailable,
                 startTime,
-                endTime
+                endTime,
+                bookingLimit: bookingLimit ?? 1
             }
         });
     }
@@ -50,8 +51,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ message: "Availability updated" });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bad Request";
+    return NextResponse.json({ message }, { status: 400 });
   }
 }
 
@@ -65,7 +67,8 @@ export async function GET(req: Request) {
       where: { vendorprofile: { userId: payload.userId } },
     });
     return NextResponse.json(availability);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

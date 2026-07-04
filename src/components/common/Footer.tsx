@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import { Facebook, Instagram, Linkedin, Twitter, Globe, ChevronUp } from "lucide-react";
+import { Globe } from "lucide-react";
+import { footerSections, legalLinks } from "@/data/common/footer";
 
 export default function Footer() {
   const scrollToTop = () => {
@@ -18,44 +21,20 @@ export default function Footer() {
 
       {/* Main Links Area */}
       <div className="max-w-[1200px] mx-auto px-6 py-16 grid grid-cols-2 md:grid-cols-4 gap-12">
-        <div>
-          <h4 className="font-bold text-[16px] mb-4 text-white uppercase tracking-wider">Get to Know Us</h4>
-          <ul className="space-y-3 text-[14px] text-gray-400">
-            <li><Link href="/about" className="hover:text-white transition-colors">About Mana Events</Link></li>
-            <li><Link href="/careers" className="hover:text-white transition-colors">Careers</Link></li>
-            <li><Link href="/press" className="hover:text-white transition-colors">Press Releases</Link></li>
-            <li><Link href="/impact" className="hover:text-white transition-colors">Community Impact</Link></li>
-          </ul>
-        </div>
-        <div>
-          <h4 className="font-bold text-[16px] mb-4 text-white uppercase tracking-wider">Connect with Us</h4>
-          <ul className="space-y-3 text-[14px] text-gray-400">
-            <li><Link href="#" className="hover:text-white transition-colors">Facebook</Link></li>
-            <li><Link href="#" className="hover:text-white transition-colors">Twitter (X)</Link></li>
-            <li><Link href="#" className="hover:text-white transition-colors">Instagram</Link></li>
-            <li><Link href="#" className="hover:text-white transition-colors">LinkedIn</Link></li>
-          </ul>
-        </div>
-        <div>
-          <h4 className="font-bold text-[16px] mb-4 text-white uppercase tracking-wider">Business with Us</h4>
-          <ul className="space-y-3 text-[14px] text-gray-400">
-            <li><Link href="/vendor/register" className="hover:text-white transition-colors">Register as Vendor</Link></li>
-            <li><Link href="/vendor/dashboard" className="hover:text-white transition-colors">Vendor Dashboard</Link></li>
-            <li><Link href="/advertise" className="hover:text-white transition-colors">Advertise Services</Link></li>
-            <li><Link href="/affiliate" className="hover:text-white transition-colors">Affiliate Program</Link></li>
-            <li><Link href="/partners" className="hover:text-white transition-colors">Partner Central</Link></li>
-          </ul>
-        </div>
-        <div>
-          <h4 className="font-bold text-[16px] mb-4 text-white uppercase tracking-wider">Support & Help</h4>
-          <ul className="space-y-3 text-[14px] text-gray-400">
-            <li><Link href="/customer/dashboard" className="hover:text-white transition-colors">Your Account</Link></li>
-            <li><Link href="/customer/bookings" className="hover:text-white transition-colors">Manage Bookings</Link></li>
-            <li><Link href="/help" className="hover:text-white transition-colors">Help Center</Link></li>
-            <li><Link href="/safety" className="hover:text-white transition-colors">Safety Guidelines</Link></li>
-            <li><Link href="/disputes" className="hover:text-white transition-colors">Dispute Resolution</Link></li>
-          </ul>
-        </div>
+        {footerSections.map((section) => (
+          <div key={section.title}>
+            <h4 className="font-bold text-[16px] mb-4 text-white uppercase tracking-wider">{section.title}</h4>
+            <ul className="space-y-3 text-[14px] text-gray-400">
+              {section.links.map((link) => (
+                <li key={link.label}>
+                  <Link href={link.href} prefetch={false} className="hover:text-white transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
 
       {/* Divider and Logo Section */}
@@ -79,13 +58,14 @@ export default function Footer() {
       {/* Bottom Legal Section */}
       <div className="bg-[#0F172A] py-12 px-6">
         <div className="max-w-[1200px] mx-auto">
-           <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 text-[12px] text-gray-400 mb-6 font-bold">
-              <Link href="/terms" className="hover:underline">Conditions of Use & Sale</Link>
-              <Link href="/privacy" className="hover:underline">Privacy Notice</Link>
-              <Link href="/ads" className="hover:underline">Interest-Based Ads</Link>
-              <Link href="/cookies" className="hover:underline">Cookies Policy</Link>
+           <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 text-[12px] text-gray-300 mb-6 font-bold">
+              {legalLinks.map((link) => (
+                <Link key={link.label} href={link.href} className="hover:underline">
+                  {link.label}
+                </Link>
+              ))}
            </div>
-           <p className="text-[12px] text-gray-500 text-center font-bold tracking-wider uppercase">© {new Date().getFullYear()}, ManaEvents.in, Inc. or its affiliates</p>
+           <p className="text-[12px] text-gray-400 text-center font-bold tracking-wider uppercase">© {new Date().getFullYear()}, ManaEvents.in, Inc. or its affiliates</p>
         </div>
       </div>
     </footer>

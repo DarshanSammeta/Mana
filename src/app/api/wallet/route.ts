@@ -1,6 +1,41 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import logger from "@/lib/logger";
+
+const WALLET_SELECT = {
+  id: true,
+  userId: true,
+  balance: true,
+  pendingBalance: true,
+  withdrawable: true,
+  lifetimeEarnings: true,
+  lifetimeSpending: true,
+  type: true,
+  user: {
+    select: {
+      vendorprofile: {
+        select: {
+          bankDetails: true,
+          businessName: true
+        }
+      }
+    }
+  },
+  transaction: {
+    take: 10,
+    orderBy: { createdAt: "desc" as const },
+    select: {
+      id: true,
+      amount: true,
+      type: true,
+      status: true,
+      description: true,
+      reference: true,
+      createdAt: true
+    }
+  },
+};
 
 export async function GET(req: Request) {
   try {
@@ -17,28 +52,8 @@ export async function GET(req: Request) {
 
     let wallet = await prisma.wallet.findUnique({
       where: { userId: payload.userId },
-      include: {
-        user: {
-          include: {
-            vendorprofile: {
-              select: {
-                bankDetails: true,
-                businessName: true
-              }
-            }
-          }
-        },
-        transaction: {
-          take: 10,
-          orderBy: { createdAt: "desc" },
-        },
-      },
+      select: WALLET_SELECT,
     });
-
-    if (wallet) {
-      // Flatten bankDetails into the wallet object for easier frontend consumption
-      (wallet as any).bankDetails = (wallet as any).user?.vendorprofile?.bankDetails;
-    }
 
     if (!wallet) {
       // Initialize wallet if it doesn't exist
@@ -53,28 +68,22 @@ export async function GET(req: Request) {
           lifetimeSpending: 0,
           type: "USER",
         },
-        include: {
-          transaction: {
-            take: 10,
-            orderBy: { createdAt: "desc" },
-          },
-          user: {
-            include: {
-              vendorprofile: {
-                select: {
-                  bankDetails: true,
-                  businessName: true
-                }
-              }
-            }
-          },
-        },
+        select: WALLET_SELECT,
       });
     }
 
-    return NextResponse.json(wallet);
-  } catch (error: any) {
-    console.error("Wallet Fetch Error:", error);
-    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
+    // Use a clean response object to avoid 'any' casting
+    const responseData = {
+      ...wallet,
+      bankDetails: wallet.user?.vendorprofile?.bankDetails || null
+    };
+
+    return NextResponse.json(responseData);
+  } catch (error) {
+    logger.error("Wallet Fetch Error", { error });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

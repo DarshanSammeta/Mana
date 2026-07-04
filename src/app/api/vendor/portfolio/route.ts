@@ -28,8 +28,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(portfolioItem, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bad Request";
+    return NextResponse.json({ message }, { status: 400 });
   }
 }
 
@@ -45,7 +46,8 @@ export async function GET(req: Request) {
       where: { vendorprofile: { userId: payload.userId } },
     });
     return NextResponse.json(items);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

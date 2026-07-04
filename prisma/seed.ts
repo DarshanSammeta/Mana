@@ -16,32 +16,23 @@ const CITIES = [
   { name: "Chennai", state: "Tamil Nadu", lat: 13.0827, lng: 80.2707 },
 ];
 
+const EVENT_TYPES = [
+  { name: "Wedding", description: "Grand wedding celebrations", icon: "wedding-icon" },
+  { name: "Birthday Party", description: "Fun birthday parties", icon: "birthday-icon" },
+  { name: "Corporate Event", description: "Professional business events", icon: "corporate-icon" },
+  { name: "Social Gathering", description: "Casual and formal get-togethers", icon: "social-icon" },
+  { name: "Anniversary", description: "Celebrating milestones", icon: "anniversary-icon" },
+];
+
 const CATEGORIES = [
-  { name: "Wedding", subcategories: ["Decoration", "Photography", "Catering", "Transportation", "Return Gifts", "Mehendi Artists", "Invitation Design", "Flower Decoration", "Dance Choreography"] },
-  { name: "Birthday Party", subcategories: ["Decoration", "Cakes", "Entertainment", "Photography", "Magic Show", "Balloon Decoration"] },
-  { name: "Anniversary", subcategories: ["Decoration", "Cakes", "Photography", "Catering"] },
-  { name: "Baby Shower", subcategories: ["Decoration", "Photography", "Cakes"] },
-  { name: "Engagement", subcategories: ["Decoration", "Photography", "Catering"] },
-  { name: "Corporate Events", subcategories: ["Catering", "DJ & Music", "Entertainment", "Photography", "Sound & Lighting"] },
-  { name: "House Warming", subcategories: ["Decoration", "Catering", "Photography"] },
-  { name: "Naming Ceremony", subcategories: ["Decoration", "Catering", "Photography"] },
-  { name: "Graduation Party", subcategories: ["DJ & Music", "Catering", "Photography"] },
-  { name: "Religious Events", subcategories: ["Decoration", "Catering", "Photography"] },
-  { name: "Photography", subcategories: ["Wedding Photography", "Candid Photography", "Cinematic Photography"] },
-  { name: "Videography", subcategories: ["Event Videography", "Cinematic Film"] },
-  { name: "Catering", subcategories: ["South Indian", "North Indian", "Multi-cuisine"] },
-  { name: "Decoration", subcategories: ["Floral", "Theme", "Stage"] },
-  { name: "Makeup Artist", subcategories: ["Bridal Makeup", "Party Makeup"] },
-  { name: "DJ Services", subcategories: ["DJ", "Sound System"] },
-  { name: "Live Music", subcategories: ["Live Band", "Singers"] },
-  { name: "Event Planning", subcategories: ["Wedding Planner", "Corporate Planner"] },
-  { name: "Venues", subcategories: ["Banquet Hall", "Lawn", "Resort"] },
-  { name: "Mehendi Artists", subcategories: ["Bridal Mehendi", "Arabic Mehendi"] },
-  { name: "Invitation Design", subcategories: ["Digital Invitation", "Print Invitation"] },
-  { name: "Flower Decoration", subcategories: ["Fresh Flowers", "Artificial Flowers"] },
-  { name: "Sound & Lighting", subcategories: ["Stage Lighting", "Sound Setup"] },
-  { name: "Dance Choreography", subcategories: ["Sangeet Choreography", "Group Dance"] },
-  { name: "Return Gifts", subcategories: ["Customized Gifts", "Traditional Gifts"] },
+  { name: "Photography", icon: "camera", eventTypes: ["Wedding", "Birthday Party", "Corporate Event", "Social Gathering", "Anniversary"] },
+  { name: "Catering", icon: "utensils", eventTypes: ["Wedding", "Birthday Party", "Corporate Event", "Social Gathering", "Anniversary"] },
+  { name: "Decoration", icon: "palette", eventTypes: ["Wedding", "Birthday Party", "Social Gathering", "Anniversary"] },
+  { name: "DJ & Music", icon: "music", eventTypes: ["Wedding", "Birthday Party", "Corporate Event", "Social Gathering"] },
+  { name: "Entertainment", icon: "smile", eventTypes: ["Birthday Party", "Social Gathering", "Corporate Event"] },
+  { name: "Cakes", icon: "cake", eventTypes: ["Birthday Party", "Wedding", "Anniversary"] },
+  { name: "Transportation", icon: "car", eventTypes: ["Wedding", "Corporate Event"] },
+  { name: "Return Gifts", icon: "gift", eventTypes: ["Wedding", "Birthday Party", "Social Gathering"] },
 ];
 
 const SUB_DATA = {
@@ -56,37 +47,35 @@ const SUB_DATA = {
 };
 
 const VENDOR_COUNTS = {
-  "Photography": 5,
-  "Catering": 5,
-  "Decoration": 5,
-  "DJ & Music": 3,
-  "Entertainment": 3,
-  "Cakes": 3,
-  "Transportation": 2,
-  "Return Gifts": 2
+  "Photography": 3,
+  "Catering": 3,
+  "Decoration": 3,
+  "DJ & Music": 2,
+  "Entertainment": 2,
+  "Cakes": 2,
+  "Transportation": 1,
+  "Return Gifts": 1
 };
 
 const PACKAGE_TEMPLATES = [
   { name: "Basic Package", priceMultiplier: 1, guestMultiplier: 50 },
   { name: "Standard Package", priceMultiplier: 2, guestMultiplier: 100 },
   { name: "Premium Package", priceMultiplier: 3.5, guestMultiplier: 250 },
-  { name: "Deluxe Package", priceMultiplier: 5, guestMultiplier: 500 },
-  { name: "Luxury Package", priceMultiplier: 10, guestMultiplier: 1000 },
 ];
 
 const BASE_PRICES = {
   "Photography": 15000,
-  "Catering": 350, // Per plate
+  "Catering": 350,
   "Decoration": 10000,
   "DJ & Music": 8000,
   "Entertainment": 5000,
   "Cakes": 1500,
   "Transportation": 3000,
-  "Return Gifts": 100 // Per gift
+  "Return Gifts": 100
 };
 
-const ADJECTIVES = ["Elite", "Royal", "Sparkle", "Grand", "Magic", "Perfect", "Creative", "Dream", "Classic", "Modern", "Urban", "Pristine", "Golden", "Silver", "Vibrant"];
-const NOUNS = ["Events", "Celebrations", "Occasions", "Solutions", "Planners", "Studios", "Kitchen", "Decors", "Sounds", "Vibes", "Delights", "Cakes", "Wheels", "Gifts"];
+const ADJECTIVES = ["Elite", "Royal", "Sparkle", "Grand", "Magic", "Perfect", "Creative", "Dream", "Classic", "Modern"];
+const NOUNS = ["Events", "Celebrations", "Occasions", "Solutions", "Planners", "Studios", "Kitchen", "Decors", "Sounds", "Vibes"];
 
 function getRandom(arr: any[]) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -99,7 +88,6 @@ function generateBusinessName() {
 async function main() {
   console.log("🚀 Starting mega seed process...");
 
-  // Clear existing data using raw SQL to bypass foreign key constraints
   console.log("🧹 Clearing old data...");
   const tables = [
     "activitylog", "auditlog", "availability", "booking", "bookingassignment", "bookingitem",
@@ -110,112 +98,49 @@ async function main() {
     "refreshtoken", "refund", "review", "service", "servicetype", "subcategory",
     "transaction", "user", "vendordocument", "vendorprofile", "recurringavailability",
     "vendorscore", "wallet", "webhookevent", "wishlist", "wishlistitem",
-    "passwordresettoken", "subscriptionpayment", "subscriptionplan", "vendorsubscription"
+    "passwordresettoken", "subscriptionpayment", "subscriptionplan", "vendorsubscription",
+    "eventtype"
   ];
 
   await prisma.$executeRawUnsafe(`SET session_replication_role = 'replica';`);
   for (const table of tables) {
     try {
       await prisma.$executeRawUnsafe(`TRUNCATE TABLE "${table}" CASCADE;`);
-    } catch (e: any) {
-      console.log(`⚠️ Could not truncate ${table}: ${e.message}`);
+    } catch (e) {
+      // console.log(`⚠️ Could not truncate ${table}: ${e.message}`);
     }
   }
   await prisma.$executeRawUnsafe(`SET session_replication_role = 'origin';`);
 
   const hashedPassword = await bcrypt.hash("Password@123", 10);
 
-  // 0. Create Customer Pool for Reviews
-  console.log("👤 Creating customer pool...");
-  const customerPool = [];
-  for (let i = 0; i < 20; i++) {
-    const customer = await prisma.user.create({
+  // 0. Create Event Types
+  console.log("🎭 Creating event types...");
+  const eventTypeMap: Record<string, any> = {};
+  for (const et of EVENT_TYPES) {
+    const created = await prisma.eventtype.create({
       data: {
         id: randomUUID(),
-        fullName: `Customer ${i + 1}`,
-        email: `customer${i}@example.com`,
-        password: hashedPassword,
-        mobileNumber: `8${Math.floor(100000000 + Math.random() * 900000000)}`,
-        role: "CUSTOMER",
-        updatedAt: new Date(),
-        wallet: { create: { id: randomUUID(), type: "USER", balance: 1000 } }
+        name: et.name,
+        description: et.description,
+        icon: et.icon,
+        isActive: true
       }
     });
-    customerPool.push(customer);
+    eventTypeMap[et.name] = created;
   }
 
-  // 1. Create Main Categories
-  console.log("📁 Creating categories...");
-
-  // Subscription Plans
+  // 1. Create Subscription Plans
   console.log("💳 Creating subscription plans...");
   const plans = [
-    {
-      name: "FREE",
-      price: 0,
-      durationMonths: 120, // 10 years for free plan
-      listingLimit: 3,
-      rank: 0,
-      features: JSON.stringify([
-        "Create Vendor Profile",
-        "Basic Marketplace Visibility",
-        "Basic Dashboard Access"
-      ])
-    },
-    {
-      name: "STARTER",
-      price: 499,
-      durationMonths: 1,
-      listingLimit: 15,
-      rank: 1,
-      features: JSON.stringify([
-        "Better Search Visibility",
-        "Customer Inquiries Access",
-        "Basic Analytics",
-        "WhatsApp Notifications"
-      ])
-    },
-    {
-      name: "PRO",
-      price: 1499,
-      durationMonths: 1,
-      listingLimit: -1,
-      rank: 2,
-      features: JSON.stringify([
-        "Unlimited Listings",
-        "Featured Listings",
-        "Priority Search Ranking",
-        "Advanced Analytics",
-        "Booking Management",
-        "Reviews Management",
-        "Vendor Verification Badge"
-      ])
-    },
-    {
-      name: "PREMIUM",
-      price: 2999,
-      durationMonths: 1,
-      listingLimit: -1,
-      rank: 3,
-      features: JSON.stringify([
-        "Top Search Priority",
-        "Homepage Featured Placement",
-        "Unlimited Listings",
-        "Complete Analytics",
-        "Premium Badge",
-        "Lead Priority",
-        "Banner Promotions",
-        "AI Recommendations"
-      ])
-    }
+    { name: "FREE", price: 0, durationMonths: 120, listingLimit: 3, rank: 0, features: JSON.stringify(["Basic Listing"]) },
+    { name: "PRO", price: 1499, durationMonths: 1, listingLimit: -1, rank: 2, features: JSON.stringify(["Unlimited Listings", "Featured"]) }
   ];
 
   const planMap: Record<string, any> = {};
   for (const plan of plans) {
-    const created = await prisma.subscriptionplan.upsert({
-      where: { name: plan.name },
-      update: plan,
-      create: {
+    const created = await prisma.subscriptionplan.create({
+      data: {
         ...plan,
         id: randomUUID(),
         updatedAt: new Date()
@@ -223,55 +148,54 @@ async function main() {
     });
     planMap[plan.name] = created;
   }
-  const categoryMap: Record<string, any> = {};
+
+  // 2. Create Categories, Subcategories and Service Types
+  console.log("📁 Creating categories...");
+  const serviceTypeMap: Record<string, any> = {};
+
   for (const cat of CATEGORIES) {
     const created = await prisma.category.create({
       data: {
         id: randomUUID(),
         name: cat.name,
-        description: `Everything you need for a perfect ${cat.name}.`,
-        icon: `/icons/${cat.name.toLowerCase().replace(/\s+/g, "-")}.png`
-      }
-    });
-    categoryMap[cat.name] = created;
-  }
-
-  // 2. Create Subcategories and Service Types
-  console.log("📂 Creating subcategories and service types...");
-  const serviceTypeMap: Record<string, any> = {};
-
-  for (const [subName, types] of Object.entries(SUB_DATA)) {
-    const parentCat = CATEGORIES.find(c => c.subcategories.includes(subName)) || CATEGORIES[0];
-
-    const sub = await prisma.subcategory.create({
-      data: {
-        id: randomUUID(),
-        name: subName,
-        categoryId: categoryMap[parentCat.name].id
+        description: `Professional ${cat.name} services.`,
+        icon: cat.icon,
+        eventtypes: {
+          connect: cat.eventTypes.map(etName => ({ id: eventTypeMap[etName].id }))
+        }
       }
     });
 
-    for (const typeName of (types as string[])) {
+    const subNames = (SUB_DATA as Record<string, string[]>)[cat.name] || [];
+    for (const subName of subNames) {
+      const sub = await prisma.subcategory.create({
+        data: {
+          id: randomUUID(),
+          name: subName,
+          categoryId: created.id
+        }
+      });
+
       const st = await prisma.servicetype.create({
         data: {
           id: randomUUID(),
-          name: typeName,
+          name: `${subName} Service`,
           subcategoryId: sub.id,
-          description: `Professional ${typeName} services for your special event.`
+          description: `Professional ${subName} services for your event.`
         }
       });
-      serviceTypeMap[typeName] = st;
+      serviceTypeMap[subName] = st;
     }
   }
 
-  // 3. Create Vendors, Services, Packages, Reviews, Portfolio
+  // 3. Create Vendors and Services
   console.log("🏪 Creating vendors and service data...");
 
   let totalVendors = 0;
-  for (const [subName, count] of Object.entries(VENDOR_COUNTS)) {
-    console.log(`   - Generating ${count} vendors for ${subName}...`);
+  for (const [catName, count] of Object.entries(VENDOR_COUNTS)) {
+    console.log(`   - Generating ${count} vendors for ${catName}...`);
 
-      for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i++) {
       const city = getRandom(CITIES);
       const businessName = generateBusinessName();
       const userId = randomUUID();
@@ -286,51 +210,31 @@ async function main() {
           mobileNumber: `9${Math.floor(100000000 + Math.random() * 900000000)}`,
           role: "VENDOR",
           updatedAt: new Date(),
-          wallet: {
-            create: {
-              id: randomUUID(),
-              type: "VENDOR",
-              balance: Math.floor(Math.random() * 50000),
-              lifetimeEarnings: Math.floor(Math.random() * 200000)
-            }
-          }
+          wallet: { create: { id: randomUUID(), type: "VENDOR", balance: 1000 } }
         }
       });
 
       const rating = 4.0 + (Math.random() * 1.0);
-      const reviewCount = 10 + Math.floor(Math.random() * 40);
-
       const vendorProfile = await prisma.vendorprofile.create({
         data: {
           id: vendorProfileId,
           userId: user.id,
           businessName: businessName,
-          description: `Award-winning ${subName} services based in ${city.name}. We specialize in high-quality, professional delivery for all types of events.`,
+          description: `Award-winning ${catName} services based in ${city.name}.`,
           city: city.name,
           state: city.state,
           address: `${100 + i}, Main Road, ${city.name}`,
           zipCode: "500001",
-          latitude: city.lat + (Math.random() - 0.5) * 0.05,
-          longitude: city.lng + (Math.random() - 0.5) * 0.05,
-          serviceRadius: 50,
-          gstNumber: `36AAAAA${1000 + totalVendors}A1Z5`,
           verificationStatus: "APPROVED",
           rating: rating,
-          reviewCount: reviewCount,
-          totalBookings: reviewCount + 5,
-          completionRate: 95 + (Math.random() * 5),
-          bankDetails: {
-            bankName: "HDFC Bank",
-            accountNumber: `50100${Math.floor(1000000000 + Math.random() * 9000000000)}`,
-            ifscCode: "HDFC0001234",
-            accountHolder: businessName
-          },
+          reviewCount: 5,
+          totalBookings: 10,
           vendorsubscription: {
             create: {
               id: randomUUID(),
               planId: planMap["FREE"].id,
               startDate: new Date(),
-              endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+              endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
               status: "ACTIVE",
               updatedAt: new Date()
             }
@@ -343,85 +247,73 @@ async function main() {
           id: randomUUID(),
           vendorProfileId: vendorProfile.id,
           ratingScore: rating * 20,
-          reviewScore: Math.min(reviewCount, 100),
           finalScore: rating * 10,
           updatedAt: new Date()
         }
       });
 
-      const subTypes = SUB_DATA[subName as keyof typeof SUB_DATA];
-      for (let s = 0; s < 1; s++) { // 1 service per vendor for speed
-        const typeName = getRandom(subTypes);
-        const serviceId = randomUUID();
-        const basePrice = BASE_PRICES[subName as keyof typeof BASE_PRICES];
+      const subNames = (SUB_DATA as Record<string, string[]>)[catName] || [];
+      const subName = getRandom(subNames);
+      const serviceId = randomUUID();
+      const basePrice = (BASE_PRICES as Record<string, number>)[catName];
 
-        const service = await prisma.service.create({
+      const service = await prisma.service.create({
+        data: {
+          id: serviceId,
+          vendorProfileId: vendorProfile.id,
+          serviceTypeId: serviceTypeMap[subName].id,
+          title: `${subName} - Professional Service`,
+          description: `Elite ${subName} by ${businessName}.`,
+          pricingType: catName === "Catering" ? "PER_GUEST" : "PACKAGE",
+          basePrice: basePrice,
+          updatedAt: new Date(),
+        }
+      });
+
+      for (const pkgTemplate of PACKAGE_TEMPLATES) {
+        const pkgId = randomUUID();
+        const pkgPrice = basePrice * pkgTemplate.priceMultiplier;
+
+        const pkg = await prisma.renamedpackage.create({
           data: {
-            id: serviceId,
-            vendorProfileId: vendorProfile.id,
-            serviceTypeId: serviceTypeMap[typeName].id,
-            title: `${typeName} - Professional Service`,
-            description: `Elite ${typeName} by ${businessName}. Professional team and top-notch equipment.`,
-            pricingType: subName === "Catering" ? "PER_GUEST" : "PACKAGE",
-            basePrice: basePrice,
-            updatedAt: new Date(),
+            id: pkgId,
+            serviceId: service.id,
+            name: pkgTemplate.name,
+            description: `Premium ${pkgTemplate.name} with extra features.`,
+            price: pkgPrice,
+            inclusions: JSON.stringify(["Equipment", "Staff", "Setup"]),
           }
         });
 
-        for (const pkgTemplate of PACKAGE_TEMPLATES) {
-          const pkgId = randomUUID();
-          const pkgPrice = basePrice * pkgTemplate.priceMultiplier;
-
-          const pkg = await prisma.renamedpackage.create({
-            data: {
-              id: pkgId,
-              serviceId: service.id,
-              name: pkgTemplate.name,
-              description: `Premium ${pkgTemplate.name} with extra features.`,
-              price: pkgPrice,
-              inclusions: JSON.stringify(["Equipment", "Staff", "Setup"]),
-            }
-          });
-
-          if (service.pricingType === "PER_GUEST") {
-            await prisma.pricingrule.create({
-              data: {
-                id: crypto.randomUUID(),
-                packageId: pkg.id,
-                minGuests: 10,
-                maxGuests: pkgTemplate.guestMultiplier,
-                pricePerGuest: basePrice,
-                flatFee: 1000
-              }
-            });
-          }
-        }
-
-        // Portfolio
-        for (let p = 0; p < 5; p++) {
-          await prisma.portfolio.create({
+        if (service.pricingType === "PER_GUEST") {
+          await prisma.pricingrule.create({
             data: {
               id: randomUUID(),
-              vendorProfileId: vendorProfile.id,
-              serviceId: service.id,
-              mediaUrl: `https://picsum.photos/seed/${vendorProfileId}-${p}/800/600`,
-              mediaType: "IMAGE",
-              title: `Portfolio Item ${p + 1}`
+              packageId: pkg.id,
+              minGuests: 10,
+              maxGuests: pkgTemplate.guestMultiplier,
+              pricePerGuest: basePrice,
+              flatFee: 1000
             }
           });
         }
       }
 
-      // Reviews
-      for (let r = 0; r < 5; r++) { // 5 reviews per vendor for speed
-        await prisma.review.create({
+      // Add availability for the next 30 days
+      const today = new Date();
+      for (let d = 0; d < 30; d++) {
+        const date = new Date(today);
+        date.setHours(0, 0, 0, 0);
+        date.setDate(today.getDate() + d);
+        await prisma.availability.create({
           data: {
             id: randomUUID(),
-            userId: getRandom(customerPool).id,
-            vendorId: vendorProfile.id,
-            rating: Math.floor(rating),
-            comment: "Excellent service, highly recommended!",
-            updatedAt: new Date()
+            vendorProfileId: vendorProfile.id,
+            date: date,
+            isAvailable: true,
+            startTime: "09:00",
+            endTime: "21:00",
+            bookingLimit: 2
           }
         });
       }
@@ -430,7 +322,7 @@ async function main() {
     }
   }
 
-  // Finalize Reviewers and cleanup
+  // 4. Create Main Customer
   console.log("👤 Creating main customer...");
   await prisma.user.create({
     data: {

@@ -8,51 +8,89 @@ import {
   Bell,
   Shield,
   CreditCard,
-  MapPin,
   Globe,
   Camera,
-  ChevronRight,
   Save,
   Trash2
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, GlassCard } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "react-hot-toast";
+import { customerService } from "@/services/customer.service";
+import { notificationService } from "@/services/notification.service";
 
 export default function CustomerSettings() {
   const { user } = useAuthStore();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
 
   const [formData, setFormData] = useState({
     fullName: "",
-    phoneNumber: "+91 98765 43210",
-    location: "Hyderabad, India"
+    mobileNumber: "",
+    location: ""
   });
+
+  const [notificationPreferences, setNotificationPreferences] = useState<any[]>([]);
 
   useEffect(() => {
     if (user) {
-      setFormData(prev => ({
-        ...prev,
-        fullName: user.fullName || ""
-      }));
+      setFormData({
+        fullName: user.fullName || "",
+        mobileNumber: user.mobileNumber || "",
+        location: (user as any).location || ""
+      });
+      fetchPreferences();
     }
-    const timer = setTimeout(() => setLoading(false), 1000);
-    return () => clearTimeout(timer);
   }, [user]);
 
+  const fetchPreferences = async () => {
+    try {
+      const data = await notificationService.getPreferences();
+      setNotificationPreferences(data);
+    } catch (error) {
+      console.error("Failed to fetch preferences", error);
+    }
+  };
+
+  const updatePreference = async (category: string, channel: string, value: boolean) => {
+    try {
+      const current = notificationPreferences.find(p => p.category === category) || {
+        category, email: true, sms: false, push: true
+      };
+      const updated = { ...current, [channel]: value };
+
+      await notificationService.updatePreferences(updated);
+
+      setNotificationPreferences(prev => {
+        const index = prev.findIndex(p => p.category === category);
+        if (index > -1) {
+          const newPrefs = [...prev];
+          newPrefs[index] = updated;
+          return newPrefs;
+        }
+        return [...prev, updated];
+      });
+      toast.success("Preference updated");
+    } catch {
+      toast.error("Failed to update preference");
+    }
+  };
+
   const handleSaveChanges = async () => {
-    setSaving(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setSaving(false);
-    alert("Profile updated successfully!");
+    try {
+      setSaving(true);
+      await customerService.updateProfile(formData);
+      toast.success("Profile updated successfully!");
+    } catch {
+      toast.error("Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const tabs = [
@@ -155,8 +193,8 @@ export default function CustomerSettings() {
                     <div className="space-y-2.5">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Phone Number</Label>
                       <Input
-                        value={formData.phoneNumber}
-                        onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                        value={formData.mobileNumber}
+                        onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
                         className="h-14 rounded-2xl border-slate-200 bg-slate-50/30 focus:bg-white transition-all font-bold"
                       />
                     </div>
@@ -265,6 +303,67 @@ export default function CustomerSettings() {
                       <Button className="w-fit rounded-2xl font-black uppercase tracking-widest text-xs px-10 h-14 bg-primary hover:bg-blue-700 shadow-xl shadow-primary/20">Update Security Password</Button>
                     </div>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "notifications" && (
+            <motion.div variants={item} className="space-y-8">
+              <div className="bg-white border border-slate-200 rounded-[2.5rem] p-10 shadow-sm">
+                <div className="flex items-center gap-4 mb-10">
+                   <div className="h-14 w-14 rounded-2xl bg-slate-900 flex items-center justify-center text-primary">
+                      <Bell className="h-7 w-7" />
+                   </div>
+                   <div>
+                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Notification Preferences</h2>
+                      <p className="text-slate-500 font-medium">Choose how you want to be notified.</p>
+                   </div>
+                </div>
+
+                <div className="space-y-6">
+                  {["BOOKING", "PAYMENT", "CHAT", "SYSTEM"].map((category) => {
+                    const pref = notificationPreferences.find(p => p.category === category) || {
+                      email: true, sms: false, push: true
+                    };
+                    return (
+                      <div key={category} className="p-6 rounded-3xl border border-slate-100 bg-slate-50/30">
+                        <h4 className="font-black text-sm text-slate-900 mb-6 uppercase tracking-widest">{category} Notifications</h4>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-slate-700">Email Notifications</p>
+                              <p className="text-[10px] text-slate-500 font-medium">Receive updates via your registered email.</p>
+                            </div>
+                            <Switch
+                              checked={pref.email}
+                              onCheckedChange={(val) => updatePreference(category, "email", val)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-slate-700">Push Notifications</p>
+                              <p className="text-[10px] text-slate-500 font-medium">Get real-time alerts on your device.</p>
+                            </div>
+                            <Switch
+                              checked={pref.push}
+                              onCheckedChange={(val) => updatePreference(category, "push", val)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-slate-700">SMS Alerts</p>
+                              <p className="text-[10px] text-slate-500 font-medium">Receive text messages for urgent updates.</p>
+                            </div>
+                            <Switch
+                              checked={pref.sms}
+                              onCheckedChange={(val) => updatePreference(category, "sms", val)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>

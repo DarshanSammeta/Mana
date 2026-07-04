@@ -11,6 +11,8 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type"); // CREDIT, DEBIT, COMMISSION etc
+  const limit = parseInt(searchParams.get("limit") || "20");
+  const cursor = searchParams.get("cursor");
 
   try {
     const wallet = await prisma.wallet.findUnique({
@@ -18,7 +20,7 @@ export async function GET(req: Request) {
     });
 
     if (!wallet) {
-      return NextResponse.json({ transactions: [] });
+      return NextResponse.json({ items: [], nextCursor: null });
     }
 
     const transactions = await prisma.transaction.findMany({
@@ -29,18 +31,40 @@ export async function GET(req: Request) {
       orderBy: {
         createdAt: 'desc'
       },
-      include: {
-        wallet: true,
+      take: limit + 1,
+      cursor: cursor ? { id: cursor } : undefined,
+      skip: cursor ? 1 : 0,
+      select: {
+        id: true,
+        walletId: true,
+        amount: true,
+        type: true,
+        status: true,
+        description: true,
+        reference: true,
+        createdAt: true,
         // Include booking and split info for credits
         ...(payload.role === 'VENDOR' ? {
           booking: {
             select: {
+              id: true,
               bookingNumber: true,
               eventName: true,
               totalAmount: true,
               payment: {
-                include: {
-                  payment_split: true
+                select: {
+                  id: true,
+                  status: true,
+                  amount: true,
+                  payment_split: {
+                    select: {
+                      id: true,
+                      entityId: true,
+                      amount: true,
+                      type: true,
+                      status: true
+                    }
+                  }
                 }
               }
             }
@@ -49,8 +73,18 @@ export async function GET(req: Request) {
       }
     });
 
-    return NextResponse.json(transactions);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+    let nextCursor: typeof cursor | undefined = undefined;
+    if (transactions.length > limit) {
+      const nextItem = transactions.pop();
+      nextCursor = nextItem?.id;
+    }
+
+    return NextResponse.json({
+      items: transactions,
+      nextCursor
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

@@ -2,23 +2,22 @@
 
 import { useCart, useRemoveFromCart, useAddToCart } from "@/hooks/useCommerce";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, GlassCard } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck, Info, Package, Store } from "lucide-react";
 import Link from "next/link";
-import { useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/store/authStore";
-import { useCheckoutStore, PLATFORM_FEE_PERCENT, TAX_PERCENT } from "@/store/checkoutStore";
+
+import { useCheckoutStore } from "@/store/checkoutStore";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/common/EmptyState";
 
+import { formatCurrency } from "@/utils/format";
+
 export default function CartPage() {
   const { data: cart, isLoading } = useCart();
   const { mutate: removeFromCart } = useRemoveFromCart();
   const { mutate: addToCart } = useAddToCart();
-  const { accessToken } = useAuthStore();
-  const queryClient = useQueryClient();
 
   const items = cart?.items || [];
   const subtotal = items.reduce((acc: number, item: any) => {
@@ -26,9 +25,7 @@ export default function CartPage() {
     return acc + (Number(price) * item.quantity);
   }, 0);
 
-  const platformFee = subtotal * PLATFORM_FEE_PERCENT;
-  const taxes = (subtotal + platformFee) * TAX_PERCENT;
-  const total = subtotal + platformFee + taxes;
+
 
   const updateQuantity = async (itemId: string, type: string, targetId: string, delta: number) => {
       addToCart({ type, targetId, quantity: delta });
@@ -99,7 +96,7 @@ export default function CartPage() {
         <EmptyState
           icon={ShoppingBag}
           title="Your cart is empty"
-          description="Looks like you haven't added any services to your event plan yet. Start exploring our verified vendors to build your dream event."
+          description="Looks like you haven&apos;t added any services to your event plan yet. Start exploring our verified vendors to build your dream event."
           actionText="Start Exploring"
           actionHref="/marketplace"
         />
@@ -160,7 +157,7 @@ export default function CartPage() {
 
                         <div className="text-right">
                             <p className="text-xs text-muted-foreground font-bold uppercase tracking-tighter">Price</p>
-                            <p className="text-xl font-black">₹ {(item.details?.price || item.details?.basePrice || 0).toLocaleString('en-IN')}</p>
+                            <p className="text-xl font-black">{formatCurrency(item.details?.price || item.details?.basePrice || 0)}</p>
                         </div>
                       </div>
                     </div>
@@ -172,7 +169,7 @@ export default function CartPage() {
             <motion.div variants={itemAnim} className="p-6 bg-amber-50 rounded-[2rem] border border-amber-100 flex gap-4">
                 <Info className="h-6 w-6 text-amber-600 flex-shrink-0" />
                 <p className="text-sm text-amber-800 font-medium">
-                    Please note that final availability depends on the vendor's schedule for your specific event dates. Proceeding to checkout will notify the vendors.
+                    Please note that final availability depends on the vendor&apos;s schedule for your specific event dates. Proceeding to checkout will notify the vendors.
                 </p>
             </motion.div>
           </div>
@@ -186,7 +183,7 @@ export default function CartPage() {
                         <div className="space-y-4">
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-muted-foreground font-medium">Subtotal</span>
-                                <span className="font-bold">₹ {subtotal.toLocaleString('en-IN')}</span>
+                                <span className="font-bold">{formatCurrency(subtotal)}</span>
                             </div>
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-muted-foreground font-medium">Platform Fee</span>
@@ -200,7 +197,7 @@ export default function CartPage() {
                             <div className="pt-6 border-t border-dashed space-y-1">
                                 <div className="flex justify-between items-end">
                                     <span className="text-lg font-black uppercase tracking-widest text-primary">Total Amount</span>
-                                    <span className="text-3xl font-black">₹ {subtotal.toLocaleString('en-IN')}</span>
+                                    <span className="text-3xl font-black">{formatCurrency(subtotal)}</span>
                                 </div>
                                 <p className="text-[10px] text-muted-foreground font-bold uppercase text-right tracking-widest">Inclusive of all taxes</p>
                             </div>

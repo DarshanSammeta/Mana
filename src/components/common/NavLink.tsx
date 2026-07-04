@@ -1,7 +1,6 @@
 "use client";
 
 import Link, { LinkProps } from "next/link";
-import { useRouter } from "next/navigation";
 import { useLoadingStore } from "@/store/loadingStore";
 import { ReactNode } from "react";
 
@@ -21,14 +20,17 @@ export default function NavLink({
   ...props
 }: NavLinkProps) {
   const { setIsLoading } = useLoadingStore();
-  const router = useRouter();
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    // If it's a standard internal link (not opening in new tab, not an external link, etc.)
+    // Standard Next.js navigation handles prefetching and loading states.
+    // We only trigger global loading for specific heavy transitions if needed.
+    // By default, we let NextTopLoader handle the visual feedback for speed.
+
     const isInternal = props.href.toString().startsWith("/") || props.href.toString().startsWith(window.location.origin);
     const isModified = e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
 
-    if (isInternal && !isModified && props.target !== "_blank") {
+    // Only show global loader for very slow links if explicitly requested, otherwise stay instant
+    if (onLoadingMessage !== "Loading page..." && isInternal && !isModified && props.target !== "_blank") {
       setIsLoading(true, onLoadingMessage);
     }
 

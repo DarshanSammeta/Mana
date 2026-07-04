@@ -1,95 +1,118 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
+import { sendNotification } from "@/lib/notifications";
 
 export async function POST(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
-  if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const payload = verifyAccessToken(token);
+    if (!payload) return NextResponse.json({ message: "Invalid token" }, { status: 401 });
 
-  try {
-    const { vendorId, serviceId, rating, comment, images } = await req.json();
+    const { bookingId, rating, comment, images, videoUrl } = await req.json();
 
-    // Check if user has completed a booking with this vendor
-    const booking = await prisma.booking.findFirst({
-        where: {
-            customerId: payload.userId,
-            vendorId,
-            status: "EVENT_COMPLETED"
+    if (!bookingId || !rating) {
+      return NextResponse.json({ message: "Booking ID and Rating are required" }, { status: 400 });
+    }
+
+    // 1. Verify Booking Ownership and Status
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true,
+        bookingNumber: true,
+        eventName: true,
+        customerId: true,
+        vendorId: true,
+        status: true,
+        bookingitem: {
+            select: { serviceId: true }
         }
+      }
     });
 
     if (!booking) {
-        return NextResponse.json({ message: "You can only review vendors after a completed booking" }, { status: 403 });
+      return NextResponse.json({ message: "Booking not found" }, { status: 404 });
     }
 
+    if (booking.customerId !== payload.userId) {
+      return NextResponse.json({ message: "You can only review your own bookings" }, { status: 403 });
+    }
+
+    if (booking.status !== "EVENT_COMPLETED") {
+      return NextResponse.json({ message: "You can only review completed bookings" }, { status: 400 });
+    }
+
+    // 2. Check for existing review
+    const existingReview = await prisma.review.findUnique({
+      where: { bookingId }
+    });
+
+    if (existingReview) {
+      return NextResponse.json({ message: "You have already reviewed this booking" }, { status: 400 });
+    }
+
+    // 3. Create Review
     const review = await prisma.review.create({
       data: {
         id: crypto.randomUUID(),
         userId: payload.userId,
-        vendorId,
-        serviceId,
+        vendorId: booking.vendorId,
+        bookingId: bookingId,
+        serviceId: booking.bookingitem[0]?.serviceId, // Associate with primary service
         rating,
         comment,
         images,
-        updatedAt: new Date()
+        videoUrl,
+        isVerified: true,
+        moderationStatus: "APPROVED", // Auto-approve for now, can be changed to PENDING for strict moderation
       }
     });
 
-    return NextResponse.json(review, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
-  }
-}
-
-export async function GET(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  const { searchParams } = new URL(req.url);
-  const vendorId = searchParams.get("vendorId");
-  const serviceId = searchParams.get("serviceId");
-  const role = searchParams.get("role");
-
-  try {
-    let where: any = {};
-    if (vendorId) where.vendorId = vendorId;
-    if (serviceId) where.serviceId = serviceId;
-
-    if (token) {
-        const payload = verifyAccessToken(token);
-        if (payload) {
-            if (role === "CUSTOMER") {
-                where.userId = payload.userId;
-            } else if (role === "VENDOR") {
-                const vendor = await prisma.vendorprofile.findUnique({
-                    where: { userId: payload.userId }
-                });
-                if (vendor) {
-                    where.vendorId = vendor.id;
-                }
-            }
-        }
-    }
-
-    const reviews = await prisma.review.findMany({
-      where,
-      include: {
-        user: {
-          select: { fullName: true }
-        },
-        vendorprofile: {
-            select: { businessName: true }
-        },
-        service: {
-            select: { title: true }
-        }
-      },
-      orderBy: { createdAt: "desc" }
+    // 4. Update Vendor Rating (Async calculation)
+    // In a real enterprise app, this might be handled by a background job or a trigger
+    const stats = await prisma.review.aggregate({
+        where: { vendorId: booking.vendorId, moderationStatus: "APPROVED" },
+        _avg: { rating: true },
+        _count: { id: true }
     });
 
-    return NextResponse.json(reviews);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+    await prisma.vendorprofile.update({
+        where: { id: booking.vendorId },
+        data: {
+            rating: stats._avg.rating || 0,
+            reviewCount: stats._count.id
+        }
+    });
+
+    // 5. Notify Vendor of New Review
+    const vendor = await prisma.vendorprofile.findUnique({
+        where: { id: booking.vendorId },
+        select: { userId: true }
+    });
+
+    if (vendor) {
+        await sendNotification({
+            userId: vendor.userId,
+            title: "New Review Received ⭐",
+            message: `A customer has left a ${rating}-star review for "${booking.eventName}".`,
+            category: "REVIEW",
+            priority: "MEDIUM",
+            link: `/vendor/reviews`,
+            metadata: {
+                reviewId: review.id,
+                bookingNumber: booking.bookingNumber,
+                rating,
+            }
+        });
+    }
+
+    logger.info("New verified review submitted", { reviewId: review.id, vendorId: booking.vendorId });
+
+    return NextResponse.json(review, { status: 201 });
+  });
 }

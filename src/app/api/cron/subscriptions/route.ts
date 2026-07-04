@@ -1,3 +1,4 @@
+import { APP_CONFIG } from "@/config/app";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -6,7 +7,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const key = searchParams.get("key");
 
-  if (process.env.CRON_SECRET && key !== process.env.CRON_SECRET) {
+  if (APP_CONFIG.cronSecret && key !== APP_CONFIG.cronSecret) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
@@ -77,7 +78,8 @@ export async function GET(req: Request) {
             userId: sub.vendorprofile.userId,
             title: "Subscription Expired",
             message: `Your ${sub.subscriptionplan.name} subscription has expired. You have been moved to the FREE plan.`,
-            type: "SYSTEM",
+            category: "SYSTEM",
+            priority: "MEDIUM"
           }
         });
       } catch (e) {

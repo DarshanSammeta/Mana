@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import Image from "next/image";
 import {
   Search,
   MoreVertical,
   Send,
   Paperclip,
   Image as ImageIcon,
-  Check,
   CheckCheck,
   User,
   Phone,
@@ -27,7 +27,8 @@ export default function MessagesPage() {
   const { user } = useAuthStore();
   const { data: conversations, isLoading: loadingConversations } = useConversations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data: messages, isLoading: loadingMessages } = useMessages(selectedId || "");
+  const { data: messagesData, isLoading: loadingMessages } = useMessages(selectedId || "");
+  const messages = useMemo(() => messagesData?.pages.flatMap(page => page.items) || [], [messagesData]);
   const sendMessage = useSendMessage();
 
   const [newMessage, setNewMessage] = useState("");
@@ -95,7 +96,7 @@ export default function MessagesPage() {
                     <div className="relative shrink-0">
                        <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden">
                           {other?.vendorprofile?.logo ? (
-                            <img src={other.vendorprofile.logo} alt="" className="h-full w-full object-cover" />
+                            <Image src={other.vendorprofile.logo} alt="" fill className="object-cover" />
                           ) : (
                             <User className="h-6 w-6" />
                           )}
@@ -142,9 +143,9 @@ export default function MessagesPage() {
                      >
                         <ChevronLeft className="h-5 w-5" />
                      </Button>
-                     <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden">
+                     <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden relative">
                         {otherParticipant?.vendorprofile?.logo ? (
-                          <img src={otherParticipant.vendorprofile.logo} alt="" className="h-full w-full object-cover" />
+                          <Image src={otherParticipant.vendorprofile.logo} alt="" fill className="object-cover" />
                         ) : (
                           <User className="h-5 w-5" />
                         )}
@@ -166,14 +167,14 @@ export default function MessagesPage() {
                <div className="flex-1 overflow-y-auto p-6 space-y-6">
                   {loadingMessages ? (
                     <div className="flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /></div>
-                  ) : messages?.map((msg: any) => {
+                  ) : messages.map((msg: any) => {
                     const isMe = msg.senderId === user?.id;
                     return (
                       <div key={msg.id} className={cn("flex gap-3 max-w-[80%]", isMe ? "flex-row-reverse ml-auto" : "")}>
                          {!isMe && (
-                           <div className="h-8 w-8 rounded-lg bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 overflow-hidden">
+                           <div className="h-8 w-8 rounded-lg bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 overflow-hidden relative">
                               {otherParticipant?.vendorprofile?.logo ? (
-                                <img src={otherParticipant.vendorprofile.logo} alt="" className="h-full w-full object-cover" />
+                                <Image src={otherParticipant.vendorprofile.logo} alt="" fill className="object-cover" />
                               ) : (
                                 <User className="h-4 w-4" />
                               )}

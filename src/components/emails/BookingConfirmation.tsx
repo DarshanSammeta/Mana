@@ -1,4 +1,5 @@
 import React from 'react';
+import { APP_CONFIG } from '@/config/app';
 
 interface BookingConfirmationEmailProps {
   customerName: string;
@@ -29,7 +30,7 @@ export const BookingConfirmationEmail = ({
     <p>You can track your booking status and communicate with your vendor through your dashboard.</p>
 
     <a
-      href={`${process.env.NEXT_PUBLIC_APP_URL}/customer/orders`}
+      href={`${APP_CONFIG.url}/customer/orders`}
       style={{
         display: 'inline-block',
         backgroundColor: '#2563EB',

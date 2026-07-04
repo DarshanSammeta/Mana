@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import logger from "@/lib/logger";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
@@ -8,7 +9,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
   const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "CUSTOMER") return NextResponse.json({ status: 403 });
+  if (!payload || payload.role !== "CUSTOMER") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
     const { reason, amount } = await req.json();
@@ -45,7 +46,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     return NextResponse.json(refund);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    logger.error("Error processing refund request", { error, bookingId: resolvedParams.id });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
+    );
   }
 }

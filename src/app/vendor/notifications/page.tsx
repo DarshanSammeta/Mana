@@ -2,17 +2,13 @@
 
 import { motion } from "framer-motion";
 import {
-  Bell,
-  CheckCircle2,
+  Clock,
+  Filter,
+  MoreVertical,
   Calendar,
   CreditCard,
   Star,
-  AlertCircle,
-  Clock,
-  MessageSquare,
-  Search,
-  Filter,
-  MoreVertical
+  AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

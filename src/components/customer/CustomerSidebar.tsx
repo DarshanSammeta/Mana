@@ -1,11 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import NavLink from "../common/NavLink";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
   Calendar,
   Heart,
   MessageSquare,
@@ -62,7 +60,7 @@ export default function CustomerSidebar() {
   return (
     <div className="flex flex-col w-full bg-white overflow-hidden">
       <nav className="flex-1 p-3">
-        {sections.map((section, idx) => (
+        {sections.map((section) => (
           <div key={section.title} className="mb-4 last:mb-0">
             <p className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
               {section.title}

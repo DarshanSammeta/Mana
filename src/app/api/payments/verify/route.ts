@@ -1,3 +1,4 @@
+import { RAZORPAY_CONFIG } from "@/config/razorpay";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
@@ -7,10 +8,11 @@ import { sendBookingConfirmationEmail } from "@/lib/mail/resend";
 import { format } from "date-fns";
 import { createAuditLog } from "@/lib/audit";
 import { rateLimit } from "@/lib/rate-limit";
+import logger from "@/lib/logger";
 
 export async function POST(req: Request) {
   const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
-  if (!rateLimit(ip, 5, 60000)) {
+  if (!rateLimit(ip, { limit: 5, window: 60000 })) {
     return NextResponse.json({ message: "Too many requests" }, { status: 429 });
   }
 
@@ -28,7 +30,7 @@ export async function POST(req: Request) {
       bookingId
     } = await req.json();
 
-    const secret = process.env.RAZORPAY_KEY_SECRET!;
+    const secret = RAZORPAY_CONFIG.keySecret!;
 
     const isValid = validatePaymentVerification(
       { order_id: razorpay_order_id, payment_id: razorpay_payment_id },
@@ -49,7 +51,16 @@ export async function POST(req: Request) {
     // Verify booking ownership and existence
     const existingBooking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { payment: true }
+      select: {
+        id: true,
+        customerId: true,
+        payment: {
+          select: {
+            id: true,
+            status: true
+          }
+        }
+      }
     });
 
     if (!existingBooking || existingBooking.customerId !== payload.userId) {
@@ -83,7 +94,20 @@ export async function POST(req: Request) {
         status: "CONFIRMED",
         updatedAt: new Date(),
       },
-      include: { user: true }
+      select: {
+        id: true,
+        bookingNumber: true,
+        totalAmount: true,
+        eventName: true,
+        eventDate: true,
+        user: {
+          select: {
+            email: true,
+            mobileNumber: true,
+            fullName: true
+          }
+        }
+      }
     });
 
     await createAuditLog({
@@ -100,7 +124,7 @@ export async function POST(req: Request) {
         `Payment Successful! Your booking ${booking.bookingNumber} is now CONFIRMED. View details: ${process.env.NEXT_PUBLIC_APP_URL}/customer/bookings/${booking.id}`
       );
     } catch (smsError) {
-      console.error("Failed to send payment confirmation SMS:", smsError);
+      logger.error("Failed to send payment confirmation SMS", { error: smsError, bookingId });
     }
 
     // Send Confirmation Email
@@ -113,7 +137,7 @@ export async function POST(req: Request) {
         totalAmount: `₹${booking.totalAmount}`,
       });
     } catch (emailError) {
-      console.error("Failed to send booking confirmation email:", emailError);
+      logger.error("Failed to send booking confirmation email", { error: emailError, bookingId });
     }
 
     // Log status change
@@ -127,8 +151,11 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true, message: "Payment verified successfully" });
-  } catch (error: any) {
-    console.error("Payment Verification Error:", error);
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    logger.error("Payment Verification Error", { error });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "An unknown error occurred" },
+      { status: 500 }
+    );
   }
 }

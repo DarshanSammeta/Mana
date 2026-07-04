@@ -1,34 +1,33 @@
 import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
+import { marketplaceService, bookingService } from "@/services";
 
-export const useCategories = () => {
+export const useEventTypes = () => {
   return useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const res = await axios.get("/api/categories");
-      return res.data;
-    },
+    queryKey: ["event-types"],
+    queryFn: () => marketplaceService.getEventTypes(),
   });
 };
 
-export const useSubcategories = (categoryId: string | null) => {
+export const useCategories = (eventTypeId: string | null, vendorId?: string) => {
   return useQuery({
-    queryKey: ["subcategories", categoryId],
-    queryFn: async () => {
-      const res = await axios.get(`/api/categories/${categoryId}/subcategories`);
-      return res.data;
-    },
+    queryKey: ["categories", eventTypeId, vendorId],
+    queryFn: () => bookingService.getCategories(eventTypeId!, vendorId),
+    enabled: !!eventTypeId,
+  });
+};
+
+export const useSubcategories = (categoryId: string | null, vendorId?: string) => {
+  return useQuery({
+    queryKey: ["subcategories", categoryId, vendorId],
+    queryFn: () => bookingService.getSubcategories(categoryId!, vendorId),
     enabled: !!categoryId,
   });
 };
 
-export const useServiceTypes = (subcategoryId: string | null) => {
+export const useServiceTypes = (subcategoryId: string | null, vendorId?: string) => {
   return useQuery({
-    queryKey: ["serviceTypes", subcategoryId],
-    queryFn: async () => {
-      const res = await axios.get(`/api/subcategories/${subcategoryId}/service-types`);
-      return res.data;
-    },
+    queryKey: ["serviceTypes", subcategoryId, vendorId],
+    queryFn: () => bookingService.getServiceTypes(subcategoryId!, vendorId),
     enabled: !!subcategoryId,
   });
 };
@@ -36,12 +35,7 @@ export const useServiceTypes = (subcategoryId: string | null) => {
 export const usePackages = (serviceTypeId: string | null, vendorId?: string) => {
   return useQuery({
     queryKey: ["packages", serviceTypeId, vendorId],
-    queryFn: async () => {
-      const res = await axios.get(`/api/service-types/${serviceTypeId}/packages`, {
-        params: { vendorId },
-      });
-      return res.data;
-    },
+    queryFn: () => bookingService.getPackages(serviceTypeId!, vendorId),
     enabled: !!serviceTypeId,
   });
 };

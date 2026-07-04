@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getRankedVendors } from './ranking';
+import logger from '@/lib/logger';
 
 export const autoAssignVendor = async (bookingId: string) => {
   const booking = await prisma.booking.findUnique({
@@ -30,7 +31,7 @@ export const autoAssignVendor = async (bookingId: string) => {
   }
 
   // Use the first service's category for matching
-  const categoryName = (booking as any).bookingitem[0]?.service.servicetype.subcategory.category.name;
+  const categoryName = booking.bookingitem[0]?.service.servicetype.subcategory.category.name;
 
   const rankedVendors = await getRankedVendors(
     booking.latitude,
@@ -39,7 +40,7 @@ export const autoAssignVendor = async (bookingId: string) => {
   );
 
   if (rankedVendors.length === 0) {
-    console.log(`No vendors found for booking ${bookingId}`);
+    logger.info(`No vendors found for booking ${bookingId}`);
     return null;
   }
 

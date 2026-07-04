@@ -46,8 +46,9 @@ export async function POST(req: Request) {
       // For simplicity, we'll just create a new review record
       const review = await prisma.review.create({
         data: {
-          id: `rev_${Math.random().toString(36).substring(2, 9)}`,
+          id: crypto.randomUUID(),
           userId,
+          bookingId,
           vendorId,
           serviceId,
           rating,

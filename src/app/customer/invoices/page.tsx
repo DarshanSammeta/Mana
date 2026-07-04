@@ -5,20 +5,15 @@ import {
   FileText,
   Download,
   Search,
-  Calendar,
-  ChevronRight,
-  ExternalLink,
   Printer,
-  MoreVertical,
   CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { customerService } from "@/services/customer.service";
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -31,14 +26,8 @@ export default function InvoicesPage() {
 
   const fetchInvoices = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/customer/invoices", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setInvoices(data);
-      }
+      const data = await customerService.getInvoices();
+      setInvoices(data);
     } catch (error) {
       console.error("Failed to fetch invoices", error);
     } finally {

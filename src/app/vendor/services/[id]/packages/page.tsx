@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, ChevronLeft } from "lucide-react";
-import axios from "axios";
-import { useAuthStore } from "@/store/authStore";
+import { vendorService } from "@/services/vendor.service";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import {
@@ -24,7 +23,6 @@ export default function ServicePackages({ params }: { params: Promise<{ id: stri
   const { id: serviceId } = use(params);
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { accessToken } = useAuthStore();
   const { toast } = useToast();
 
   const [newPackage, setNewPackage] = useState({
@@ -35,38 +33,34 @@ export default function ServicePackages({ params }: { params: Promise<{ id: stri
     exclusions: "",
   });
 
-  const fetchPackages = async () => {
+  const fetchPackages = useCallback(async () => {
     try {
-      const res = await axios.get(`/api/vendor/packages?serviceId=${serviceId}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      setPackages(res.data);
-    } catch (error) {
+      const data = await vendorService.getPackages(serviceId);
+      setPackages(data);
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch packages" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [serviceId, toast]);
 
   useEffect(() => {
-    if (accessToken) fetchPackages();
-  }, [accessToken, serviceId]);
+    fetchPackages();
+  }, [serviceId, fetchPackages]);
 
   const handleAddPackage = async () => {
     try {
       setLoading(true);
-      await axios.post("/api/vendor/packages", {
+      await vendorService.addPackage({
         ...newPackage,
         serviceId,
         inclusions: newPackage.inclusions.split("\n").filter(i => i),
         exclusions: newPackage.exclusions.split("\n").filter(e => e),
-      }, {
-        headers: { Authorization: `Bearer ${accessToken}` },
       });
       toast({ title: "Success", description: "Package added successfully" });
       fetchPackages();
       setNewPackage({ name: "", description: "", price: "", inclusions: "", exclusions: "" });
-    } catch (error) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to add package" });
     } finally {
       setLoading(false);
@@ -76,15 +70,14 @@ export default function ServicePackages({ params }: { params: Promise<{ id: stri
   const handleDeletePackage = async (id: string) => {
     if (!confirm("Are you sure?")) return;
     try {
-      await axios.delete(`/api/vendor/packages/${id}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      await vendorService.deletePackage(id);
       toast({ title: "Success", description: "Package deleted" });
       fetchPackages();
-    } catch (error) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "Delete failed" });
     }
   };
+
 
   return (
     <div className="space-y-10">
@@ -211,7 +204,7 @@ export default function ServicePackages({ params }: { params: Promise<{ id: stri
                 </div>
 
                 <div>
-                  <p className="text-xs font-black uppercase text-primary tracking-widest mb-3">What's Included</p>
+                  <p className="text-xs font-black uppercase text-primary tracking-widest mb-3">What&apos;s Included</p>
                   <ul className="space-y-3">
                     {Array.isArray(pkg.inclusions) && pkg.inclusions.map((inc: string, i: number) => (
                       <li key={i} className="flex items-start gap-3 text-sm font-bold text-foreground">

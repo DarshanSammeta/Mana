@@ -39,6 +39,14 @@ interface CheckoutState {
     taxes: number;
     platformFee: number;
     total: number;
+    breakdown?: {
+      base: number;
+      guests: number;
+      extra: number;
+      platform: number;
+      tax: number;
+      total: number;
+    };
   };
 
   setStep: (step: CheckoutStep) => void;
@@ -47,6 +55,7 @@ interface CheckoutState {
   setDateTime: (dateTime: CheckoutState["dateTime"]) => void;
   setLocation: (location: CheckoutState["location"]) => void;
   setVendorInfo: (info: CheckoutState["vendorInfo"]) => void;
+  setPricing: (pricing: CheckoutState["pricing"]) => void;
   calculatePricing: () => void;
   resetCheckout: () => void;
 }
@@ -67,20 +76,29 @@ export const useCheckoutStore = create<CheckoutState>()(
 
       setStep: (step) => set({ step }),
       setEventDetails: (eventDetails) => set({ eventDetails }),
-      setGuestInfo: (guestInfo) => set({ guestInfo }),
+      setGuestInfo: (guestInfo) => {
+        set({ guestInfo });
+        get().calculatePricing();
+      },
       setDateTime: (dateTime) => set({ dateTime }),
       setLocation: (location) => set({ location }),
       setVendorInfo: (vendorInfo) => {
         set({ vendorInfo });
         get().calculatePricing();
       },
+      setPricing: (pricing) => set({ pricing }),
       calculatePricing: () => {
         const { basePrice } = get().vendorInfo;
+        // Basic calculation as fallback
         const subtotal = basePrice;
         const platformFee = subtotal * PLATFORM_FEE_PERCENT;
         const taxes = (subtotal + platformFee) * TAX_PERCENT;
         const total = subtotal + platformFee + taxes;
-        set({ pricing: { subtotal, taxes, platformFee, total } });
+
+        // We don't overwrite if a detailed breakdown already exists from the wizard
+        if (!get().pricing.breakdown) {
+          set({ pricing: { subtotal, taxes, platformFee, total } });
+        }
       },
       resetCheckout: () => set({
         step: 1,

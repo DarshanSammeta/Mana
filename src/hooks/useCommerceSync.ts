@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useCommerceStore } from "@/store/commerceStore";
 import { useCart, useWishlist } from "@/hooks/useCommerce";
-import axios from "axios";
+import apiClient from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
 
 export const useCommerceSync = () => {
   const { accessToken, user } = useAuthStore();
-  const { cart, wishlist, clearCart, setWishlist } = useCommerceStore();
+  const { cart, wishlist } = useCommerceStore();
   const { toast } = useToast();
   const [isMerging, setIsMerging] = useState(false);
   const [hasAttemptedMerge, setHasAttemptedMerge] = useState(false);
@@ -23,8 +23,8 @@ export const useCommerceSync = () => {
       if (user && accessToken && !hasAttemptedMerge && (cart.length > 0 || wishlist.length > 0)) {
         setIsMerging(true);
         try {
-          await axios.post(
-            "/api/commerce/merge",
+          await apiClient.post(
+            "/commerce/merge",
             {
               cartItems: cart.map(item => ({
                 targetId: item.targetId,
@@ -35,9 +35,6 @@ export const useCommerceSync = () => {
                 targetId: item.targetId,
                 type: item.type
               }))
-            },
-            {
-              headers: { Authorization: `Bearer ${accessToken}` }
             }
           );
 
@@ -64,7 +61,9 @@ export const useCommerceSync = () => {
     };
 
     mergeData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, user, hasAttemptedMerge, refetchCart, refetchWishlist, toast]); // Removed cart/wishlist from deps to avoid loops
 
   return { isMerging };
 };
+

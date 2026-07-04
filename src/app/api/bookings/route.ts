@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { verifyAccessToken } from "@/lib/auth";
-import { sendSMS } from "@/lib/sms/twilio";
-import { sendBookingConfirmationEmail, sendVendorNotificationEmail } from "@/lib/mail/resend";
-import { format } from "date-fns";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { createAuditLog } from "@/lib/audit";
+import { withErrorHandler } from "@/lib/error-handler";
+import { inngest } from "@/lib/inngest";
+import logger from "@/lib/logger";
 
 const bookingSchema = z.object({
   vendorId: z.string().optional(),
@@ -16,9 +17,9 @@ const bookingSchema = z.object({
     price: z.number().positive(),
     quantity: z.number().int().positive().default(1),
   })).min(1),
-  eventDate: z.string().datetime(),
+  eventDate: z.string(),
   eventTime: z.string().optional(),
-  eventLocation: z.string().min(5),
+  eventLocation: z.string().min(5, "Address must be at least 5 characters long"),
   landmark: z.string().optional(),
   city: z.string(),
   state: z.string(),
@@ -32,25 +33,44 @@ const bookingSchema = z.object({
   eventType: z.string(),
   eventDescription: z.string().optional(),
   latitude: z.number().optional(),
-  longitude: z.number().optional()
+  longitude: z.number().optional(),
+  idempotencyKey: z.string().optional()
 });
 
 export async function POST(req: Request) {
-  const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
-  if (!rateLimit(ip, 10, 60000)) {
-    return NextResponse.json({ message: "Too many requests" }, { status: 429 });
-  }
+  return withErrorHandler(async () => {
+    const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+    const rateLimitResult = await rateLimit(ip, { limit: 10, window: 60 });
+    if (!rateLimitResult.success) {
+      logger.warn("Rate limit exceeded for booking creation", { ip });
+      return NextResponse.json({ message: "Too many requests" }, { status: 429 });
+    }
 
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) {
+      logger.warn("Unauthorized booking attempt", { ip });
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
 
-  const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "CUSTOMER") {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "CUSTOMER") {
+      logger.warn("Forbidden booking attempt", { userId: payload?.userId, role: payload?.role, ip });
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
 
-  try {
     const body = await req.json();
+
+    // Idempotency check before starting transaction
+    if (body.idempotencyKey) {
+      const existingBooking = await prisma.booking.findUnique({
+        where: { idempotencyKey: body.idempotencyKey }
+      });
+      if (existingBooking) {
+        logger.info("Idempotent booking request received", { idempotencyKey: body.idempotencyKey, bookingId: existingBooking.id });
+        return NextResponse.json(existingBooking, { status: 200 });
+      }
+    }
+
     const validated = bookingSchema.parse(body);
     const {
       vendorId,
@@ -69,18 +89,85 @@ export async function POST(req: Request) {
       landmark,
       city,
       state,
-      pincode
+      pincode,
+      idempotencyKey
     } = validated;
 
-    // Server-side amount validation
+    // Server-side amount validation & inventory check would go here in enterprise apps
+    // 1. Fetch current prices and hierarchy from DB
+    const serviceIds = items.map(i => i.serviceId);
+    const packageIds = items.filter(i => i.packageId).map(i => i.packageId as string);
+
+    const dbServices = await prisma.service.findMany({
+      where: { id: { in: serviceIds } },
+      select: {
+        id: true,
+        title: true,
+        basePrice: true,
+        servicetype: {
+          select: {
+            id: true,
+            name: true,
+            subcategory: {
+              select: {
+                id: true,
+                name: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                    eventtypes: {
+                      select: {
+                        id: true,
+                        name: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const dbPackages = await prisma.renamedpackage.findMany({
+      where: { id: { in: packageIds } },
+      select: {
+        id: true,
+        serviceId: true,
+        price: true
+      }
+    });
+
     let calculatedSubTotal = 0;
     for (const item of items) {
-        // In a real production app, we would fetch prices from DB here to prevent tampering
-        calculatedSubTotal += item.price * item.quantity;
+        const service = dbServices.find(s => s.id === item.serviceId);
+        if (!service) throw new Error(`Service ${item.serviceId} not found`);
+
+        // Hierarchy Integrity Check: Ensure service belongs to the eventType in the booking
+        const hasEventType = service.servicetype.subcategory.category.eventtypes.some(et => et.id === eventType);
+        if (!hasEventType) {
+             return NextResponse.json({
+               message: `Service hierarchy mismatch: ${service.title} does not belong to Event Type ${eventType}`
+             }, { status: 400 });
+        }
+
+        if (item.packageId) {
+          const pkg = dbPackages.find(p => p.id === item.packageId);
+          if (!pkg) throw new Error(`Package ${item.packageId} not found`);
+          if (pkg.serviceId !== item.serviceId) {
+            return NextResponse.json({ message: "Package does not belong to the selected service" }, { status: 400 });
+          }
+          calculatedSubTotal += Number(pkg.price) * item.quantity;
+        } else {
+          calculatedSubTotal += Number(service.basePrice) * item.quantity;
+        }
     }
-    // Simple check for demo, in production we'd re-calculate everything including tax
+
     if (Math.abs(calculatedSubTotal - subTotal) > 0.01) {
-         return NextResponse.json({ message: "Price mismatch detected" }, { status: 400 });
+         logger.error("Price mismatch in booking creation", { calculatedSubTotal, subTotal, userId: payload.userId });
+         return NextResponse.json({ message: `Price mismatch detected. Expected: ${calculatedSubTotal}, Received: ${subTotal}` }, { status: 400 });
     }
 
     // Generate Amazon-style Booking ID: ME-YYYY-XXXXXX
@@ -108,13 +195,16 @@ export async function POST(req: Request) {
     const vendorPayout = totalAmount - commissionAmount;
 
     const booking = await prisma.$transaction(async (tx) => {
+      // 2. Automated Allocation Logic
+      const finalVendorId = vendorId || "SYSTEM_ALLOCATED";
+
       // 1. Create the base booking
       const newBooking = await tx.booking.create({
         data: {
           id: crypto.randomUUID(),
           bookingNumber,
           customerId: payload.userId,
-          vendorId: vendorId || "SYSTEM_ALLOCATED",
+          vendorId: finalVendorId,
           eventDate: new Date(eventDate),
           eventTime,
           eventLocation,
@@ -134,10 +224,11 @@ export async function POST(req: Request) {
           vendorPayout,
           specialInstructions,
           otp,
+          idempotencyKey,
           status: "PENDING",
           updatedAt: new Date(),
           bookingitem: {
-            create: items.map((item: any) => ({
+            create: items.map((item) => ({
               id: crypto.randomUUID(),
               serviceId: item.serviceId,
               packageId: item.packageId || null,
@@ -153,12 +244,35 @@ export async function POST(req: Request) {
             }
           }
         },
-        include: {
+        select: {
+          id: true,
+          bookingNumber: true,
+          customerId: true,
+          vendorId: true,
+          eventDate: true,
+          eventTime: true,
+          eventLocation: true,
+          landmark: true,
+          city: true,
+          state: true,
+          pincode: true,
+          eventName: true,
+          eventType: true,
+          eventDescription: true,
+          guestCount: true,
+          totalAmount: true,
+          subTotal: true,
+          taxAmount: true,
+          status: true,
+          specialInstructions: true,
+          otp: true,
+          idempotencyKey: true,
+          createdAt: true,
+          updatedAt: true,
           user: { select: { fullName: true, mobileNumber: true, email: true } }
         }
       });
 
-      // 2. Automated Allocation Logic
       if (vendorId) {
         // Direct Assignment
         await tx.bookingassignment.create({
@@ -175,7 +289,13 @@ export async function POST(req: Request) {
         // ... (Smart Match logic)
         const firstItem = await tx.bookingitem.findFirst({
             where: { bookingId: newBooking.id },
-            include: { service: true }
+            select: {
+              service: {
+                select: {
+                  serviceTypeId: true
+                }
+              }
+            }
         });
         const serviceTypeId = firstItem?.service.serviceTypeId;
         const customerLat = body.latitude;
@@ -228,105 +348,172 @@ export async function POST(req: Request) {
       });
 
       return newBooking;
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable // Prevent race conditions on bookingNumber or availability
     });
 
-    // Background notifications
-    (async () => {
-        try {
-            const notifications = [];
+    // Trigger enterprise background jobs via Inngest
+    await inngest.send({
+      name: "booking/created",
+      data: {
+        bookingId: booking.id,
+      },
+    });
 
-            // Customer notifications
-            notifications.push(sendSMS(
-                booking.user.mobileNumber,
-                `Hi ${booking.user.fullName}, your booking ${bookingNumber} is created. Track it at ${process.env.NEXT_PUBLIC_APP_URL}/customer/bookings`
-            ));
-
-            if (booking.user.email) {
-                notifications.push(sendBookingConfirmationEmail(booking.user.email, {
-                    customerName: booking.user.fullName,
-                    bookingNumber: bookingNumber,
-                    eventName: eventName,
-                    eventDate: format(new Date(eventDate), "PPP"),
-                    totalAmount: totalAmount.toString()
-                }));
-            }
-
-            // Vendor notifications
-            const assignments = await prisma.bookingassignment.findMany({
-                where: { bookingId: booking.id },
-                include: { vendorprofile: { include: { user: { select: { email: true, fullName: true, mobileNumber: true } } } } }
-            });
-
-            for (const assignment of assignments) {
-                const v = assignment.vendorprofile;
-                notifications.push(sendSMS(v.user.mobileNumber, `New booking request ${bookingNumber} available! Claim it now in your Seller Dashboard.`));
-                if (v.user.email) {
-                    notifications.push(sendVendorNotificationEmail(v.user.email, {
-                        vendorName: v.user.fullName,
-                        bookingNumber: bookingNumber,
-                        eventName: eventName,
-                        eventDate: format(new Date(eventDate), "PPP"),
-                        customerName: booking.user.fullName,
-                        payoutAmount: vendorPayout.toString()
-                    }));
-                }
-            }
-
-            await Promise.allSettled(notifications);
-        } catch (err) {
-            console.error("Background notification error:", err);
-        }
-    })();
+    logger.info("Booking created successfully", { bookingId: booking.id, userId: payload.userId, bookingNumber });
 
     return NextResponse.json(booking, { status: 201 });
-  } catch (error: any) {
-    console.error("Booking Creation Error:", error);
-    return NextResponse.json({ message: error.message }, { status: 400 });
-  }
+  });
 }
 
 export async function GET(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
 
-  const payload = verifyAccessToken(token);
-  if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const payload = verifyAccessToken(token);
+    if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-  try {
     const { searchParams } = new URL(req.url);
     const bookingId = searchParams.get("id");
 
     if (bookingId) {
+        logger.info("Fetching booking details", { bookingId, userId: payload.userId });
         const booking = await prisma.booking.findUnique({
             where: { id: bookingId },
-            include: {
-                vendorprofile: true,
+            select: {
+                id: true,
+                bookingNumber: true,
+                customerId: true,
+                vendorId: true,
+                eventDate: true,
+                eventTime: true,
+                eventLocation: true,
+                landmark: true,
+                city: true,
+                state: true,
+                pincode: true,
+                eventName: true,
+                eventType: true,
+                eventDescription: true,
+                guestCount: true,
+                totalAmount: true,
+                subTotal: true,
+                taxAmount: true,
+                status: true,
+                specialInstructions: true,
+                otp: true,
+                createdAt: true,
+                vendorprofile: {
+                    select: {
+                        id: true,
+                        businessName: true,
+                        logo: true,
+                        city: true,
+                        state: true
+                    }
+                },
                 user: {
                     select: { fullName: true, email: true, mobileNumber: true },
                 },
                 bookingitem: {
-                    include: {
-                        service: true,
-                        Renamedpackage: true,
+                    select: {
+                        id: true,
+                        price: true,
+                        quantity: true,
+                        service: {
+                            select: {
+                                id: true,
+                                title: true
+                            }
+                        },
+                        Renamedpackage: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        },
                     },
                 },
-                payment: true
+                payment: {
+                    select: {
+                        id: true,
+                        amount: true,
+                        status: true,
+                        razorpayPaymentId: true
+                    }
+                }
             },
         });
+
+        if (!booking) {
+          return NextResponse.json({ message: "Booking not found" }, { status: 404 });
+        }
+
+        // Authorization check: only customer or vendor involved can see it
+        if (payload.role === "CUSTOMER" && booking.customerId !== payload.userId) {
+          return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+        }
+
+        // For vendors, check if they are the assigned vendor
+        if (payload.role === "VENDOR") {
+          const vendorProfile = await prisma.vendorprofile.findUnique({
+            where: { userId: payload.userId }
+          });
+          if (booking.vendorId !== vendorProfile?.id) {
+            return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+          }
+        }
+
         return NextResponse.json(booking);
     }
 
+    logger.info("Fetching user bookings", { userId: payload.userId, role: payload.role });
+
     const bookings = await prisma.booking.findMany({
       where: payload.role === "CUSTOMER" ? { customerId: payload.userId } : { vendorprofile: { userId: payload.userId } },
-      include: {
-        vendorprofile: true,
+      select: {
+        id: true,
+        bookingNumber: true,
+        eventDate: true,
+        status: true,
+        totalAmount: true,
+        eventName: true,
+        vendorprofile: {
+          select: {
+            id: true,
+            businessName: true,
+            logo: true,
+            city: true
+          }
+        },
         user: {
-          select: { fullName: true, email: true, mobileNumber: true },
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            mobileNumber: true
+          },
         },
         bookingitem: {
-          include: {
-            service: true,
-            Renamedpackage: true,
+          select: {
+            id: true,
+            price: true,
+            quantity: true,
+            service: {
+              select: {
+                id: true,
+                title: true
+              }
+            },
+            Renamedpackage: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
           },
         },
       },
@@ -334,7 +521,5 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(bookings);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }

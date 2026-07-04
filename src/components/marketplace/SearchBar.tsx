@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, MapPin } from "lucide-react"
@@ -11,14 +11,14 @@ export const SearchBar = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [query, setQuery] = useState(searchParams?.get("q") || "")
+  const [query, setQuery] = useState(searchParams?.get("query") || "")
   const [city, setCity] = useState(searchParams?.get("city") || "")
-  const debouncedQuery = useDebounce(query, 500)
+  const _debouncedQuery = useDebounce(query, 500)
 
   const handleSearch = () => {
     const params = new URLSearchParams(searchParams?.toString() || "")
-    if (query) params.set("q", query)
-    else params.delete("q")
+    if (query) params.set("query", query)
+    else params.delete("query")
     if (city) params.set("city", city)
     else params.delete("city")
 

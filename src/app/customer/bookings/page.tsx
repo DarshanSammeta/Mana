@@ -1,17 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { format } from "date-fns";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search,
-  Filter,
-  ChevronRight,
   Package,
   MapPin,
-  Calendar as CalendarIcon,
   Clock,
   MoreVertical,
-  ExternalLink,
   RefreshCcw,
   CheckCircle2,
   XCircle,
@@ -29,6 +24,11 @@ import {
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
+import { customerService } from "@/services/customer.service";
+import { toast } from "react-hot-toast";
+
+import { formatCurrency, formatDate } from "@/utils/format";
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
@@ -43,31 +43,23 @@ export default function BookingsPage() {
     { label: "Cancelled", value: "CANCELLED" },
   ];
 
-  useEffect(() => {
-    fetchBookings();
-  }, [activeTab]);
-
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      let url = "/api/customer/bookings";
-      if (activeTab !== "ALL") {
-        url += `?status=${activeTab}`;
-      }
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
+      const data = await customerService.getBookings({
+        status: activeTab === "ALL" ? undefined : activeTab
       });
-      if (res.ok) {
-        const data = await res.json();
-        setBookings(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch bookings", error);
+      setBookings(data);
+    } catch {
+      toast.error("Failed to load bookings");
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings]);
 
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -90,17 +82,17 @@ export default function BookingsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">My Bookings</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">My Bookings</h1>
           <p className="text-slate-500 mt-1 font-medium">Track and manage your upcoming and past events.</p>
         </div>
         <div className="relative w-full md:w-80 group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary transition-colors" />
           <Input
             placeholder="Search by vendor or booking ID..."
-            className="pl-11 h-12 bg-white border-slate-200 rounded-2xl focus:ring-primary/20 transition-all shadow-sm"
+            className="pl-11 h-12 bg-white border-slate-200 rounded-xl focus:ring-primary/20 transition-all shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -115,7 +107,7 @@ export default function BookingsPage() {
               key={tab.value}
               onClick={() => setActiveTab(tab.value)}
               className={cn(
-                "pb-4 text-sm font-bold transition-all relative",
+                "pb-4 text-sm font-black transition-all relative uppercase tracking-widest",
                 activeTab === tab.value
                   ? "text-primary"
                   : "text-slate-400 hover:text-slate-600"
@@ -141,41 +133,41 @@ export default function BookingsPage() {
           {filteredBookings.map((booking) => {
             const status = getStatusConfig(booking.status);
             return (
-              <div key={booking.id} className="group border border-slate-200 rounded-3xl overflow-hidden hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all bg-white">
+              <div key={booking.id} className="group border border-slate-200 rounded-2xl overflow-hidden hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/5 transition-all bg-white">
                 {/* Booking Header */}
-                <div className="bg-slate-50/50 px-8 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+                <div className="bg-slate-50/80 px-8 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-10">
                     <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order Placed</p>
-                      <p className="text-sm font-bold text-slate-700">{format(new Date(booking.createdAt), 'MMM dd, yyyy')}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Order Placed</p>
+                      <p className="text-sm font-black text-slate-700">{formatDate(booking.createdAt, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Amount</p>
-                      <p className="text-sm font-bold text-slate-700">₹{Number(booking.totalAmount).toLocaleString('en-IN')}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Amount</p>
+                      <p className="text-sm font-black text-slate-900">{formatCurrency(Number(booking.totalAmount))}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Event Date</p>
-                      <p className="text-sm font-bold text-slate-700">{format(new Date(booking.eventDate), 'MMM dd, yyyy')}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Event Date</p>
+                      <p className="text-sm font-black text-slate-700">{formatDate(booking.eventDate, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right hidden sm:block">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Booking ID</p>
-                      <p className="text-sm font-bold text-slate-700">#{booking.bookingNumber}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Booking ID</p>
+                      <p className="text-sm font-black text-slate-700">#{booking.bookingNumber}</p>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-slate-100">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-slate-200 transition-colors">
                           <MoreVertical className="h-5 w-5 text-slate-500" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-xl border-slate-200 p-2">
-                        <DropdownMenuItem asChild className="rounded-lg font-medium cursor-pointer">
+                      <DropdownMenuContent align="end" className="rounded-xl border-slate-200 p-2 shadow-xl">
+                        <DropdownMenuItem asChild className="rounded-lg font-bold text-slate-700 cursor-pointer focus:bg-primary focus:text-white">
                           <Link href={`/customer/bookings/${booking.id}`}>View Details</Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="rounded-lg font-medium cursor-pointer">Download Invoice</DropdownMenuItem>
+                        <DropdownMenuItem className="rounded-lg font-bold text-slate-700 cursor-pointer focus:bg-primary focus:text-white">Download Invoice</DropdownMenuItem>
                         {booking.status === 'EVENT_COMPLETED' && (
-                          <DropdownMenuItem className="rounded-lg font-bold text-primary cursor-pointer">Write Review</DropdownMenuItem>
+                          <DropdownMenuItem className="rounded-lg font-black text-primary cursor-pointer focus:bg-primary focus:text-white">Write Review</DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -184,43 +176,50 @@ export default function BookingsPage() {
 
                 {/* Booking Content */}
                 <div className="p-8 flex flex-col md:flex-row gap-8">
-                  <div className="h-24 w-24 bg-slate-50 rounded-2xl flex items-center justify-center shrink-0 border border-slate-100 group-hover:border-primary/20 transition-colors overflow-hidden">
+                  <div className="h-28 w-28 bg-slate-50 rounded-2xl flex items-center justify-center shrink-0 border border-slate-100 group-hover:border-primary/20 transition-all overflow-hidden shadow-inner relative">
                     {booking.vendorprofile.logo ? (
-                      <img src={booking.vendorprofile.logo} alt={booking.vendorprofile.businessName} className="h-full w-full object-cover" />
+                      <Image
+                        src={booking.vendorprofile.logo}
+                        alt={booking.vendorprofile.businessName}
+                        fill
+                        className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                        sizes="112px"
+                      />
                     ) : (
-                      <Package className="h-10 w-10 text-slate-300" />
+                      <Package className="h-12 w-12 text-slate-300" />
                     )}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         <div>
-                          <h3 className="text-xl font-extrabold text-slate-900 group-hover:text-primary transition-colors">{booking.vendorprofile.businessName}</h3>
-                          <p className="text-sm text-slate-500 font-medium mt-1">
+                          <h3 className="text-2xl font-black text-slate-900 group-hover:text-primary transition-colors tracking-tight">{booking.vendorprofile.businessName}</h3>
+                          <p className="text-sm text-slate-500 font-bold mt-1.5 flex items-center gap-2">
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary/40"></span>
                             {booking.bookingitem.map((it: any) => it.service.title).join(", ")}
                           </p>
                         </div>
                         <div className="flex items-center gap-6">
-                           <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                              <MapPin className="h-4 w-4 text-slate-400" />
+                           <div className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+                              <MapPin className="h-4 w-4 text-primary/60" />
                               {booking.city}, {booking.state}
                            </div>
-                           <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                              <Clock className="h-4 w-4 text-slate-400" />
+                           <div className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+                              <Clock className="h-4 w-4 text-primary/60" />
                               {booking.eventTime || "TBA"}
                            </div>
                         </div>
                       </div>
 
                       <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-start gap-4 shrink-0">
-                        <Badge className={cn("px-4 py-1.5 font-black text-[10px] uppercase tracking-widest rounded-full border-none shadow-sm", status.color)}>
+                        <Badge className={cn("px-5 py-2 font-black text-[10px] uppercase tracking-widest rounded-full border-none shadow-sm", status.color)}>
                           <status.icon className="h-3 w-3 mr-2" />
                           {status.label}
                         </Badge>
-                        <div className="lg:mt-4">
+                        <div className="lg:mt-6">
                            <Link href={`/customer/bookings/${booking.id}`}>
-                             <Button variant="outline" className="h-10 px-6 font-black text-xs border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl transition-all">
+                             <Button className="h-12 px-8 font-black text-xs bg-primary hover:bg-blue-700 text-white rounded-xl transition-all shadow-lg shadow-primary/20">
                                TRACK STATUS
                              </Button>
                            </Link>

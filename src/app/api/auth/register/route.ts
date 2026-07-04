@@ -4,6 +4,8 @@ import { hashPassword } from "@/lib/auth";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { createAuditLog } from "@/lib/audit";
+import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
 
 const registerSchema = z.object({
   fullName: z.string().min(2),
@@ -14,12 +16,13 @@ const registerSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
-  if (!rateLimit(ip, 5, 60000)) {
-    return NextResponse.json({ message: "Too many requests. Please try again later." }, { status: 429 });
-  }
+  return withErrorHandler(async () => {
+    const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+    const rateLimitResult = await rateLimit(ip, { limit: 5, window: 60 });
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ message: "Too many requests. Please try again later." }, { status: 429 });
+    }
 
-  try {
     const body = await req.json();
     const validated = registerSchema.parse(body);
 
@@ -62,13 +65,11 @@ export async function POST(req: Request) {
     }
 
     await createAuditLog({ userId: user.id, action: "USER_REGISTERED", ipAddress: ip });
+    logger.info("New user registered", { userId: user.id, role: user.role });
 
     return NextResponse.json(
       { message: "User registered successfully", userId: user.id },
       { status: 201 }
     );
-  } catch (error: any) {
-    console.error("Registration Error:", error);
-    return NextResponse.json({ message: error.message }, { status: 400 });
-  }
+  });
 }

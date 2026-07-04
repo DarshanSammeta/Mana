@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import logger from "@/lib/logger";
 
 export async function GET(req: Request) {
   try {
@@ -16,10 +17,18 @@ export async function GET(req: Request) {
 
     const vendor = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId },
-      include: {
+      select: {
+        id: true,
         user: {
-          include: {
-            wallet: true
+          select: {
+            wallet: {
+              select: {
+                id: true,
+                lifetimeEarnings: true,
+                pendingBalance: true,
+                withdrawable: true,
+              }
+            }
           }
         },
         _count: {
@@ -84,8 +93,11 @@ export async function GET(req: Request) {
     };
 
     return NextResponse.json(stats);
-  } catch (error: any) {
-    console.error("Stats API Error:", error);
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    logger.error("Stats API Error", { error });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "An unknown error occurred" },
+      { status: 500 }
+    );
   }
 }

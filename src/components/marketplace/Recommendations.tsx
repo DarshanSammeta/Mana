@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
+import { marketplaceService } from '@/services/marketplace.service';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from '@/components/ui/card';
 import { Star, TrendingUp, Award, MapPin } from 'lucide-react';
@@ -12,10 +12,7 @@ import Link from 'next/link';
 export const Recommendations = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['recommendations'],
-    queryFn: async () => {
-      const res = await axios.get('/api/vendors/recommendations');
-      return res.data;
-    }
+    queryFn: () => marketplaceService.getRecommendations()
   });
 
   if (isLoading) return <div className="h-96 w-full bg-muted animate-pulse rounded-xl" />;

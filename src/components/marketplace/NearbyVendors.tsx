@@ -2,13 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Star, MapPin, Navigation } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
+import { vendorService } from '@/services';
 
 interface Vendor {
   id: string;
@@ -33,8 +33,7 @@ export const NearbyVendors = () => {
     queryKey: ['nearby-vendors', coords],
     queryFn: async () => {
       if (!coords) return [];
-      const res = await axios.get(`/api/vendors/nearby?lat=${coords.lat}&lng=${coords.lng}&radius=20`);
-      return res.data;
+      return vendorService.getNearbyVendors(coords.lat, coords.lng);
     },
     enabled: !!coords,
   });

@@ -5,20 +5,26 @@ import { useSocketStore } from "@/store/socketStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 import { Bell } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 export const NotificationListener = () => {
   const { socket } = useSocketStore();
   const queryClient = useQueryClient();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewNotification = (notification: any) => {
-      // Invalidate notifications query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    // Debounced invalidation to prevent main-thread blocking during socket bursts
+    const invalidate = (keys: string[][]) => {
+      const timeoutId = setTimeout(() => {
+        keys.forEach(key => queryClient.invalidateQueries({ queryKey: key }));
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    };
 
-      // Also update counts in dashboard/stats if needed
-      queryClient.invalidateQueries({ queryKey: ["customer-stats"] });
+    const handleNewNotification = (notification: any) => {
+      invalidate([["notifications"], ["customer-stats"]]);
 
       // Show a toast
       toast.custom((t) => (
@@ -53,23 +59,20 @@ export const NotificationListener = () => {
     };
 
     const handleBookingUpdate = (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["vendor-stats"] });
+      invalidate([["bookings"], ["customer-stats"], ["vendor-stats"]]);
       toast.success(data.message || "Booking updated");
     };
 
     const handleNewMessage = (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["messages"] });
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      invalidate([["messages"], ["conversations"]]);
       // Only toast if not on the chat page
-      if (window.location.pathname !== "/customer/messages" && window.location.pathname !== "/vendor/messages") {
+      if (pathname !== "/customer/messages" && pathname !== "/vendor/messages") {
         toast.success(`New message from ${data.senderName}`);
       }
     };
 
     const handleVendorUpdate = () => {
-      queryClient.invalidateQueries({ queryKey: ["marketplace"] });
+      invalidate([["marketplace"]]);
     };
 
     socket.on("notification:receive", handleNewNotification);
@@ -85,7 +88,7 @@ export const NotificationListener = () => {
       socket.off("vendor:updated", handleVendorUpdate);
       socket.off("vendor:new", handleVendorUpdate);
     };
-  }, [socket, queryClient]);
+  }, [socket, queryClient, pathname]);
 
   return null;
 };

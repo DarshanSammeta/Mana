@@ -15,14 +15,25 @@ export async function GET(req: Request) {
         vendorprofile: { userId: payload.userId },
         status: "PENDING",
       },
-      include: {
+      select: {
+        id: true,
+        priority: true,
+        createdAt: true,
         booking: {
-          include: {
+          select: {
+            id: true,
+            bookingNumber: true,
+            eventName: true,
+            eventDate: true,
+            totalAmount: true,
             user: { select: { fullName: true } },
             bookingitem: {
-              include: {
-                service: true,
-                Renamedpackage: true,
+              select: {
+                id: true,
+                price: true,
+                quantity: true,
+                service: { select: { title: true } },
+                Renamedpackage: { select: { name: true } },
               },
             },
           },
@@ -60,6 +71,13 @@ export async function PATCH(req: Request) {
     }
 
     if (action === "ACCEPT") {
+      // Check if vendor is verified (Step 7: Verification Security)
+      if (assignment.vendorprofile.verificationStatus !== "APPROVED") {
+        return NextResponse.json({
+          message: "Verification pending. You cannot accept bookings until your documents are approved by the admin."
+        }, { status: 403 });
+      }
+
       // 1. Update assignment status
       await prisma.bookingassignment.update({
         where: { id: assignmentId },
@@ -94,6 +112,29 @@ export async function PATCH(req: Request) {
         },
         data: { status: "REASSIGNED" },
       });
+
+      // 5. Notify Customer (Step 6)
+      await prisma.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: assignment.booking.customerId,
+          title: "Vendor Assigned!",
+          message: `Vendor ${assignment.vendorprofile.businessName} has accepted your booking #${assignment.booking.bookingNumber}.`,
+          category: "BOOKING",
+          priority: "HIGH",
+          link: `/customer/bookings/${assignment.bookingId}`
+        }
+      });
+
+      // Emit Socket Event for Real-time Update
+      try {
+        const { emitSocketEvent } = await import("@/lib/socket-helper");
+        emitSocketEvent(assignment.booking.customerId, "BOOKING_UPDATED", {
+          bookingId: assignment.bookingId,
+          status: "VENDOR_ASSIGNED",
+          vendorName: assignment.vendorprofile.businessName
+        });
+      } catch (e) { console.error("Socket error", e); }
 
       return NextResponse.json({ message: "Assignment accepted successfully" });
     } else if (action === "REJECT") {

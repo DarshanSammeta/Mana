@@ -25,7 +25,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     });
 
     return NextResponse.json({ message: "Package deleted" });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 400 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Bad Request";
+    return NextResponse.json({ message }, { status: 400 });
   }
 }

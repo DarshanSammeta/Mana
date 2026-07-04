@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
-import { Star, MapPin, Phone, ExternalLink } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { vendorService } from '@/services/vendor.service';
+import { Star, MapPin, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { MAPS_CONFIG } from '@/config/maps';
 
 const mapContainerStyle = {
   width: '100%',
@@ -21,7 +21,7 @@ const defaultCenter = {
 export default function GlobalMapPage() {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: MAPS_CONFIG.apiKey || '',
   });
 
   const [center, setCenter] = useState(defaultCenter);
@@ -35,10 +35,7 @@ export default function GlobalMapPage() {
 
   const { data: vendors } = useQuery({
     queryKey: ['map-vendors', center],
-    queryFn: async () => {
-      const res = await axios.get(`/api/vendors/nearby?lat=${center.lat}&lng=${center.lng}&radius=50`);
-      return res.data;
-    },
+    queryFn: () => vendorService.getNearbyVendors(center.lat, center.lng, 50),
     enabled: isLoaded,
   });
 

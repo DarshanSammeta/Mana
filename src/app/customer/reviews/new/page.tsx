@@ -3,20 +3,17 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import axios from "axios";
-import { useAuthStore } from "@/store/authStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Star } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { customerService } from "@/services/customer.service";
 
 export default function NewReviewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const vendorId = searchParams?.get("vendorId");
-  const bookingId = searchParams?.get("bookingId");
-  const { accessToken } = useAuthStore();
 
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
@@ -24,12 +21,8 @@ export default function NewReviewPage() {
 
   const { mutate: submitReview, isPending } = useMutation({
     mutationFn: async () => {
-      const res = await axios.post(
-        "/api/reviews",
-        { vendorId, rating, comment },
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      return res.data;
+      if (!vendorId) throw new Error("Vendor ID is missing");
+      return customerService.submitReview({ vendorId, rating, comment });
     },
     onSuccess: () => {
       toast({ title: "Review submitted successfully!" });

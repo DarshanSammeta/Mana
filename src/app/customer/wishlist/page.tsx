@@ -4,19 +4,17 @@ import { useState, useEffect } from "react";
 import {
   Heart,
   Trash2,
-  ShoppingCart,
   Star,
   MapPin,
-  ChevronRight,
-  Search,
   Zap,
   Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
+import { customerService } from "@/services/customer.service";
 import { toast } from "react-hot-toast";
 
 export default function WishlistPage() {
@@ -29,14 +27,8 @@ export default function WishlistPage() {
 
   const fetchWishlist = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/customer/wishlist", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data);
-      }
+      const data = await customerService.getWishlist();
+      setItems(data);
     } catch (error) {
       console.error("Failed to fetch wishlist", error);
     } finally {
@@ -44,23 +36,12 @@ export default function WishlistPage() {
     }
   };
 
-  const removeItem = async (targetId: string, type: string) => {
+  const removeItem = async (targetId: string, _type: string) => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/customer/wishlist", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ targetId, type })
-      });
-
-      if (res.ok) {
-        setItems(items.filter(item => item.targetId !== targetId));
-        toast.success("Item removed from wishlist");
-      }
-    } catch (error) {
+      await customerService.removeFromWishlist(targetId);
+      setItems(items.filter(item => item.targetId !== targetId));
+      toast.success("Item removed from wishlist");
+    } catch {
       toast.error("Failed to remove item");
     }
   };
@@ -81,7 +62,7 @@ export default function WishlistPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">My Wishlist</h1>
-          <p className="text-slate-500 mt-1 font-medium">Services and vendors you've saved for your upcoming events.</p>
+          <p className="text-slate-500 mt-1 font-medium">Services and vendors you&apos;ve saved for your upcoming events.</p>
         </div>
         <div className="bg-white border border-slate-200 px-6 py-3 rounded-2xl flex items-center gap-3 shadow-sm">
           <Heart className="h-5 w-5 text-rose-500 fill-rose-500" />
@@ -100,10 +81,12 @@ export default function WishlistPage() {
               <div key={item.id} className="group bg-white border border-slate-200 rounded-[2rem] overflow-hidden hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all">
                 <div className="relative h-56 bg-slate-100 overflow-hidden">
                   {detail.logo || detail.coverImage ? (
-                    <img
+                    <Image
                       src={detail.logo || detail.coverImage}
                       alt={detail.businessName || detail.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      fill
+                      className="object-cover group-hover:scale-110 transition-transform duration-700"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
@@ -170,7 +153,7 @@ export default function WishlistPage() {
            </div>
            <h3 className="text-2xl font-extrabold text-slate-900">Your wishlist is empty</h3>
            <p className="text-slate-500 mt-2 font-medium max-w-sm mx-auto">
-             Save your favorite vendors and services here to easily find them when you're ready to plan your next event.
+             Save your favorite vendors and services here to easily find them when you&apos;re ready to plan your next event.
            </p>
            <Link href="/marketplace">
               <Button className="mt-10 bg-primary hover:bg-blue-700 text-white font-extrabold rounded-2xl px-12 py-7 h-auto shadow-xl shadow-primary/20 transition-all hover:scale-105">

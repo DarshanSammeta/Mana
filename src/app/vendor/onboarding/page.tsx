@@ -10,18 +10,17 @@ import {
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
-  Briefcase,
-  Building2,
-  Phone,
-  ArrowRight
+  Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthStore } from "@/store/authStore";
-import axios from "axios";
 import { useToast } from "@/hooks/use-toast";
+import { vendorService } from "@/services/vendor.service";
+import { marketplaceService } from "@/services/marketplace.service";
+import SuccessState from "@/components/common/SuccessState";
 
 const STEPS = [
   { id: "business", title: "Business Info", icon: Store },
@@ -36,6 +35,7 @@ export default function VendorOnboarding() {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     businessName: "",
@@ -58,9 +58,9 @@ export default function VendorOnboarding() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await axios.get("/api/categories");
-        setCategories(res.data || []);
-      } catch (err) {
+        const data = await marketplaceService.getCategories();
+        setCategories(data || []);
+      } catch {
         console.error("Failed to fetch categories");
       }
     };
@@ -95,10 +95,8 @@ export default function VendorOnboarding() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("accessToken");
-
-      // 1. Update Profile
-      await axios.put("/api/vendor/profile", {
+      // 1. Update Profile using vendorService
+      await vendorService.updateProfile({
         ...formData,
         serviceRadius: parseFloat(formData.serviceRadius),
         bankDetails: {
@@ -106,16 +104,10 @@ export default function VendorOnboarding() {
           accountNumber: formData.accountNumber,
           ifscCode: formData.ifscCode
         }
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
 
       // 2. Profile updated successfully
-      toast({
-        title: "Profile Updated!",
-        description: "Your business details have been saved successfully.",
-      });
-      router.push("/vendor/dashboard");
+      setIsSuccess(true);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -126,6 +118,20 @@ export default function VendorOnboarding() {
       setLoading(false);
     }
   };
+
+  if (isSuccess) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <SuccessState
+          title="Onboarding Complete!"
+          message="Your business profile has been successfully set up. You can now start adding services and receiving bookings."
+          onContinue={() => router.push("/vendor/dashboard")}
+          continueText="Go to Dashboard"
+          showHome={false}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

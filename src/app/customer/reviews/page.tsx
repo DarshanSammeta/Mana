@@ -1,47 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  Star,
-  MessageSquare,
-  ThumbsUp,
-  MoreVertical,
-  Image as ImageIcon,
-  CheckCircle2,
-  Package,
-  ArrowRight
-} from "lucide-react";
+import Image from "next/image";
+import { Star, MessageSquare, ThumbsUp, Package, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { reviewService } from "@/services";
 
 export default function CustomerReviewsPage() {
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchReviews();
-  }, []);
-
-  const fetchReviews = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/customer/reviews", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setReviews(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch reviews", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: reviews = [], isLoading: loading } = useQuery({
+    queryKey: ["customer-reviews"],
+    queryFn: () => reviewService.getReviews("CUSTOMER"),
+  });
 
   return (
     <div className="space-y-8">
@@ -72,13 +46,18 @@ export default function CustomerReviewsPage() {
         </div>
       ) : reviews.length > 0 ? (
         <div className="space-y-6">
-          {reviews.map((review) => (
+          {reviews.map((review: any) => (
             <div key={review.id} className="bg-card border border-border rounded-2xl p-6 hover:shadow-md transition-shadow">
                <div className="flex flex-col md:flex-row gap-6">
                   <div className="shrink-0">
-                     <div className="h-16 w-16 bg-muted/50 rounded-xl border border-border/50 flex items-center justify-center overflow-hidden">
+                     <div className="h-16 w-16 bg-muted/50 rounded-xl border border-border/50 flex items-center justify-center overflow-hidden relative">
                         {review.vendorprofile.logo ? (
-                           <img src={review.vendorprofile.logo} alt={review.vendorprofile.businessName} className="h-full w-full object-cover" />
+                           <Image
+                             src={review.vendorprofile.logo}
+                             alt={review.vendorprofile.businessName}
+                             fill
+                             className="object-cover"
+                           />
                         ) : (
                            <Package className="h-8 w-8 text-muted-foreground/30" />
                         )}
@@ -113,13 +92,18 @@ export default function CustomerReviewsPage() {
                         <div className="absolute -top-2 left-4 text-muted/50">
                            <MessageSquare className="h-8 w-8 fill-muted/30" />
                         </div>
-                        <p className="text-sm text-foreground italic leading-relaxed">"{review.comment}"</p>
+                        <p className="text-sm text-foreground italic leading-relaxed">&quot;{review.comment}&quot;</p>
 
                         {review.images && review.images.length > 0 && (
                            <div className="flex gap-2 mt-4">
                               {review.images.map((img: string, idx: number) => (
-                                 <div key={idx} className="h-14 w-14 rounded-lg overflow-hidden border border-border">
-                                    <img src={img} className="h-full w-full object-cover" />
+                                 <div key={idx} className="h-14 w-14 rounded-lg overflow-hidden border border-border relative">
+                                    <Image
+                                      src={img}
+                                      alt={`Review image ${idx + 1}`}
+                                      fill
+                                      className="object-cover"
+                                    />
                                  </div>
                               ))}
                            </div>
@@ -159,7 +143,7 @@ export default function CustomerReviewsPage() {
            </div>
            <h3 className="text-xl font-bold text-foreground">No reviews shared yet</h3>
            <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-             Share your experience with vendors you've worked with to help other customers make better choices.
+             Share your experience with vendors you&apos;ve worked with to help other customers make better choices.
            </p>
            <Link href="/customer/bookings">
               <Button className="mt-8 bg-primary hover:bg-primary/90 font-bold px-10 rounded-xl">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { booking_status } from "@prisma/client";
 
 export async function GET(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
@@ -17,13 +18,20 @@ export async function GET(req: Request) {
 
     const whereClause: any = { customerId: userId };
     if (status && status !== 'ALL') {
-      whereClause.status = status;
+      whereClause.status = status as booking_status;
     }
 
     const bookings = await prisma.booking.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        bookingNumber: true,
+        eventName: true,
+        eventDate: true,
+        status: true,
+        totalAmount: true,
+        createdAt: true,
         vendorprofile: {
           select: {
             businessName: true,
@@ -33,7 +41,9 @@ export async function GET(req: Request) {
           }
         },
         bookingitem: {
-          include: {
+          select: {
+            price: true,
+            quantity: true,
             service: {
               select: { title: true }
             },
@@ -53,7 +63,8 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(bookings);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

@@ -269,11 +269,31 @@ async function main() {
 
       // Add some reviews
       for (let r = 0; r < 3; r++) {
+        const customer = getRandom(customerPool);
+        const bookingId = crypto.randomUUID();
+
+        // Create a completed booking for the review
+        await prisma.booking.create({
+          data: {
+            id: bookingId,
+            bookingNumber: `BK-${bookingId.slice(0, 8).toUpperCase()}`,
+            customerId: customer.id,
+            vendorId: vendorId,
+            status: 'EVENT_COMPLETED',
+            eventDate: new Date(),
+            eventLocation: city.name,
+            totalAmount: 5000,
+            guestCount: 50,
+            updatedAt: new Date()
+          }
+        });
+
         await prisma.review.create({
           data: {
             id: crypto.randomUUID(),
-            userId: getRandom(customerPool).id,
+            userId: customer.id,
             vendorId: vendorId,
+            bookingId: bookingId,
             rating: Math.floor(rating) + (Math.random() > 0.5 ? 1 : 0),
             comment: getRandom(["Excellent work!", "Highly recommend their services.", "Very professional and punctual.", "Great experience overall.", "Loved the attention to detail.", "The team was amazing!"]),
             updatedAt: new Date()
