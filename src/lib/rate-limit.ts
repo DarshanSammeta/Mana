@@ -1,4 +1,4 @@
-import { redis } from './redis';
+import { safeRedis } from './redis';
 import { NextResponse } from 'next/server';
 
 export interface RateLimitConfig {
@@ -8,14 +8,28 @@ export interface RateLimitConfig {
 
 export async function rateLimit(identifier: string, config: RateLimitConfig = { limit: 10, window: 60 }) {
   const key = `ratelimit:${identifier}`;
-  const current = await redis.incr(key);
+
+  // Use safeRedis wrapper to avoid throwing errors if Redis is down
+  const current = await safeRedis.incr(key);
+
+  // If Redis is down, current will be null.
+  // We treat null as "success" to ensure the app stays functional.
+  if (current === null) {
+    return {
+      success: true,
+      limit: config.limit,
+      remaining: config.limit,
+      reset: config.window,
+      redisOffline: true
+    };
+  }
 
   if (current === 1) {
-    await redis.expire(key, config.window);
+    await safeRedis.expire(key, config.window);
   }
 
   const remaining = Math.max(0, config.limit - current);
-  const reset = await redis.ttl(key);
+  const reset = await safeRedis.ttl(key) || config.window;
 
   return {
     success: current <= config.limit,

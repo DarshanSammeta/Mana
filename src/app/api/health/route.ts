@@ -22,19 +22,35 @@ export async function GET() {
   };
 
   try {
+    // Database check
     await prisma.$queryRaw`SELECT 1`;
     healthStatus.services.database = "UP";
-  } catch {
+  } catch (error) {
+    console.error("[Health Check] Database down:", error);
     healthStatus.services.database = "DOWN";
     healthStatus.status = "ERROR";
   }
 
   try {
-    await redis.ping();
-    healthStatus.services.redis = "UP";
-  } catch {
+    // Redis check - using ping directly but with a timeout
+    // We don't use safeRedis here because we actually WANT to know if it's down
+    if (typeof redis.ping === 'function') {
+      const pingPromise = redis.ping();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), 500)
+      );
+
+      await Promise.race([pingPromise, timeoutPromise]);
+      healthStatus.services.redis = "UP";
+    } else {
+      healthStatus.services.redis = "DOWN";
+    }
+  } catch (error) {
+    // Redis being down shouldn't necessarily mark the whole app as ERROR
+    // unless the user specifically wants it to. Given the requirement
+    // "Redis must be OPTIONAL", we might just mark it as DOWN but status OK.
     healthStatus.services.redis = "DOWN";
-    healthStatus.status = "ERROR";
+    // Not marking healthStatus.status = "ERROR" if Redis is down since it's optional
   }
 
   const statusCode = healthStatus.status === "OK" ? 200 : 503;

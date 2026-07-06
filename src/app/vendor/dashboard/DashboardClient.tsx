@@ -527,7 +527,7 @@ export default function DashboardClient({
                  <div>
                     <p className="text-xs font-black text-foreground">{currentSubscription?.subscriptionplan?.name || 'FREE'} PLAN</p>
                     <p className="text-[10px] text-muted-foreground font-bold">
-                      {currentSubscription ? `Expires ${format(new Date(currentSubscription.endDate), "MMM dd")}` : 'Upgrade for more features'}
+                      {currentSubscription?.endDate ? `Expires ${format(new Date(currentSubscription.endDate), "MMM dd")}` : 'Upgrade for more features'}
                     </p>
                  </div>
               </div>
