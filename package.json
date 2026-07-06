@@ -49,7 +49,7 @@
     "date-fns": "^3.6.0",
     "framer-motion": "^11.11.9",
     "inngest": "^4.11.0",
-    "ioredis": "^5.11.1",
+    "@upstash/redis": "^1.34.3",
     "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^4.2.1",

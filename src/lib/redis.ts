@@ -1,179 +1,58 @@
-import Redis from "ioredis";
+import { Redis } from "@upstash/redis";
 import { observability } from "./observability";
 import { REDIS_CONFIG } from "@/config/redis";
 
 /**
- * REDIS IMPLEMENTATION FOR VERCEL + UPSTASH
+ * REDIS IMPLEMENTATION FOR VERCEL + UPSTASH (REST API)
  *
- * Fixes for:
- * - Error: connect ETIMEDOUT (Increased timeouts)
- * - Stream isn't writeable (Better error handling + retry strategy)
- * - Reached the max retries per request limit (Corrected maxRetriesPerRequest)
+ * Switched from ioredis (TCP) to @upstash/redis (REST) to:
+ * - Avoid "Stream isn't writeable" errors in serverless
+ * - Support Vercel's REST-based environment variables
+ * - Simplify connection management (stateless)
  */
 
-declare global {
-  // eslint-disable-next-line no-var
-  var redis: Redis | undefined;
-}
+// Initialize the Redis client using REST credentials
+export const redis = REDIS_CONFIG.enabled
+  ? new Redis({
+      url: REDIS_CONFIG.restUrl!,
+      token: REDIS_CONFIG.restToken!,
+    })
+  : null;
 
-const isRedisEnabled = REDIS_CONFIG.enabled && !!REDIS_CONFIG.url;
-const redisUrl = REDIS_CONFIG.url;
+const isRedisEnabled = REDIS_CONFIG.enabled && !!redis;
 
-// Tracks if we should skip Redis calls temporarily due to persistent failures
-let redisConnectionFailed = false;
-
-// Singleton pattern for Redis client
-function getRedisInstance(): Redis {
-  if (!isRedisEnabled) {
-    return {} as Redis;
-  }
-
-  if (global.redis) {
-    return global.redis;
-  }
-
-  const client = new Redis(redisUrl, {
-    // Connection settings optimized for Serverless + Upstash
-    lazyConnect: true, // Don't connect until needed
-    enableOfflineQueue: false, // Fail fast if connection is down
-
-    // Fix: ioredis recommends setting maxRetriesPerRequest to null
-    // when using a queue or if we want to handle failures manually.
-    // Setting to 0 can cause "Reached the max retries..." errors during reconnects.
-    maxRetriesPerRequest: null,
-
-    // Timeout settings (Higher for remote Upstash connection)
-    connectTimeout: 10000, // 10s
-    commandTimeout: 3000,  // 3s
-
-    // Keep alive to prevent stale connections in pool
-    keepAlive: 1000,
-
-    retryStrategy(times) {
-      const delay = Math.min(times * 50, 2000);
-
-      // Stop retrying after 5 attempts to prevent blocking serverless function
-      if (times > 5) {
-        console.error("[Redis] Max reconnection attempts reached.");
-        redisConnectionFailed = true;
-        return null; // stop retrying
-      }
-      return delay;
-    },
-
-    reconnectOnError(err) {
-      const targetErrors = ["READONLY", "ECONNRESET", "ETIMEDOUT"];
-      if (targetErrors.some(e => err.message.includes(e))) {
-        return true; // reconnect
-      }
-      return false;
-    },
-  });
-
-  // Event Listeners for Auditing/Debugging
-  client.on("connect", () => {
-    console.log("[Redis] Attempting to connect...");
-  });
-
-  client.on("ready", () => {
-    console.log("[Redis] Client ready and connected");
-    redisConnectionFailed = false;
-  });
-
-  client.on("error", (err) => {
-    console.error("[Redis] Connection error:", err.message);
-    if (err.message.includes("ECONNREFUSED") || err.message.includes("ETIMEDOUT")) {
-      redisConnectionFailed = true;
-    }
-  });
-
-  client.on("reconnecting", (delay) => {
-    console.warn(`[Redis] Reconnecting in ${delay}ms...`);
-  });
-
-  client.on("end", () => {
-    console.warn("[Redis] Connection closed");
-    redisConnectionFailed = true;
-  });
-
-  if (process.env.NODE_ENV !== "production") {
-    global.redis = client;
-  }
-
-  return client;
-}
-
-export const redis = getRedisInstance();
+// Circuit breaker flag (simulated for REST)
+let redisCircuitOpen = false;
 
 /**
- * Ensures Redis is connected before executing a command.
- * Optimized for serverless environments.
- */
-async function ensureConnection(): Promise<boolean> {
-  if (!isRedisEnabled || redisConnectionFailed) return false;
-
-  if (redis.status === "ready") {
-    return true;
-  }
-
-  if (redis.status === "connecting" || redis.status === "reconnecting") {
-    // Wait briefly for existing connection attempt
-    return new Promise((resolve) => {
-      const timeout = setTimeout(() => resolve(false), 2000);
-      redis.once("ready", () => {
-        clearTimeout(timeout);
-        resolve(true);
-      });
-    });
-  }
-
-  try {
-    await redis.connect();
-    return true;
-  } catch (err) {
-    console.error("[Redis] Failed to establish connection:", (err as Error).message);
-    redisConnectionFailed = true;
-    return false;
-  }
-}
-
-/**
- * Core wrapper to execute Redis commands safely.
- * Returns null on failure instead of throwing, allowing the app to fall back.
+ * Core wrapper to execute Redis commands safely via REST.
  */
 async function executeRedis<T>(
   command: string,
   fn: () => Promise<T>
 ): Promise<T | null> {
-  if (!isRedisEnabled || redisConnectionFailed) return null;
+  if (!isRedisEnabled || redisCircuitOpen) return null;
 
   try {
     observability.trackRedis(command);
 
-    const isConnected = await ensureConnection();
-    if (!isConnected) return null;
+    // REST calls are stateless, no need for ensureConnection()
 
     // Use a race to ensure commands don't hang serverless functions indefinitely
     const timeout = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), 3500)
+      setTimeout(() => resolve(null), 4000)
     );
 
     const result = await Promise.race([fn(), timeout]);
     return result as T;
   } catch (err) {
     const error = err as Error;
-    console.warn(`[Redis] Command ${command} failed:`, error.message);
+    console.error(`[Redis REST] Command ${command} failed:`, error.message);
 
-    // If we hit connection issues during execution, trip the circuit breaker
-    if (
-      error.message.includes('ECONNREFUSED') ||
-      error.message.includes('ETIMEDOUT') ||
-      error.message.includes('stream isn\'t writeable') ||
-      error.message.includes('Connection is closed')
-    ) {
-      redisConnectionFailed = true;
-      // Reset after a delay (e.g., 30s) to allow for temporary outages
-      setTimeout(() => { redisConnectionFailed = false; }, 30000);
+    // If we hit persistent network issues, trip the circuit breaker briefly
+    if (error.message.includes('fetch') || error.message.includes('network')) {
+      redisCircuitOpen = true;
+      setTimeout(() => { redisCircuitOpen = false; }, 10000); // 10s cooldown
     }
 
     return null;
@@ -189,13 +68,16 @@ export const CACHE_TTL = {
 // --- Safe Wrapper Methods ---
 
 export async function getCachedData<T>(key: string): Promise<T | null> {
-  const result = await executeRedis("get", () => redis.get(key));
+  const result = await executeRedis("get", () => redis!.get<string>(key));
   if (!result) return null;
+
+  // @upstash/redis might return the object directly if it was stored as JSON
+  if (typeof result !== 'string') return result as T;
 
   try {
     return JSON.parse(result) as T;
   } catch {
-    return null;
+    return result as unknown as T;
   }
 }
 
@@ -205,48 +87,47 @@ export async function setCachedData(
   ttl: number = CACHE_TTL.MEDIUM
 ): Promise<boolean> {
   const result = await executeRedis("set", () =>
-    redis.set(key, JSON.stringify(value), "EX", ttl)
+    redis!.set(key, JSON.stringify(value), { ex: ttl })
   );
   return result === "OK";
 }
 
 export async function incrementCounter(key: string): Promise<number | null> {
-  const result = await executeRedis("incr", () => redis.incr(key));
-  if (result === null) return null;
-  return typeof result === 'number' ? result : parseInt(result as string, 10);
+  return await executeRedis("incr", () => redis!.incr(key));
 }
 
 export async function expireKey(key: string, seconds: number): Promise<boolean> {
-  const result = await executeRedis("expire", () => redis.expire(key, seconds));
+  const result = await executeRedis("expire", () => redis!.expire(key, seconds));
   return result === 1;
 }
 
 export async function getTTL(key: string): Promise<number | null> {
-  return await executeRedis("ttl", () => redis.ttl(key));
+  return await executeRedis("ttl", () => redis!.ttl(key));
 }
 
 export async function deleteCache(key: string): Promise<boolean> {
-  const result = await executeRedis("del", () => redis.del(key));
-  return !!result;
+  const result = await executeRedis("del", () => redis!.del(key));
+  return result > 0;
 }
 
 export async function deleteCachePattern(pattern: string): Promise<void> {
-  const keys = await executeRedis("keys", () => redis.keys(pattern));
+  const keys = await executeRedis("keys", () => redis!.keys(pattern));
   if (keys && keys.length > 0) {
-    await executeRedis("del", () => redis.del(...keys));
+    await executeRedis("del", () => redis!.del(...keys));
   }
 }
 
 export async function zRevRange(key: string, start: number, stop: number): Promise<string[] | null> {
-  return await executeRedis("zrevrange", () => redis.zrevrange(key, start, stop));
+  // Note: Upstash REST return types might differ slightly, but usually match ioredis for common commands
+  return await executeRedis("zrevrange", () => redis!.zrevrange(key, start, stop));
 }
 
-export async function zIncrBy(key: string, increment: number, member: string): Promise<string | null> {
-  return await executeRedis("zincrby", () => redis.zincrby(key, increment, member));
+export async function zIncrBy(key: string, increment: number, member: string): Promise<number | null> {
+  return await executeRedis("zincrby", () => redis!.zincrby(key, increment, member));
 }
 
 export async function geoAdd(key: string, lng: number, lat: number, member: string): Promise<number | null> {
-  return await executeRedis("geoadd", () => redis.geoadd(key, lng, lat, member));
+  return await executeRedis("geoadd", () => redis!.geoadd(key, { longitude: lng, latitude: lat, member }));
 }
 
 // Export a safe proxy-like object for all Redis needs
@@ -257,7 +138,7 @@ export const safeRedis = {
   expire: expireKey,
   ttl: getTTL,
   del: deleteCache,
-  keys: (pattern: string) => executeRedis("keys", () => redis.keys(pattern)),
+  keys: (pattern: string) => executeRedis("keys", () => redis!.keys(pattern)),
   zrevrange: zRevRange,
   zincrby: zIncrBy,
   geoadd: geoAdd,

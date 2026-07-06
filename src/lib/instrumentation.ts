@@ -18,7 +18,11 @@ const sdk = new NodeSDK({
       url: process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
     }),
   }),
-  instrumentations: [getNodeAutoInstrumentations()],
+  instrumentations: [
+    getNodeAutoInstrumentations({
+      // ioredis instrumentation is no longer needed as we've switched to @upstash/redis (REST)
+    }),
+  ],
 });
 
 if (process.env.NEXT_RUNTIME === 'nodejs') {
