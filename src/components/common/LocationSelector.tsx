@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useLocationStore, SavedAddress, LocationDetails } from "@/store/locationStore";
+import { useLocationStore, LocationDetails } from "@/store/locationStore";
 import { useLocation } from "@/hooks/useLocation";
 import { mapsService } from "@/services/maps.service";
 import { cn } from "@/lib/utils";

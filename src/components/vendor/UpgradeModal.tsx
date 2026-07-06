@@ -17,7 +17,7 @@ export default function UpgradeModal({
   onClose,
   title = "Premium Feature",
   description = "This feature is only available for Starter, Pro and Premium members.",
-  feature
+  feature: _feature
 }: UpgradeModalProps) {
   if (!isOpen) return null;
 

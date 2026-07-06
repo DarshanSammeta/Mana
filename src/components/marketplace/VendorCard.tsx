@@ -25,7 +25,7 @@ interface VendorCardProps {
 
 const BLUR_DATA_URL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMzAwIDIwMCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2YxZjVmOSIvPjwvc3ZnPg==";
 
-export const VendorCard = memo(function VendorCard({ vendor, index, viewMode = "grid", priority = false }: VendorCardProps) {
+export const VendorCard = memo(function VendorCard({ vendor, index: _index, viewMode = "grid", priority = false }: VendorCardProps) {
   const { wishlist, addToCart: _addToStore, toggleWishlist: toggleStore } = useCommerceStore();
   const { addVendor, removeVendor, isInCompare } = useCompareStore();
   const { user } = useAuthStore();
