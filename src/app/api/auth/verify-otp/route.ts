@@ -14,7 +14,7 @@ const verifyOTPSchema = z.object({
 
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
-    const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
 
     // Rate limit OTP verification attempts (3 attempts per minute)
     const rateLimitResult = await rateLimit(`otp-verify-${ip}`, { limit: 3, window: 60 });

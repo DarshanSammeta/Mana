@@ -16,7 +16,8 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       DATABASE_URL: ${DATABASE_URL}
       DIRECT_URL: ${DIRECT_URL}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN}
       MEILISEARCH_HOST: ${MEILISEARCH_HOST:-http://meilisearch:7700}
       MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
@@ -35,15 +36,7 @@ services:
       CRON_SECRET: ${CRON_SECRET}
 
     depends_on:
-      - redis
       - meilisearch
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-
-    ports:
-      - "6379:6379"
 
   meilisearch:
     image: getmeili/meilisearch:latest

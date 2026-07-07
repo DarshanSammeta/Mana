@@ -39,7 +39,7 @@ const bookingSchema = z.object({
 
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
-    const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
     const rateLimitResult = await rateLimit(ip, { limit: 10, window: 60 });
     if (!rateLimitResult.success) {
       logger.warn("Rate limit exceeded for booking creation", { ip });

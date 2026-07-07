@@ -107,19 +107,18 @@ export async function getTTL(key: string): Promise<number | null> {
 
 export async function deleteCache(key: string): Promise<boolean> {
   const result = await executeRedis("del", () => redis!.del(key));
-  return result > 0;
+  return typeof result === 'number' && result > 0;
 }
 
 export async function deleteCachePattern(pattern: string): Promise<void> {
   const keys = await executeRedis("keys", () => redis!.keys(pattern));
-  if (keys && keys.length > 0) {
+  if (keys && Array.isArray(keys) && keys.length > 0) {
     await executeRedis("del", () => redis!.del(...keys));
   }
 }
 
 export async function zRevRange(key: string, start: number, stop: number): Promise<string[] | null> {
-  // Note: Upstash REST return types might differ slightly, but usually match ioredis for common commands
-  return await executeRedis("zrevrange", () => redis!.zrevrange(key, start, stop));
+  return await executeRedis("zrange", () => redis!.zrange<string[]>(key, start, stop, { rev: true }));
 }
 
 export async function zIncrBy(key: string, increment: number, member: string): Promise<number | null> {

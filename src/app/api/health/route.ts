@@ -32,16 +32,10 @@ export async function GET() {
   }
 
   try {
-    // Redis check - using ping directly but with a timeout
-    // We don't use safeRedis here because we actually WANT to know if it's down
-    if (typeof redis.ping === 'function') {
-      const pingPromise = redis.ping();
-      const _timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout")), 500)
-      );
-
-      await Promise.race([pingPromise, _timeoutPromise]);
-      healthStatus.services.redis = "UP";
+    // Redis check - using ping directly via REST
+    if (redis) {
+      const result = await redis.ping();
+      healthStatus.services.redis = result === "PONG" ? "UP" : "DOWN";
     } else {
       healthStatus.services.redis = "DOWN";
     }

@@ -20,7 +20,12 @@ const sdk = new NodeSDK({
   }),
   instrumentations: [
     getNodeAutoInstrumentations({
-      // ioredis instrumentation is no longer needed as we've switched to @upstash/redis (REST)
+      // ioredis and redis-based instrumentations are disabled since we use @upstash/redis (REST)
+      ...({
+        '@opentelemetry/instrumentation-ioredis': { enabled: false },
+        '@opentelemetry/instrumentation-redis': { enabled: false },
+        '@opentelemetry/instrumentation-redis-4': { enabled: false },
+      } as any)
     }),
   ],
 });

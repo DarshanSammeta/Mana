@@ -7,7 +7,7 @@ import logger from "@/lib/logger";
 
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
-    const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
 
     // Rate limit payment order creation
     const limit = await rateLimit(`payment-order-${ip}`, { limit: 5, window: 60 });
