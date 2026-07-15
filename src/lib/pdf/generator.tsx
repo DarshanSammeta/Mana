@@ -3,9 +3,12 @@ import React from 'react';
 import { InvoiceTemplate } from './InvoiceTemplate';
 import { getCloudinary } from '@/lib/cloudinary.server';
 
-const cloudinary = getCloudinary();
-
 export async function generateAndUploadInvoice(booking: any) {
+  const cloudinary = getCloudinary();
+  if (!cloudinary) {
+    throw new Error("Cloudinary instance not available");
+  }
+
   try {
     // 1. Prepare data for the template
     const invoiceData = {
@@ -14,10 +17,10 @@ export async function generateAndUploadInvoice(booking: any) {
       customerName: booking.user.fullName,
       customerEmail: booking.user.email,
       customerPhone: booking.user.mobileNumber,
-      vendorName: booking.vendorprofile.businessName,
-      vendorCity: booking.vendorprofile.city || '',
-      vendorState: booking.vendorprofile.state || '',
-      vendorGst: booking.vendorprofile.gstNumber,
+      vendorName: booking.vendorprofile?.businessName || 'N/A',
+      vendorCity: booking.vendorprofile?.city || '',
+      vendorState: booking.vendorprofile?.state || '',
+      vendorGst: booking.vendorprofile?.gstNumber || 'N/A',
       eventName: booking.eventName,
       eventType: booking.eventType,
       eventLocation: booking.eventLocation,

@@ -11,6 +11,8 @@ import {
 import DashboardClient from "./DashboardClient";
 import { Suspense } from "react";
 import { DashboardSkeleton } from "@/components/vendor/DashboardSkeleton";
+import VerificationStatusPage from "@/components/vendor/VerificationStatusPage";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 export default async function VendorDashboardPage() {
   const cookieStore = await cookies();
@@ -26,9 +28,11 @@ export default async function VendorDashboardPage() {
   }
 
   return (
-    <Suspense fallback={<DashboardSkeleton />}>
-      <VendorDashboardDataWrapper userId={payload.userId} token={token} />
-    </Suspense>
+    <ErrorBoundary name="Vendor Dashboard">
+      <Suspense fallback={<DashboardSkeleton />}>
+        <VendorDashboardDataWrapper userId={payload.userId} token={token} />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
@@ -37,7 +41,20 @@ async function VendorDashboardDataWrapper({ userId, token }: { userId: string, t
   const baseContext = await getVendorBaseContext(userId);
 
   if (!baseContext?.vendorprofile) {
-    redirect("/onboarding/vendor");
+    redirect("/vendor/onboarding");
+  }
+
+  const status = baseContext.vendorprofile.verificationStatus;
+
+  // Protect Dashboard: Only APPROVED vendors can see the full dashboard
+  if (status !== "APPROVED") {
+    return (
+      <VerificationStatusPage
+        status={status}
+        rejectionReason={baseContext.vendorprofile.rejectionReason}
+        rejectedDocuments={baseContext.vendorprofile.rejectedDocuments as string[]}
+      />
+    );
   }
 
   const vendorId = baseContext.vendorprofile.id;

@@ -44,7 +44,7 @@ export async function GET(req: Request) {
       },
     });
     return NextResponse.json(vendors);
-  });
+  }, req);
 }
 
 export async function PATCH(req: Request) {
@@ -70,5 +70,5 @@ export async function PATCH(req: Request) {
     logger.info("Vendor profile updated by admin", { adminId: admin.userId, vendorProfileId: id, updates: data });
 
     return NextResponse.json(updatedVendor);
-  });
+  }, req);
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import Navbar from "@/components/common/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +16,7 @@ import {
   Package,
   ArrowRight
 } from "lucide-react";
-import { customerService } from "@/services/customer.service";
+import { customerService } from "@/services/client";
 import Link from "next/link";
 
 export default function EventDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -36,8 +35,6 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <Navbar />
-
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-5xl mx-auto">
           {/* Header */}

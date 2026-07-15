@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import toast from "react-hot-toast";
 import Script from "next/script";
 import { useAuthStore } from "@/store/authStore";
-import { vendorService } from "@/services";
+import { vendorService } from "@/services/client";
 import { RAZORPAY_CONFIG } from "@/config/razorpay";
 
 interface SubscriptionClientProps {

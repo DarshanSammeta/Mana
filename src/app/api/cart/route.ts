@@ -5,6 +5,7 @@ import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
 
 export async function GET(req: Request) {
+  const startTime = process.hrtime();
   return withErrorHandler(async () => {
     const authHeader = req.headers.get("Authorization");
     const token = authHeader?.split(" ")[1];
@@ -13,6 +14,7 @@ export async function GET(req: Request) {
     const payload = verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
+    const dbStartTime = process.hrtime();
     const cart = await prisma.cart.findUnique({
       where: { userId: payload.userId },
       include: {
@@ -20,7 +22,14 @@ export async function GET(req: Request) {
       }
     });
 
-    if (!cart) return NextResponse.json({ items: [] });
+    if (!cart) {
+      const dbEndTime = process.hrtime(dbStartTime);
+      const dbDuration = (dbEndTime[0] * 1000 + dbEndTime[1] / 1000000).toFixed(2);
+      const endTime = process.hrtime(startTime);
+      const duration = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2);
+      logger.info(`Cart GET API Performance (Empty): ${duration}ms (DB: ${dbDuration}ms)`);
+      return NextResponse.json({ items: [] });
+    }
 
     // Optimize: Bulk fetch details to avoid N+1
     const serviceIds = cart.cartitem.filter(i => i.type === "SERVICE").map(i => i.targetId);
@@ -66,6 +75,8 @@ export async function GET(req: Request) {
         }
       })
     ]);
+    const dbEndTime = process.hrtime(dbStartTime);
+    const dbDuration = (dbEndTime[0] * 1000 + dbEndTime[1] / 1000000).toFixed(2);
 
     const itemsWithDetails = cart.cartitem.map((item) => {
       let details = null;
@@ -77,9 +88,14 @@ export async function GET(req: Request) {
       return { ...item, details };
     });
 
+    const endTime = process.hrtime(startTime);
+    const duration = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2);
+    logger.info(`Cart GET API Performance: ${duration}ms (DB: ${dbDuration}ms)`);
+
     return NextResponse.json({ ...cart, items: itemsWithDetails });
-  });
+  }, req);
 }
+
 
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
@@ -131,7 +147,7 @@ export async function POST(req: Request) {
     logger.info("Item added/updated in cart", { userId: payload.userId, itemId: item.id });
 
     return NextResponse.json(item, { status: 201 });
-  });
+  }, req);
 }
 
 export async function DELETE(req: Request) {
@@ -163,5 +179,5 @@ export async function DELETE(req: Request) {
     logger.info("Item removed from cart", { userId: payload.userId, itemId });
 
     return NextResponse.json({ message: "Item removed from cart" });
-  });
+  }, req);
 }

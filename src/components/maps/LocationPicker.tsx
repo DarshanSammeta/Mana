@@ -90,6 +90,18 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({ onLocationSelect
     }
   };
 
+  if (!MAPS_CONFIG.apiKey) {
+    return (
+      <div className="h-[400px] w-full bg-muted rounded-xl flex items-center justify-center p-6 text-center">
+        <div className="space-y-2">
+          <MapPin className="h-8 w-8 text-muted-foreground mx-auto" />
+          <p className="text-sm font-medium">Google Maps API key is missing.</p>
+          <p className="text-xs text-muted-foreground">Please configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to use the location picker.</p>
+        </div>
+      </div>
+    );
+  }
+
   return isLoaded ? (
     <div className="space-y-4">
       <div className="flex gap-2">

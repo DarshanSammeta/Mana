@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -26,7 +27,7 @@ import {
   TrendingUp
 } from "lucide-react";
 import CountUp from "react-countup";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import UpgradeModal from "@/components/vendor/UpgradeModal";
@@ -59,7 +60,7 @@ import {
   VendorAssignment,
   VendorUsage
 } from "@/types";
-import { vendorService } from "@/services";
+import { vendorService } from "@/services/client";
 
 interface DashboardClientProps {
   initialStats: VendorStats | null;
@@ -79,7 +80,12 @@ export default function DashboardClient({
   initialRecentBookings
 }: DashboardClientProps) {
   const queryClient = useQueryClient();
+  const [isMounted, setIsMounted] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   const [assignments, setAssignments] = useState(initialAssignments);
 
   const assignmentMutation = useMutation({
@@ -357,7 +363,8 @@ export default function DashboardClient({
                     />
                   </div>
                 ) : null}
-                <ResponsiveContainer width="100%" height="100%">
+                {isMounted && (
+                  <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                         <defs>
                             <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -401,7 +408,8 @@ export default function DashboardClient({
                             fill="url(#colorRevenue)"
                         />
                     </AreaChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
           </div>
@@ -436,7 +444,7 @@ export default function DashboardClient({
                         </td>
                         <td className="px-6 py-5 text-foreground font-bold">{booking.user.fullName}</td>
                         <td className="px-6 py-5 text-muted-foreground font-bold">{booking.bookingitem[0]?.service.title || 'N/A'}</td>
-                        <td className="px-6 py-5 font-black text-foreground">₹{Number(booking.totalAmount).toLocaleString('en-IN')}</td>
+                        <td className="px-6 py-5 font-black text-foreground">{formatCurrency(booking.totalAmount)}</td>
                         <td className="px-6 py-5">
                           <span className={cn(
                             "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
@@ -486,7 +494,7 @@ export default function DashboardClient({
                       </div>
                       <div className="flex justify-between items-end">
                          <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider line-clamp-1">{booking.bookingitem[0]?.service.title || 'N/A'}</p>
-                         <p className="text-base font-black text-foreground">₹{Number(booking.totalAmount).toLocaleString('en-IN')}</p>
+                         <p className="text-base font-black text-foreground">{formatCurrency(booking.totalAmount)}</p>
                       </div>
                    </Link>
                  ))
@@ -604,7 +612,7 @@ export default function DashboardClient({
             <div className="p-6">
               <div className="space-y-1.5 mb-6">
                 <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Withdrawable Balance</p>
-                <p className="text-3xl font-black text-foreground tracking-tight">₹{(stats.find((s) => s.label === "Withdrawable")?.value || 0).toLocaleString('en-IN')}</p>
+                <p className="text-3xl font-black text-foreground tracking-tight">{formatCurrency(stats.find((s) => s.label === "Withdrawable")?.value || 0)}</p>
                 <div className="flex items-center gap-1.5 pt-1">
                    <div className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
                    <p className="text-[10px] text-success font-black uppercase tracking-widest">Ready to Transfer</p>

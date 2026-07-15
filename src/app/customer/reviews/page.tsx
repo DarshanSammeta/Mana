@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { reviewService } from "@/services";
+import { reviewService } from "@/services/client";
 
 export default function CustomerReviewsPage() {
   const { data: reviews = [], isLoading: loading } = useQuery({

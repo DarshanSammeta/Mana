@@ -54,6 +54,9 @@ export async function getVendorBaseContext(userId: string) {
       vendorprofile: {
         select: {
           id: true,
+          verificationStatus: true,
+          rejectionReason: true,
+          rejectedDocuments: true,
           _count: { select: { booking: true } },
           vendorsubscription: {
             select: {

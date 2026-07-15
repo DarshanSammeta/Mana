@@ -30,8 +30,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { customerService } from "@/services/customer.service";
-import { vendorService } from "@/services/vendor.service";
+import { customerService } from "@/services/client";
+import { vendorService } from "@/services/client";
 import { toast } from "react-hot-toast";
 import { useCallback } from "react";
 
@@ -90,7 +90,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
 
   const handleShare = async () => {
     const shareData = {
-      title: `Booking for ${booking.vendorprofile.businessName}`,
+      title: `Booking for ${booking.vendorprofile?.businessName || 'Partner'}`,
       text: `Check out my event booking #${booking.bookingNumber} at Mana Events!`,
       url: window.location.href,
     };
@@ -233,13 +233,15 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
                   <h3 className="font-black text-slate-900 flex items-center gap-3 uppercase tracking-widest text-xs">
                      <Building2 className="h-5 w-5 text-primary" /> Vendor Profile
                   </h3>
-                  <Link href={`/marketplace/vendor/${booking.vendorprofile.id}`} className="text-xs font-black text-primary uppercase hover:underline tracking-widest">
-                    View Business Profile
-                  </Link>
+                  {booking.vendorprofile && (
+                    <Link href={`/marketplace/vendor/${booking.vendorprofile.id}`} className="text-xs font-black text-primary uppercase hover:underline tracking-widest">
+                      View Business Profile
+                    </Link>
+                  )}
                </div>
                <div className="p-8 flex flex-col sm:flex-row gap-8">
                   <div className="h-28 w-28 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 shadow-inner overflow-hidden relative">
-                     {booking.vendorprofile.logo ? (
+                     {booking.vendorprofile?.logo ? (
                         <Image
                           src={booking.vendorprofile.logo}
                           alt={booking.vendorprofile.businessName}
@@ -247,7 +249,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
                           className="object-cover"
                         />
                      ) : (
-                        <div className="text-3xl font-black text-slate-200">{booking.vendorprofile.businessName[0]}</div>
+                        <div className="text-3xl font-black text-slate-200">{booking.vendorprofile?.businessName?.[0] || 'V'}</div>
                      )}
                   </div>
                   <div className="flex-1">
@@ -271,7 +273,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
                         </div>
                      )}
                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{booking.vendorprofile.businessName}</h4>
+                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{booking.vendorprofile?.businessName || 'Partner'}</h4>
                         <div className="flex gap-3">
                            <Button variant="outline" className="rounded-xl h-12 w-12 p-0 border-slate-200 hover:bg-slate-50 shadow-sm">
                               <Phone className="h-5 w-5 text-slate-600" />
@@ -281,7 +283,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
                            </Button>
                         </div>
                      </div>
-                     <p className="text-base text-slate-500 font-medium leading-relaxed max-w-2xl">{booking.vendorprofile.description}</p>
+                     <p className="text-base text-slate-500 font-medium leading-relaxed max-w-2xl">{booking.vendorprofile?.description}</p>
                      <div className="flex items-center gap-4 mt-6">
                         <Badge className="rounded-lg text-[10px] font-black tracking-widest px-3 py-1.5 bg-indigo-50 text-indigo-700 border-none shadow-sm uppercase">Premium Partner</Badge>
                         <Badge className="rounded-lg text-[10px] font-black tracking-widest px-3 py-1.5 bg-emerald-50 text-emerald-700 border-none shadow-sm uppercase">Verified</Badge>

@@ -5,8 +5,12 @@ import { sendOTP } from "@/lib/sms/twilio";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
 
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { AUTH_LIMITS } from "@/config/auth-limits";
+
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -14,6 +18,14 @@ export async function POST(req: Request) {
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { bookingId } = await req.json();
+
+    // Rate limit check-in OTP requests
+    const identifier = `checkin-otp-send:${ip}:${payload.userId}:${bookingId}`;
+    const rateLimitResult = await rateLimit(identifier, AUTH_LIMITS.BOOKING_OTP);
+
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult, "Too many OTP requests.");
+    }
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
@@ -46,6 +58,7 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   return withErrorHandler(async () => {
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -54,13 +67,21 @@ export async function PATCH(req: Request) {
 
     const { bookingId, otp } = await req.json();
 
+    // Rate limit check-in OTP verification
+    const identifier = `checkin-otp-verify:${ip}:${payload.userId}:${bookingId}`;
+    const rateLimitResult = await rateLimit(identifier, AUTH_LIMITS.BOOKING_VERIFY);
+
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult, "Too many verification attempts.");
+    }
+
     const checkin = await prisma.eventcheckin.findUnique({
       where: { bookingId },
       include: { booking: { include: { vendorprofile: true } } }
     });
 
     if (!checkin) return NextResponse.json({ message: "Check-in record not found" }, { status: 404 });
-    if (checkin.booking.vendorprofile.userId !== payload.userId) {
+    if (!checkin.booking.vendorprofile || checkin.booking.vendorprofile.userId !== payload.userId) {
         return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
     }
 

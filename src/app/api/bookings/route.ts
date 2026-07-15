@@ -34,7 +34,11 @@ const bookingSchema = z.object({
   eventDescription: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
-  idempotencyKey: z.string().optional()
+  idempotencyKey: z.string().optional(),
+  isDraft: z.boolean().optional().default(false),
+  couponCode: z.string().optional(),
+  referralCode: z.string().optional(),
+  attachments: z.array(z.string()).optional(),
 });
 
 export async function POST(req: Request) {
@@ -90,10 +94,11 @@ export async function POST(req: Request) {
       city,
       state,
       pincode,
-      idempotencyKey
+      idempotencyKey,
+      isDraft
     } = validated;
 
-    // Server-side amount validation & inventory check would go here in enterprise apps
+    const initialStatus = isDraft ? "DRAFT" : "SEARCHING";
     // 1. Fetch current prices and hierarchy from DB
     const serviceIds = items.map(i => i.serviceId);
     const packageIds = items.filter(i => i.packageId).map(i => i.packageId as string);
@@ -116,12 +121,7 @@ export async function POST(req: Request) {
                   select: {
                     id: true,
                     name: true,
-                    eventtypes: {
-                      select: {
-                        id: true,
-                        name: true
-                      }
-                    }
+                    eventTypeId: true
                   }
                 }
               }
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
         if (!service) throw new Error(`Service ${item.serviceId} not found`);
 
         // Hierarchy Integrity Check: Ensure service belongs to the eventType in the booking
-        const hasEventType = service.servicetype.subcategory.category.eventtypes.some(et => et.id === eventType);
+        const hasEventType = service.servicetype.subcategory.category.eventTypeId === eventType;
         if (!hasEventType) {
              return NextResponse.json({
                message: `Service hierarchy mismatch: ${service.title} does not belong to Event Type ${eventType}`
@@ -195,13 +195,23 @@ export async function POST(req: Request) {
     const vendorPayout = totalAmount - commissionAmount;
 
     const booking = await prisma.$transaction(async (tx) => {
-      // 2. Automated Allocation Logic
+      // 1. Validate Coupon if provided
+      let discountAmount = 0;
+      if (validated.couponCode) {
+        const coupon = await tx.coupon.findUnique({
+          where: { code: validated.couponCode, isActive: true },
+        });
+        if (coupon && coupon.expiryDate > new Date()) {
+          // Calculate discount (simplified)
+          discountAmount = Number(coupon.discountValue);
+        }
+      }
+
       const finalVendorId = vendorId || "SYSTEM_ALLOCATED";
 
-      // 1. Create the base booking
+      // 2. Create the base booking
       const newBooking = await tx.booking.create({
         data: {
-          id: crypto.randomUUID(),
           bookingNumber,
           customerId: payload.userId,
           vendorId: finalVendorId,
@@ -216,20 +226,23 @@ export async function POST(req: Request) {
           eventType,
           eventDescription,
           guestCount,
-          totalAmount,
+          totalAmount: totalAmount - discountAmount,
           subTotal,
           taxAmount,
+          discountAmount,
           commissionRate,
           commissionAmount,
           vendorPayout,
           specialInstructions,
           otp,
           idempotencyKey,
-          status: "PENDING",
+          status: initialStatus,
+          latitude: validated.latitude,
+          longitude: validated.longitude,
+          checklist: validated.attachments ? { attachments: validated.attachments } : Prisma.JsonNull,
           updatedAt: new Date(),
           bookingitem: {
             create: items.map((item) => ({
-              id: crypto.randomUUID(),
               serviceId: item.serviceId,
               packageId: item.packageId || null,
               price: item.price,
@@ -238,9 +251,8 @@ export async function POST(req: Request) {
           },
           bookingstatuslog: {
             create: {
-              id: crypto.randomUUID(),
-              status: "PENDING",
-              notes: "Booking initiated by customer",
+              status: initialStatus,
+              notes: isDraft ? "Booking saved as draft" : "Booking initiated by customer. Searching for vendors.",
             }
           }
         },
@@ -277,7 +289,6 @@ export async function POST(req: Request) {
         // Direct Assignment
         await tx.bookingassignment.create({
           data: {
-            id: crypto.randomUUID(),
             bookingId: newBooking.id,
             vendorId: vendorId,
             priority: 1,
@@ -311,24 +322,49 @@ export async function POST(req: Request) {
                 id: true,
                 latitude: true,
                 longitude: true,
-                serviceRadius: true
+                serviceRadius: true,
+                verificationStatus: true
             }
           });
 
           const nearbyVendors = candidateVendors
-            .map(v => ({
-              id: v.id,
-              distance: v.latitude && v.longitude ? getDistance(customerLat, customerLng, v.latitude, v.longitude) : Infinity,
-              radius: v.serviceRadius || 50
-            }))
+            .map(v => {
+              // SMART RANKING CALCULATION
+              let score = 0;
+              const radius = v.serviceRadius ?? 50;
+              const distance = (v.latitude !== null && v.longitude !== null)
+                ? getDistance(customerLat, customerLng, v.latitude, v.longitude)
+                : Infinity;
+
+              // 1. Distance Score (0-40 pts)
+              if (distance <= 5) score += 40;
+              else if (distance <= 10) score += 30;
+              else if (distance <= 20) score += 20;
+              else if (distance <= radius) score += 10;
+
+              // 2. Verification Bonus (20 pts)
+              if (v.verificationStatus === "APPROVED") score += 20;
+
+              // 3. Rating Score (0-20 pts)
+              // score += (v.rating || 0) * 4;
+
+              // 4. Activity/Response Bonus (Placeholder)
+              score += 10;
+
+              return {
+                id: v.id,
+                distance,
+                radius: radius,
+                score
+              };
+            })
             .filter(v => v.distance <= v.radius)
-            .sort((a, b) => a.distance - b.distance)
-            .slice(0, 3); // Top 3 closest
+            .sort((a, b) => b.score - a.score) // Sort by highest score
+            .slice(0, 5); // Top 5 candidates
 
           for (let i = 0; i < nearbyVendors.length; i++) {
             await tx.bookingassignment.create({
               data: {
-                id: crypto.randomUUID(),
                 bookingId: newBooking.id,
                 vendorId: nearbyVendors[i].id,
                 priority: i + 1,
@@ -352,6 +388,16 @@ export async function POST(req: Request) {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable // Prevent race conditions on bookingNumber or availability
     });
 
+    // Trigger BullMQ for Vendor Matching if not a draft
+    if (!isDraft) {
+      const { addBookingToQueue } = await import("@/lib/queue");
+      await addBookingToQueue({
+        bookingId: booking.id,
+        iteration: 0,
+        radius: 5, // Start with 5km
+      });
+    }
+
     // Trigger enterprise background jobs via Inngest
     await inngest.send({
       name: "booking/created",
@@ -363,7 +409,7 @@ export async function POST(req: Request) {
     logger.info("Booking created successfully", { bookingId: booking.id, userId: payload.userId, bookingNumber });
 
     return NextResponse.json(booking, { status: 201 });
-  });
+  }, req);
 }
 
 export async function GET(req: Request) {
@@ -444,6 +490,14 @@ export async function GET(req: Request) {
                         status: true,
                         razorpayPaymentId: true
                     }
+                },
+                review: {
+                    select: {
+                        id: true,
+                        rating: true,
+                        comment: true,
+                        vendorResponse: true
+                    }
                 }
             },
         });
@@ -521,5 +575,5 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(bookings);
-  });
+  }, req);
 }

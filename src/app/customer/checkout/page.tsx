@@ -22,9 +22,9 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import Image from "next/image";
 
-import { customerService } from "@/services/customer.service";
-import { vendorService } from "@/services/vendor.service";
-import { marketplaceService } from "@/services/marketplace.service";
+import { customerService } from "@/services/client";
+import { vendorService } from "@/services/client";
+import { marketplaceService } from "@/services/client";
 
 import { formatCurrency } from "@/utils/format";
 import { calculateGST, calculatePlatformFee } from "@/utils/calculation";

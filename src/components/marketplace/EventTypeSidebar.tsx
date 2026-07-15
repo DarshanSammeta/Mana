@@ -17,10 +17,8 @@ export function EventTypeSidebar({ eventTypes }: EventTypeSidebarProps) {
       <div className="space-y-3">
         <button
           onClick={() => {
-            const params = new URLSearchParams(searchParams?.toString() || "");
-            params.delete("eventTypeId");
-            params.delete("eventName");
-            router.push(`/marketplace?${params.toString()}`, { scroll: false });
+            // Preserve only viewMode if needed, but usually a full reset is better for "All Events"
+            router.push(`/marketplace`, { scroll: false });
           }}
           className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all ${
             !activeId ? 'bg-primary text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
@@ -32,12 +30,10 @@ export function EventTypeSidebar({ eventTypes }: EventTypeSidebarProps) {
           <button
             key={type.id}
             onClick={() => {
-              const params = new URLSearchParams(searchParams?.toString() || "");
+              const params = new URLSearchParams();
               params.set("eventTypeId", type.id);
               params.set("eventName", type.name);
-              // Clear category when switching event type to avoid mismatch
-              params.delete("category");
-              params.delete("subcategory");
+              // Reset all other filters as per Step 11
               router.push(`/marketplace?${params.toString()}`, { scroll: false });
             }}
             className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all ${

@@ -2,6 +2,10 @@ export const REDIS_CONFIG = {
   // Upstash Redis REST configuration
   restUrl: process.env.UPSTASH_REDIS_REST_URL,
   restToken: process.env.UPSTASH_REDIS_REST_TOKEN,
+
+  // Standard Redis for BullMQ / ioredis
+  connectionUri: process.env.REDIS_URL || "redis://localhost:6379",
+
   ttl: {
     short: 60 * 5, // 5 minutes
     medium: 60 * 60, // 1 hour

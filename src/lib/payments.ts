@@ -5,6 +5,10 @@ import { emitSocketEvent } from "./socket-helper";
 import logger from "./logger";
 import { NotificationTriggers } from "./notifications";
 
+import { SOCKET_EVENTS } from "@/constants/socket-events";
+
+import { booking_status, payment_status, transaction_status, transaction_type, wallet_type } from "@prisma/client";
+
 export async function processSuccessfulPayment(payment: any) {
   const bookingId = payment.notes.bookingId;
   const razorpayPaymentId = payment.id;
@@ -16,7 +20,7 @@ export async function processSuccessfulPayment(payment: any) {
     where: { razorpayPaymentId }
   });
 
-  if (existingPayment?.status === "SUCCESS") {
+  if (existingPayment?.status === payment_status.SUCCESS) {
     logger.info(`[PaymentService] Payment ${razorpayPaymentId} already processed.`);
     return;
   }
@@ -26,11 +30,11 @@ export async function processSuccessfulPayment(payment: any) {
     const booking = await tx.booking.update({
       where: { id: bookingId },
       data: {
-        status: "CONFIRMED",
+        status: booking_status.CONFIRMED,
         bookingstatuslog: {
           create: {
             id: crypto.randomUUID(),
-            status: "CONFIRMED",
+            status: booking_status.CONFIRMED,
             notes: `Payment successful. Razorpay ID: ${razorpayPaymentId}`
           }
         }
@@ -44,12 +48,12 @@ export async function processSuccessfulPayment(payment: any) {
     // 3. Upsert Payment Record
     const paymentRecord = await tx.payment.upsert({
       where: { razorpayPaymentId },
-      update: { status: "SUCCESS" },
+      update: { status: payment_status.SUCCESS },
       create: {
         id: crypto.randomUUID(),
         bookingId,
         amount: new Decimal(payment.amount / 100),
-        status: "SUCCESS",
+        status: payment_status.SUCCESS,
         razorpayOrderId: payment.order_id,
         razorpayPaymentId,
         method: payment.method,
@@ -64,6 +68,10 @@ export async function processSuccessfulPayment(payment: any) {
 
     const adminShare = totalAmount.mul(commissionRate).div(100);
     const vendorShare = totalAmount.sub(adminShare);
+
+    if (!booking.vendorId) {
+        throw new Error("Vendor not assigned to booking");
+    }
 
     await tx.payment_split.upsert({
       where: { paymentId: paymentRecord.id },
@@ -84,9 +92,9 @@ export async function processSuccessfulPayment(payment: any) {
     });
 
     // 5. Update Wallets (Escrow)
-    let platformWallet = await tx.wallet.findFirst({ where: { type: "PLATFORM" } });
+    let platformWallet = await tx.wallet.findFirst({ where: { type: wallet_type.PLATFORM } });
     if (!platformWallet) {
-      platformWallet = await tx.wallet.create({ data: { id: crypto.randomUUID(), type: "PLATFORM", balance: totalAmount } });
+      platformWallet = await tx.wallet.create({ data: { id: crypto.randomUUID(), type: wallet_type.PLATFORM, balance: totalAmount } });
     } else {
       await tx.wallet.update({ where: { id: platformWallet.id }, data: { balance: { increment: totalAmount } } });
     }
@@ -97,18 +105,22 @@ export async function processSuccessfulPayment(payment: any) {
         id: crypto.randomUUID(),
         walletId: platformWallet.id,
         amount: totalAmount,
-        type: "CREDIT",
+        type: transaction_type.CREDIT,
         description: `Payment for booking ${booking.bookingNumber}`,
         bookingId: booking.id,
         reference: razorpayPaymentId
       }
     });
 
+    if (!booking.vendorprofile) {
+        throw new Error("Vendor profile not found for booking");
+    }
+
     // Vendor Pending Balance
     let vendorWallet = await tx.wallet.findUnique({ where: { userId: booking.vendorprofile.userId } });
     if (!vendorWallet) {
       vendorWallet = await tx.wallet.create({
-        data: { id: crypto.randomUUID(), userId: booking.vendorprofile.userId, balance: 0, pendingBalance: vendorShare, type: "VENDOR" }
+        data: { id: crypto.randomUUID(), userId: booking.vendorprofile.userId, balance: 0, pendingBalance: vendorShare, type: wallet_type.VENDOR }
       });
     } else {
       await tx.wallet.update({ where: { id: vendorWallet.id }, data: { pendingBalance: { increment: vendorShare } } });
@@ -120,8 +132,8 @@ export async function processSuccessfulPayment(payment: any) {
         id: crypto.randomUUID(),
         walletId: vendorWallet.id,
         amount: vendorShare,
-        type: "CREDIT",
-        status: "PENDING",
+        type: transaction_type.CREDIT,
+        status: transaction_status.PENDING,
         description: `Escrow credit for booking ${booking.bookingNumber}`,
         bookingId: booking.id,
         reference: razorpayPaymentId
@@ -143,11 +155,65 @@ export async function processSuccessfulPayment(payment: any) {
   try {
     await NotificationTriggers.paymentSuccess(result.booking, result);
 
-    emitSocketEvent(result.booking.customerId, 'payment:success', { bookingId, bookingNumber: result.booking.bookingNumber });
-    emitSocketEvent(result.booking.vendorprofile.userId, 'booking:new', { bookingId, bookingNumber: result.booking.bookingNumber });
+    // Phase 1: Standardized Events
+    emitSocketEvent(result.booking.customerId, SOCKET_EVENTS.BOOKING_PAYMENT, {
+      bookingId,
+      bookingNumber: result.booking.bookingNumber,
+      status: "SUCCESS"
+    });
+
+    if (result.booking.vendorprofile) {
+      emitSocketEvent(result.booking.vendorprofile.userId, SOCKET_EVENTS.BOOKING_CONFIRMED, {
+        bookingId,
+        bookingNumber: result.booking.bookingNumber
+      });
+    }
   } catch (err) {
     logger.error("Payment post-processing side effects failed", err);
   }
+}
+
+export async function handleFailedPayment(payment: any) {
+    const bookingId = payment.notes?.bookingId;
+    const razorpayPaymentId = payment.id;
+
+    logger.warn(`[PaymentService] Payment failed for booking ${bookingId}, payment ${razorpayPaymentId}`);
+
+    if (bookingId) {
+        await prisma.booking.update({
+            where: { id: bookingId },
+            data: {
+                bookingstatuslog: {
+                    create: {
+                        id: crypto.randomUUID(),
+                        status: "PAYMENT_PENDING",
+                        notes: `Payment failed. Razorpay ID: ${razorpayPaymentId}. Error: ${payment.error_description || 'Unknown error'}`
+                    }
+                }
+            }
+        });
+
+        emitSocketEvent(payment.notes.customerId, SOCKET_EVENTS.BOOKING_PAYMENT, {
+            bookingId,
+            status: "FAILED",
+            error: payment.error_description || 'Payment was unsuccessful'
+        });
+    }
+
+    await prisma.payment.upsert({
+        where: { razorpayPaymentId },
+        update: { status: "FAILED" },
+        create: {
+            id: crypto.randomUUID(),
+            bookingId: bookingId || null,
+            amount: new Decimal(payment.amount / 100),
+            status: "FAILED",
+            razorpayOrderId: payment.order_id,
+            razorpayPaymentId,
+            method: payment.method,
+            updatedAt: new Date()
+        }
+    });
 }
 
 export async function processRefund(refundData: any) {
@@ -199,10 +265,12 @@ export async function processRefund(refundData: any) {
             await tx.wallet.update({ where: { id: platformWallet.id }, data: { balance: { decrement: amount } } });
         }
 
-        await tx.wallet.update({
-            where: { userId: payment.booking.vendorprofile.userId },
-            data: { pendingBalance: { decrement: payment.booking.vendorPayout } }
-        });
+        if (payment.booking.vendorprofile) {
+            await tx.wallet.update({
+                where: { userId: payment.booking.vendorprofile.userId },
+                data: { pendingBalance: { decrement: payment.booking.vendorPayout } }
+            });
+        }
 
         const customerWallet = await tx.wallet.upsert({
             where: { userId: payment.booking.customerId },
@@ -224,5 +292,9 @@ export async function processRefund(refundData: any) {
         });
     });
 
-    emitSocketEvent(payment.booking.customerId, 'wallet:updated', { type: 'REFUND', amount: refundData.amount / 100 });
+    emitSocketEvent(payment.booking.customerId, SOCKET_EVENTS.BOOKING_PAYMENT, {
+        bookingId,
+        type: 'REFUND',
+        amount: refundData.amount / 100
+    });
 }

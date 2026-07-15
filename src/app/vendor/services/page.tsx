@@ -18,7 +18,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from "lucide-react";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import {

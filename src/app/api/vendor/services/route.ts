@@ -4,6 +4,21 @@ import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
 import { revalidateTag } from "next/cache";
+import { z } from "zod";
+
+const serviceSchema = z.object({
+  title: z.string().min(3, "Title must be at least 3 characters"),
+  description: z.string().min(10, "Description must be at least 10 characters"),
+  basePrice: z.coerce.number().nonnegative("Price must be a non-negative number"),
+  serviceTypeId: z.string().uuid("Invalid Service Type ID"),
+  pricingType: z.enum(["PACKAGE", "HOURLY", "FIXED"]).default("PACKAGE"),
+  inclusions: z.any().optional(),
+  exclusions: z.any().optional(),
+  faqs: z.any().optional(),
+  terms: z.any().optional(),
+  cancellationPolicy: z.string().optional(),
+  images: z.array(z.string().url()).optional(),
+});
 
 export async function GET(request: Request) {
   return withErrorHandler(async () => {
@@ -44,7 +59,7 @@ export async function GET(request: Request) {
                   select: {
                     id: true,
                     name: true,
-                    eventtypes: {
+                    eventtype: {
                       select: {
                         id: true,
                         name: true
@@ -68,7 +83,7 @@ export async function GET(request: Request) {
       }
     });
     return NextResponse.json(services);
-  });
+  }, request);
 }
 
 export async function POST(request: Request) {
@@ -82,6 +97,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    const result = serviceSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json({
+        message: "Validation failed",
+        errors: result.error.flatten().fieldErrors
+      }, { status: 400 });
+    }
+
+    const validated = result.data;
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId },
@@ -119,19 +144,21 @@ export async function POST(request: Request) {
       data: {
         id: crypto.randomUUID(),
         vendorProfileId: vendorProfile.id,
-        serviceTypeId: body.serviceTypeId,
-        title: body.title,
-        description: body.description,
-        basePrice: body.basePrice,
-        pricingType: body.pricingType,
+        serviceTypeId: validated.serviceTypeId,
+        title: validated.title,
+        description: validated.description,
+        basePrice: validated.basePrice,
+        pricingType: validated.pricingType,
+        // Note: inclusions, exclusions, etc. should be on the Renamedpackage model if using PACKAGE pricingType
+        // based on the schema.
         updatedAt: new Date(),
         portfolio: {
-          create: (body.images || []).map((url: string) => ({
+          create: (validated.images || []).map((url: string) => ({
             id: crypto.randomUUID(),
             vendorProfileId: vendorProfile.id,
             mediaUrl: url,
             mediaType: "IMAGE",
-            title: body.title
+            title: validated.title
           }))
         }
       },
@@ -143,6 +170,7 @@ export async function POST(request: Request) {
         description: true,
         basePrice: true,
         pricingType: true,
+        // inclusions: true, - Removed as it's not in service model
         updatedAt: true,
         portfolio: {
           select: {
@@ -161,5 +189,5 @@ export async function POST(request: Request) {
     logger.info("New service created by vendor", { vendorId: vendorProfile.id, serviceId: service.id });
 
     return NextResponse.json(service);
-  });
+  }, request);
 }

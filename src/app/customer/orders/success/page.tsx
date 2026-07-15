@@ -5,8 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, Download, Home, Calendar, Package } from "lucide-react";
-import Navbar from "@/components/common/Navbar";
-import { customerService } from "@/services/customer.service";
+import { customerService } from "@/services/client";
 
 function SuccessContent() {
   const searchParams = useSearchParams();
@@ -25,7 +24,6 @@ function SuccessContent() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
       <main className="max-w-4xl mx-auto px-4 py-16">
         <div className="text-center">
           <div className="mb-8 flex justify-center">

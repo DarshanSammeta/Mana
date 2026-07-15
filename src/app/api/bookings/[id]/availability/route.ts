@@ -22,7 +22,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     });
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
-    if (booking.vendorprofile.userId !== payload.userId) {
+    if (!booking.vendorprofile || booking.vendorprofile.userId !== payload.userId) {
       logger.warn("Unauthorized availability update attempt", { bookingId: id, userId: payload.userId });
       return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
     }
@@ -76,10 +76,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
 
       // Mark current assignment as REJECTED or CANCELLED
-      await prisma.bookingassignment.updateMany({
-        where: { bookingId: id, vendorId: booking.vendorId },
-        data: { status: "REJECTED" }
-      });
+      if (booking.vendorId) {
+        await prisma.bookingassignment.updateMany({
+          where: { bookingId: id, vendorId: booking.vendorId },
+          data: { status: "REJECTED" }
+        });
+      }
 
       return NextResponse.json({ message: "Reassignment triggered" });
     }

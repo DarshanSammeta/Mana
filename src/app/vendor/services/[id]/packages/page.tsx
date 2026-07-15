@@ -3,7 +3,7 @@
 import { useState, useEffect, use, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, ChevronLeft } from "lucide-react";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import {

@@ -2,7 +2,7 @@ import { RAZORPAY_CONFIG } from "@/config/razorpay";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyWebhookSignature } from "@/lib/razorpay";
-import { processSuccessfulPayment, processRefund } from "@/lib/payments";
+import { processSuccessfulPayment, processRefund, handleFailedPayment } from "@/lib/payments";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
 import crypto from "crypto";
@@ -56,7 +56,11 @@ export async function POST(req: Request) {
     // 3. Handle Events
     switch (event.event) {
       case "payment.captured":
-        await processSuccessfulPayment(event.payload.payment.entity);
+      case "order.paid":
+        await processSuccessfulPayment(event.payload.payment?.entity || event.payload.order.entity);
+        break;
+      case "payment.failed":
+        await handleFailedPayment(event.payload.payment.entity);
         break;
       case "refund.processed":
         await processRefund(event.payload.refund.entity);
@@ -72,5 +76,5 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ message: "Webhook processed" });
-  });
+  }, req);
 }

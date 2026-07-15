@@ -2,10 +2,10 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/authStore";
-import { reviewService } from "@/services";
+import { reviewService } from "@/services/client";
 import { Star, MessageSquare, Quote, Reply, Search, Filter, ChevronDown, Send } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { cn, formatRating } from "@/lib/utils";
 import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { format } from "date-fns";
@@ -49,7 +49,7 @@ export default function ReviewsClient({ initialReviews }: ReviewsClientProps) {
 
   const replyMutation = useMutation({
     mutationFn: ({ reviewId, vendorResponse }: { reviewId: string, vendorResponse: string }) =>
-      reviewService.respondToReview(reviewId, vendorResponse),
+      reviewService.replyToReview(reviewId, vendorResponse),
     onSuccess: () => {
       toast.success("Reply posted successfully");
       setReplyingTo(null);
@@ -77,9 +77,10 @@ export default function ReviewsClient({ initialReviews }: ReviewsClientProps) {
     return true;
   }) || [];
 
-  const avgRating = reviews?.length
-    ? (reviews.reduce((acc: number, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
-    : "0.0";
+  const avgRatingValue = reviews?.length
+    ? (reviews.reduce((acc: number, r) => acc + r.rating, 0) / reviews.length)
+    : 0;
+  const avgRating = formatRating(avgRatingValue);
 
   const stats = [
     { title: "Average Rating", value: avgRating, icon: Star, color: "text-amber-500", bg: "bg-amber-500/10", trend: "Based on all reviews" },
@@ -209,7 +210,7 @@ export default function ReviewsClient({ initialReviews }: ReviewsClientProps) {
                             {[1, 2, 3, 4, 5].map((s) => (
                                 <Star key={s} className={cn("h-3.5 w-3.5", s <= review.rating ? "fill-amber-500 text-amber-500" : "text-slate-200")} />
                             ))}
-                            <span className="text-[10px] font-black text-slate-400 ml-2 uppercase tracking-widest">{review.rating.toFixed(1)} Rating</span>
+                            <span className="text-[10px] font-black text-slate-400 ml-2 uppercase tracking-widest">{formatRating(review.rating)} Rating</span>
                         </div>
                     </div>
                   </div>

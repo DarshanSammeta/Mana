@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import logger from "@/lib/logger";
+import { NotificationTriggers } from "@/lib/notifications";
 
 export async function GET(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
@@ -72,7 +73,7 @@ export async function PATCH(req: Request) {
           }
       });
 
-      if (!booking || booking.vendorprofile.userId !== payload.userId) {
+      if (!booking || booking.vendorprofile?.userId !== payload.userId) {
           return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
       }
 
@@ -88,7 +89,14 @@ export async function PATCH(req: Request) {
                 }
             }
         },
+        include: {
+            vendorprofile: true,
+            user: true
+        }
       });
+
+      // Notify customer of status change
+      await NotificationTriggers.bookingStatusUpdated(updatedBooking, status);
 
       return NextResponse.json(updatedBooking);
     } catch (error) {

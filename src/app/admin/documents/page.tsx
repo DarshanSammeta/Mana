@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, ExternalLink } from "lucide-react";
-import { adminService } from "@/services/admin.service";
+import { ExternalLink } from "lucide-react";
+import { adminService } from "@/services/client";
 import { toast } from "react-hot-toast";
 import Image from "next/image";
 
@@ -28,15 +28,7 @@ export default function AdminDocumentReview() {
     fetchDocs();
   }, []);
 
-  const updateDoc = async (id: string, status: string) => {
-    try {
-      await adminService.updateDocumentStatus(id, status);
-      toast.success(`Document ${status}`);
-      fetchDocs();
-    } catch {
-      toast.error("Update failed");
-    }
-  };
+  // updateDoc function removed as it is unused
 
   if (loading) return <div className="p-8 text-center font-bold">Loading Verification Queue...</div>;
 
@@ -86,17 +78,12 @@ export default function AdminDocumentReview() {
               {doc.status === 'PENDING' && (
                 <div className="flex gap-3">
                   <Button
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black h-11"
-                    onClick={() => updateDoc(doc.id, 'APPROVED')}
+                    className="flex-1 bg-primary hover:bg-primary/90 text-white rounded-xl font-black h-11"
+                    asChild
                   >
-                    <Check className="h-4 w-4 mr-2" /> Approve
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="flex-1 rounded-xl font-black h-11"
-                    onClick={() => updateDoc(doc.id, 'REJECTED')}
-                  >
-                    <X className="h-4 w-4 mr-2" /> Reject
+                    <Link href={`/admin/vendors/${doc.vendorProfileId}`}>
+                      Review Full Profile
+                    </Link>
                   </Button>
                 </div>
               )}
@@ -107,6 +94,8 @@ export default function AdminDocumentReview() {
     </div>
   );
 }
+
+import Link from "next/link";
 
 function cn(...inputs: any[]) {
     return inputs.filter(Boolean).join(' ');

@@ -1,53 +1,73 @@
-import jwt from "jsonwebtoken";
+import "server-only";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
+import { verifyAccessToken, signAccessToken as jwtSignAccessToken, signRefreshToken as jwtSignRefreshToken } from "./jwt";
 
-import { AUTH_CONFIG } from "@/config/auth";
+export * from "./jwt";
 
-const JWT_ACCESS_SECRET = AUTH_CONFIG.jwtAccessSecret;
-const JWT_REFRESH_SECRET = AUTH_CONFIG.jwtRefreshSecret;
-
-export const hashPassword = async (password: string) => {
-  return await bcrypt.hash(password, AUTH_CONFIG.passwordSaltRounds);
+export const signAccessToken = (payload: { userId: string; role: string }) => {
+  return jwtSignAccessToken(payload);
 };
 
-export const comparePassword = async (password: string, hashed: string) => {
-  return await bcrypt.compare(password, hashed);
+export const signRefreshToken = (payload: { userId: string; role: string }) => {
+  return jwtSignRefreshToken(payload);
 };
 
-export const generateAccessToken = (userId: string, role: string) => {
-  return jwt.sign({ userId, role }, JWT_ACCESS_SECRET, { expiresIn: AUTH_CONFIG.accessTokenExpiresIn as any });
-};
+/**
+ * Password Helpers
+ */
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 12);
+}
 
-export const generateRefreshToken = (userId: string) => {
-  return jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: AUTH_CONFIG.refreshTokenExpiresIn as any });
-};
+export async function comparePassword(
+  password: string,
+  hashedPassword: string
+): Promise<boolean> {
+  return bcrypt.compare(password, hashedPassword);
+}
 
-export const verifyAccessToken = (token: string) => {
+/**
+ * NextAuth-like compatibility layer
+ */
+export const authOptions: any = {};
+
+export const auth = async () => {
   try {
-    return jwt.verify(token, JWT_ACCESS_SECRET) as { userId: string; role: string };
+    const cookieStore = await cookies();
+    const token = cookieStore.get("accessToken")?.value;
+    if (!token) return null;
+
+    const payload = await verifyAccessToken(token);
+    if (!payload) return null;
+    return {
+      user: {
+        ...payload,
+        id: payload.userId, // Ensure id is also present
+        email: (payload as any).email || null
+      }
+    };
   } catch {
     return null;
   }
 };
 
+/**
+ * Returns authenticated user payload from
+ * Authorization header or accessToken cookie.
+ */
 export const getAuthPayload = async (req?: Request) => {
-  // 1. Check Authorization Header if req is provided
   let token = req?.headers.get("authorization")?.split(" ")[1];
 
-  // 2. Check Cookie if header is missing or req is not provided
   if (!token) {
     const cookieStore = await cookies();
     token = cookieStore.get("accessToken")?.value;
   }
 
   if (!token) return null;
-  return verifyAccessToken(token);
-};
 
-export const verifyRefreshToken = (token: string) => {
   try {
-    return jwt.verify(token, JWT_REFRESH_SECRET) as { userId: string };
+    return await verifyAccessToken(token);
   } catch {
     return null;
   }

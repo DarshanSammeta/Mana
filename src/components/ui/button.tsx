@@ -48,7 +48,16 @@ export interface ButtonProps
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, isLoading, children, disabled, ...props }, ref) => {
+    // Enterprise Guard: Slot contract requires a single element child.
+    // isLoading injection adds a second child (Loader2), which violates this.
     if (asChild) {
+      if (process.env.NODE_ENV === "development" && isLoading) {
+        console.warn(
+          "Button: 'isLoading' prop is ignored when 'asChild' is true. " +
+          "Slot requires a single child element. Wrap your child in a component " +
+          "that handles its own loading state if needed."
+        );
+      }
       return (
         <Slot
           className={cn(buttonVariants({ variant, size, className }))}
@@ -63,7 +72,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref as any}
+        ref={ref}
         disabled={isLoading || disabled}
         {...props}
       >

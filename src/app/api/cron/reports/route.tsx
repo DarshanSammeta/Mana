@@ -1,14 +1,16 @@
 import { APP_CONFIG } from "@/config/app";
-import { EMAIL_CONFIG } from "@/config/email";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Resend } from "resend";
+import { getResend } from "@/lib/resend";
 import { getReportData, generatePDFBuffer, generateExcelBuffer, ReportType } from "@/lib/reports/reportGenerator";
 import { AutomatedReportEmail } from "@/components/emails/AutomatedReportEmail";
 
-const resend = new Resend(EMAIL_CONFIG.resendApiKey);
-
 export async function GET(req: Request) {
+  const resend = getResend();
+  if (!resend) {
+    console.error("Resend service is unavailable for cron reports");
+    return NextResponse.json({ error: "Resend service is unavailable" }, { status: 500 });
+  }
   // Check for CRON_SECRET to protect the endpoint
   const authHeader = req.headers.get('authorization');
   if (authHeader !== `Bearer ${APP_CONFIG.cronSecret}`) {

@@ -21,7 +21,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import CountUp from "react-countup";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { customerService } from "@/services";
+import { customerService } from "@/services/client";
 import { useInView } from "react-intersection-observer";
 
 export default function WalletPage() {

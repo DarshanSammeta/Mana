@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Image as ImageIcon, Upload, Grid3X3, Film, Search, ExternalLink } from "lucide-react";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,

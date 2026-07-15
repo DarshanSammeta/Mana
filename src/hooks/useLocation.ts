@@ -2,14 +2,19 @@
 
 import { useEffect, useCallback } from 'react';
 import { useLocationStore, LocationDetails } from '@/store/locationStore';
-import { mapsService } from '@/services/maps.service';
+import { mapsService } from '@/services/client';
 import { useToast } from '@/hooks/use-toast';
 
 export function useLocation() {
-  const {
-    lat, lng, city, locality, setLocation,
-    setPermissionStatus, setAutoDetected, permissionStatus
-  } = useLocationStore();
+  const lat = useLocationStore(state => state.lat);
+  const lng = useLocationStore(state => state.lng);
+  const city = useLocationStore(state => state.city);
+  const locality = useLocationStore(state => state.locality);
+  const setLocation = useLocationStore(state => state.setLocation);
+  const setPermissionStatus = useLocationStore(state => state.setPermissionStatus);
+  const setAutoDetected = useLocationStore(state => state.setAutoDetected);
+  const permissionStatus = useLocationStore(state => state.permissionStatus);
+
   const { toast } = useToast();
 
   const updateLocationDetails = useCallback(async (latitude: number, longitude: number) => {

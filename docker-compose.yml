@@ -1,56 +1,63 @@
+version: '3.8'
+
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-
-    ports:
-      - "3000:3000"
-
-    env_file:
-      - .env
-
+  # --- Database ---
+  postgres:
+    image: postgres:15-alpine
+    container_name: mana-postgres
+    restart: always
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      DATABASE_URL: ${DATABASE_URL}
-      DIRECT_URL: ${DIRECT_URL}
-      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL}
-      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN}
-      MEILISEARCH_HOST: ${MEILISEARCH_HOST:-http://meilisearch:7700}
-      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      NEXTAUTH_URL: ${NEXTAUTH_URL}
-      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
-      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
-      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
-      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
-      NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
-      CRON_SECRET: ${CRON_SECRET}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mana_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-    depends_on:
-      - meilisearch
+  # --- Cache & Queues ---
+  redis:
+    image: redis:7-alpine
+    container_name: mana-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
+  # --- Search ---
   meilisearch:
     image: getmeili/meilisearch:latest
-    restart: unless-stopped
-
+    container_name: mana-meilisearch
+    restart: always
+    environment:
+      MEILI_HOST: 0.0.0.0:7700
+      MEILI_MASTER_KEY: masterKey
+      MEILI_NO_ANALYTICS: "true"
     ports:
       - "7700:7700"
-
-    environment:
-      MEILI_MASTER_KEY: ${MEILISEARCH_API_KEY}
-      MEILI_ENV: ${NODE_ENV:-production}
-
     volumes:
       - meili_data:/meili_data
 
+  # --- Email Testing (Optional) ---
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mana-mailhog
+    restart: always
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+
+  # --- Inngest Dev Server ---
+  inngest:
+    image: inngest/inngest:latest
+    container_name: mana-inngest
+    restart: always
+    ports:
+      - "8288:8288"
+    command: ["dev", "-u", "http://host.docker.internal:3000/api/inngest"]
+
 volumes:
+  postgres_data:
+  redis_data:
   meili_data:

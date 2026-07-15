@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import { z } from "zod";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { AUTH_LIMITS } from "@/config/auth-limits";
 import { createAuditLog } from "@/lib/audit";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
@@ -17,14 +18,19 @@ const registerSchema = z.object({
 
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
-    const rateLimitResult = await rateLimit(ip, { limit: 5, window: 60 });
-    if (!rateLimitResult.success) {
-      return NextResponse.json({ message: "Too many requests. Please try again later." }, { status: 429 });
-    }
-
     const body = await req.json();
     const validated = registerSchema.parse(body);
+
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
+    const identifier = `register:${ip}:${validated.email.toLowerCase()}`;
+
+    const rateLimitResult = await rateLimit(identifier, AUTH_LIMITS.REGISTER);
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(
+        rateLimitResult,
+        `Too many registration attempts. Please wait ${Math.ceil(rateLimitResult.reset / 60)} minutes.`
+      );
+    }
 
     const existingUser = await prisma.user.findFirst({
       where: {
@@ -50,6 +56,24 @@ export async function POST(req: Request) {
         mobileNumber: validated.mobileNumber,
         role: validated.role,
         updatedAt: new Date(),
+        // Create initial wallet and notification preferences
+        wallet: {
+          create: {
+            id: crypto.randomUUID(),
+            balance: 0,
+            pendingBalance: 0,
+            withdrawable: 0
+          }
+        },
+        notification_preference: {
+          create: {
+            id: crypto.randomUUID(),
+            category: "SYSTEM",
+            email: true,
+            sms: true,
+            push: true
+          }
+        }
       },
     });
 
@@ -67,9 +91,23 @@ export async function POST(req: Request) {
     await createAuditLog({ userId: user.id, action: "USER_REGISTERED", ipAddress: ip });
     logger.info("New user registered", { userId: user.id, role: user.role });
 
+    // Send Welcome Notification
+    try {
+      const { sendNotification } = await import("@/lib/notifications");
+      await sendNotification({
+        userId: user.id,
+        title: "Welcome to Mana Events! 🎉",
+        message: `Hi ${user.fullName}, we're excited to have you here! Start exploring the marketplace to plan your perfect event.`,
+        category: "SYSTEM",
+        priority: "MEDIUM"
+      });
+    } catch (error) {
+      logger.error("Failed to send welcome notification", error);
+    }
+
     return NextResponse.json(
       { message: "User registered successfully", userId: user.id },
       { status: 201 }
     );
-  });
+  }, req);
 }

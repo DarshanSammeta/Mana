@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Star } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
-import { customerService } from "@/services/customer.service";
+import { customerService } from "@/services/client";
 
 export default function NewReviewPage() {
   const router = useRouter();

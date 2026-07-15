@@ -10,21 +10,27 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import { toast } from "react-hot-toast";
 
 interface Document {
   id: string;
-  name: string;
+  name?: string;
   type: string;
-  status: "Verified" | "Pending" | "Expired" | "Rejected";
+  status: "Verified" | "Pending" | "Expired" | "Rejected" | "APPROVED";
   updatedAt: string;
   url: string;
 }
 
 export default function DocumentCenter() {
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [verificationData, setVerificationData] = useState<{ score: number, isVerified: boolean } | null>(null);
+  const [verificationData, setVerificationData] = useState<{
+    score: number;
+    isVerified: boolean;
+    verificationStatus: string;
+    rejectionReason?: string;
+    rejectedDocuments?: string[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
@@ -57,9 +63,8 @@ export default function DocumentCenter() {
       setUploading(true);
       // In a real app, you might want a modal to ask for document name/type
       await vendorService.uploadDocument({
-        name: file.name,
         type: "OTHER",
-        file
+        url: URL.createObjectURL(file) // Placeholder until actual upload logic is implemented
       });
       toast.success("Document uploaded successfully");
       fetchData();
@@ -98,29 +103,38 @@ export default function DocumentCenter() {
             "p-8 rounded-[32px] border",
             verificationData?.isVerified
               ? "bg-emerald-500/10 border-emerald-500/20"
+              : verificationData?.verificationStatus === "REJECTED"
+              ? "bg-red-500/10 border-red-500/20"
               : "bg-orange-500/10 border-orange-500/20"
           )}>
               <div className={cn(
                 "h-12 w-12 rounded-2xl flex items-center justify-center mb-6",
-                verificationData?.isVerified ? "bg-emerald-500/20" : "bg-orange-500/20"
+                verificationData?.isVerified ? "bg-emerald-500/20" :
+                verificationData?.verificationStatus === "REJECTED" ? "bg-red-500/20" : "bg-orange-500/20"
               )}>
                 <ShieldCheck className={cn(
                   "h-6 w-6",
-                  verificationData?.isVerified ? "text-emerald-600" : "text-orange-600"
+                  verificationData?.isVerified ? "text-emerald-600" :
+                  verificationData?.verificationStatus === "REJECTED" ? "text-red-600" : "text-orange-600"
                 )} />
               </div>
               <h3 className={cn(
                 "text-xl font-black",
-                verificationData?.isVerified ? "text-emerald-700" : "text-orange-700"
+                verificationData?.isVerified ? "text-emerald-700" :
+                verificationData?.verificationStatus === "REJECTED" ? "text-red-700" : "text-orange-700"
               )}>
-                {verificationData?.isVerified ? "Business Verified" : "Verification Pending"}
+                {verificationData?.isVerified ? "Business Verified" :
+                 verificationData?.verificationStatus === "REJECTED" ? "Verification Rejected" : "Verification Pending"}
               </h3>
               <p className={cn(
                 "text-sm mt-2 font-medium",
-                verificationData?.isVerified ? "text-emerald-600/80" : "text-orange-600/80"
+                verificationData?.isVerified ? "text-emerald-600/80" :
+                verificationData?.verificationStatus === "REJECTED" ? "text-red-600/80" : "text-orange-600/80"
               )}>
                 {verificationData?.isVerified
                   ? "Your account is fully verified for high-value transactions."
+                  : verificationData?.verificationStatus === "REJECTED"
+                  ? "Your account verification was rejected. Please contact support."
                   : "Complete your document submissions to enable all features."}
               </p>
           </div>

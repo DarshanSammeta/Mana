@@ -38,9 +38,13 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-storage",
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+      }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // We don't set isInitialized here because we want to validate the session first
+          state.isInitialized = false;
         }
       },
     }

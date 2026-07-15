@@ -71,5 +71,5 @@ export async function GET(req: Request) {
         totalVendorEarnings: stats._sum.vendorShare || 0,
       }
     });
-  });
+  }, req);
 }

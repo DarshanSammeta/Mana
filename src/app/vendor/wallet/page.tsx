@@ -19,10 +19,9 @@ import CountUp from "react-countup";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import { useSocketStore } from "@/store/socketStore";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "@/components/vendor/TableSkeleton";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useInView } from "react-intersection-observer";
 
@@ -30,7 +29,6 @@ export default function VendorWallet() {
   const { ref, inView } = useInView();
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
-  const { socket } = useSocketStore();
 
   const { data: wallet, isLoading: walletLoading } = useQuery({
     queryKey: ['vendor-wallet'],
@@ -62,16 +60,6 @@ export default function VendorWallet() {
       fetchNextPage();
     }
   }, [inView, fetchNextPage, hasNextPage]);
-
-  useEffect(() => {
-    if (!socket) return;
-    socket.on("wallet:updated", () => {
-        queryClient.invalidateQueries({ queryKey: ['vendor-wallet'] });
-        queryClient.invalidateQueries({ queryKey: ['vendor-transactions'] });
-        queryClient.invalidateQueries({ queryKey: ['vendor-payouts'] });
-    });
-    return () => { socket.off("wallet:updated"); };
-  }, [socket, queryClient]);
 
   const withdrawMutation = useMutation({
     mutationFn: (amount: number) => vendorService.requestPayout(amount),

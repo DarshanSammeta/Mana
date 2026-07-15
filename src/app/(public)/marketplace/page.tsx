@@ -5,6 +5,7 @@ import { getMarketplaceVendors, getMarketplaceCategories } from "@/lib/marketpla
 import { Suspense } from "react";
 import { GridSectionSkeleton } from "@/components/common/Skeletons";
 import { prisma } from "@/lib/prisma";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ category?: string; subcategory?: string; query?: string; city?: string; eventName?: string; locality?: string }> }): Promise<Metadata> {
   const params = await searchParams;
@@ -53,8 +54,15 @@ function MarketplaceLoading() {
 
 async function getEventTypes() {
   return prisma.eventtype.findMany({
+    where: { isActive: true },
     orderBy: { name: "asc" },
-    select: { id: true, name: true }
+    select: {
+      id: true,
+      name: true,
+      image: true,
+      description: true,
+      icon: true
+    }
   });
 }
 
@@ -110,15 +118,17 @@ export default async function MarketplacePage({
     ]);
 
     return (
-      <Suspense fallback={<MarketplaceLoading />}>
-        <MarketplaceClient
-          initialVendors={JSON.parse(JSON.stringify(initialVendors?.vendors || []))}
-          initialTotal={initialVendors?.total || 0}
-          categories={JSON.parse(JSON.stringify(categories || []))}
-          eventTypes={JSON.parse(JSON.stringify(eventTypes || []))}
-          cities={cities}
-        />
-      </Suspense>
+      <ErrorBoundary name="Marketplace">
+        <Suspense fallback={<MarketplaceLoading />}>
+          <MarketplaceClient
+            initialVendors={JSON.parse(JSON.stringify(initialVendors?.vendors || []))}
+            initialTotal={initialVendors?.total || 0}
+            categories={JSON.parse(JSON.stringify(categories || []))}
+            eventTypes={JSON.parse(JSON.stringify(eventTypes || []))}
+            cities={cities}
+          />
+        </Suspense>
+      </ErrorBoundary>
     );
   } catch (error) {
     console.error("Critical error in MarketplacePage:", error);

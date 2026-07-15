@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { RecentlyViewed } from "@/components/home/RecentlyViewed";
+import { RecommendationCarouselSection } from "@/components/customer/RecommendationCarousel";
 import { optimizeImage } from "@/lib/cloudinary";
 import { HERO_SLIDES, IMAGES, EVENT_TYPE_ICONS } from "@/constants";
 
@@ -166,6 +167,9 @@ export default function HomeClient({
         <div className="shadow-md">
           <RecentlyViewed />
         </div>
+
+        {/* AI Recommendations */}
+        <RecommendationCarouselSection />
 
         {/* Horizontal Scroll Sections (Amazon-style) */}
         {initialFeatured.length > 0 && (

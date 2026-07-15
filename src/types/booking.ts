@@ -1,17 +1,29 @@
 export type BookingStatus =
+  | "DRAFT"
+  | "SEARCHING"
   | "PENDING"
-  | "ACCEPTED"
-  | "REJECTED"
+  | "VENDORS_NOTIFIED"
+  | "QUOTE_RECEIVED"
   | "NEGOTIATING"
+  | "QUOTE_ACCEPTED"
+  | "PAYMENT_PENDING"
+  | "REJECTED"
   | "CONFIRMED"
   | "CANCELLED"
+  | "PREPARATION"
   | "VENDOR_ASSIGNED"
   | "VENDOR_TRAVELING"
   | "VENDOR_ARRIVED"
   | "OTP_VERIFICATION_PENDING"
   | "EVENT_STARTED"
   | "EVENT_ONGOING"
-  | "EVENT_COMPLETED";
+  | "EVENT_COMPLETED"
+  | "CUSTOMER_CONFIRMED"
+  | "PAYMENT_RELEASED"
+  | "CLOSED"
+  | "DISPUTED"
+  | "IN_PROGRESS"
+  | "EMERGENCY";
 
 export interface BookingChecklistItem {
   id: number;

@@ -19,6 +19,21 @@ export async function GET(req: Request) {
     const payload = verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
+    // Security check: Verify user is a participant in the conversation
+    const participant = await prisma.conversationparticipant.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId,
+          userId: payload.userId
+        }
+      }
+    });
+
+    if (!participant) {
+      logger.warn("Unauthorized chat access attempt", { userId: payload.userId, conversationId });
+      return NextResponse.json({ message: "Access denied" }, { status: 403 });
+    }
+
     const messages = await prisma.message.findMany({
       where: { conversationId },
       take: limit,
@@ -50,7 +65,7 @@ export async function GET(req: Request) {
       items: messages.reverse(),
       nextCursor
     });
-  });
+  }, req);
 }
 
 export async function POST(req: Request) {
@@ -62,6 +77,21 @@ export async function POST(req: Request) {
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { conversationId, content, attachments } = await req.json();
+
+    // Security check: Verify user is a participant in the conversation
+    const participant = await prisma.conversationparticipant.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId,
+          userId: payload.userId
+        }
+      }
+    });
+
+    if (!participant) {
+      logger.warn("Unauthorized message post attempt", { userId: payload.userId, conversationId });
+      return NextResponse.json({ message: "Access denied" }, { status: 403 });
+    }
 
     const message = await prisma.message.create({
       data: {
@@ -93,5 +123,5 @@ export async function POST(req: Request) {
     logger.info("Chat message sent", { conversationId, senderId: payload.userId, messageId: message.id });
 
     return NextResponse.json(message, { status: 201 });
-  });
+  }, req);
 }

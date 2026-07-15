@@ -3,6 +3,7 @@ import { v2 as cloudinary } from "cloudinary";
 let isConfigured = false;
 
 export const getCloudinary = () => {
+  if (typeof window !== "undefined") return null;
   if (isConfigured) return cloudinary;
 
   const cloud_name = process.env.CLOUDINARY_CLOUD_NAME;

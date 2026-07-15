@@ -12,8 +12,8 @@ async function checkAdmin(req: Request) {
 }
 
 export async function GET(req: Request) {
-  return withErrorHandler(async () => {
-    const admin = await checkAdmin(req);
+  return withErrorHandler(async (innerReq) => {
+    const admin = await checkAdmin(innerReq!);
     if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { searchParams } = new URL(req.url);
@@ -34,5 +34,5 @@ export async function GET(req: Request) {
     const total = await prisma.auditlog.count();
 
     return NextResponse.json({ logs, total });
-  });
+  }, req);
 }

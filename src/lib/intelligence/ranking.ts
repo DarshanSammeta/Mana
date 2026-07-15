@@ -43,11 +43,23 @@ export const getRankedVendors = async (
   category?: string,
   maxDistance: number = 20 // default 20km
 ) => {
+  // Rough bounding box calculation (approximate)
+  // 1 degree latitude ~= 111km
+  // 1 degree longitude ~= 111km * cos(lat)
+  const latDelta = maxDistance / 111;
+  const lngDelta = maxDistance / (111 * Math.cos(lat * (Math.PI / 180)));
+
   const vendors = await prisma.vendorprofile.findMany({
     where: {
       verificationStatus: 'APPROVED',
-      latitude: { not: null },
-      longitude: { not: null },
+      latitude: {
+        gte: lat - latDelta,
+        lte: lat + latDelta
+      },
+      longitude: {
+        gte: lng - lngDelta,
+        lte: lng + lngDelta
+      },
       service: category ? {
         some: {
           servicetype: {

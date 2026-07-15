@@ -1,57 +1,58 @@
-import { useEffect, useState } from "react";
-import { useSocketStore } from "@/store/socketStore";
+import { useMemo } from "react";
 import { useAuthStore } from "@/store/authStore";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { notificationService } from "@/services/notification.service";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { notificationService } from "@/services/client";
 
+/**
+ * Hook for consuming notification data.
+ * Socket listeners are handled globally in NotificationListener to prevent duplication.
+ * Supports infinite scrolling for the notification bell/list.
+ */
 export const useLiveNotifications = () => {
-  const { socket } = useSocketStore();
-  const { accessToken, user } = useAuthStore();
-  const queryClient = useQueryClient();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const accessToken = useAuthStore(state => state.accessToken);
 
-  const { data: notifications } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: () => notificationService.getNotifications(),
+  // 1. Fetch unread count separately for high-performance badge updates
+  const { data: unreadData } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      const res = await notificationService.getNotifications(1);
+      return res.unreadCount || 0;
+    },
     enabled: !!accessToken,
+    refetchInterval: 60000, // Fallback poll every minute
+    refetchOnWindowFocus: false, // Prevent redundant calls on tab switch if socket is active
   });
 
-  useEffect(() => {
-    if (Array.isArray(notifications)) {
-      setUnreadCount(notifications.filter((n: any) => !n.isRead).length);
-    }
-  }, [notifications]);
+  // 2. Infinite query for the notification list
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    refetch
+  } = useInfiniteQuery({
+    queryKey: ["notifications", "list"],
+    queryFn: ({ pageParam }) => notificationService.getNotifications(10, pageParam as string | undefined),
+    initialPageParam: undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled: !!accessToken,
+    staleTime: 30000,
+  });
 
-  useEffect(() => {
-    if (!socket || !user) return;
+  const notifications = useMemo(() =>
+    data?.pages.flatMap(page => page?.items).filter(Boolean) || [],
+  [data]);
 
-    const handleNotification = (notification: any) => {
-      queryClient.setQueryData(["notifications"], (old: any) => {
-        const currentList = Array.isArray(old) ? old : [];
-        const updated = [notification, ...currentList];
-        return updated;
-      });
-      setUnreadCount(prev => prev + 1);
+  const unreadCount = unreadData ?? (notifications.filter((n: any) => n && !n.isRead).length);
 
-      // Show browser notification if permitted
-      if (Notification.permission === "granted") {
-          new Notification(notification.title, { body: notification.message });
-      }
-    };
-
-    const handleBookingUpdate = (_update: any) => {
-        queryClient.invalidateQueries({ queryKey: ["bookings"] });
-        // Optionally show a specific toast or notification
-    };
-
-    socket.on("notification:new", handleNotification);
-    socket.on("booking:update", handleBookingUpdate);
-
-    return () => {
-      socket.off("notification:new", handleNotification);
-      socket.off("booking:update", handleBookingUpdate);
-    };
-  }, [socket, user, queryClient]);
-
-  return { unreadCount, notifications };
+  return {
+    notifications,
+    unreadCount,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    refetch
+  };
 };

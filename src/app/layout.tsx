@@ -52,6 +52,8 @@ import RouteLoadingHandler from "@/components/common/RouteLoadingHandler";
 import { GoogleMapsLoader } from "@/components/common/GoogleMapsLoader";
 import NavbarWrapper from "@/components/common/NavbarWrapper";
 
+import FooterWrapper from "@/components/common/FooterWrapper";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -90,8 +92,7 @@ export default function RootLayout({
                 {children}
               </PageTransition>
             </main>
-            {/* Note: Footer is often page-specific in its design,
-                but for performance we can keep it here or in a sub-layout */}
+            <FooterWrapper />
           </div>
           <Toaster />
         </Providers>

@@ -6,8 +6,11 @@ import apiClient from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
 
 export const useCommerceSync = () => {
-  const { accessToken, user } = useAuthStore();
-  const { cart, wishlist } = useCommerceStore();
+  const accessToken = useAuthStore(state => state.accessToken);
+  const user = useAuthStore(state => state.user);
+  const cart = useCommerceStore(state => state.cart);
+  const wishlist = useCommerceStore(state => state.wishlist);
+
   const { toast } = useToast();
   const [isMerging, setIsMerging] = useState(false);
   const [hasAttemptedMerge, setHasAttemptedMerge] = useState(false);
@@ -50,19 +53,24 @@ export const useCommerceSync = () => {
           setHasAttemptedMerge(true);
         } catch (error) {
           console.error("Failed to merge commerce data:", error);
-          // We don't clear local data on failure so user doesn't lose it
+          // If 401/403, we might want to stop trying but keep the data
+          const status = (error as any)?.response?.status;
+          if (status === 401 || status === 403) {
+             setHasAttemptedMerge(true);
+          }
         } finally {
           setIsMerging(false);
         }
       } else if (user && accessToken && !hasAttemptedMerge) {
-          // If no data to merge, still mark as attempted to prevent unnecessary checks
+          // If no data to merge, we still need to fetch the server-side data
+          await Promise.all([refetchCart(), refetchWishlist()]);
           setHasAttemptedMerge(true);
       }
     };
 
     mergeData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken, user, hasAttemptedMerge, refetchCart, refetchWishlist, toast]); // Removed cart/wishlist from deps to avoid loops
+  }, [accessToken, user, hasAttemptedMerge, toast]);
 
   return { isMerging };
 };

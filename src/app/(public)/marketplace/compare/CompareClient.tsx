@@ -1,6 +1,5 @@
 "use client";
 
-import Navbar from "@/components/common/Navbar";
 import { Star, Check, X, ArrowLeft, Trash2, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,8 +10,8 @@ import Image from "next/image";
 import { optimizeImage } from "@/lib/cloudinary";
 
 export default function CompareClient({
-  initialEventTypes,
-  initialCategories
+  initialEventTypes: _initialEventTypes,
+  initialCategories: _initialCategories
 }: {
   initialEventTypes: any[],
   initialCategories: any[]
@@ -34,7 +33,6 @@ export default function CompareClient({
   if (vendors.length === 0) {
     return (
       <div className="min-h-screen bg-slate-50">
-        <Navbar initialEventTypes={initialEventTypes} initialCategories={initialCategories} />
         <main className="container mx-auto px-4 py-32 text-center">
            <div className="h-24 w-24 bg-white rounded-[2rem] shadow-xl flex items-center justify-center mx-auto mb-8">
               <Star className="h-10 w-10 text-slate-200" />
@@ -53,8 +51,6 @@ export default function CompareClient({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Navbar initialEventTypes={initialEventTypes} initialCategories={initialCategories} />
-
       <main className="container mx-auto px-4 py-16">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16">
            <div>

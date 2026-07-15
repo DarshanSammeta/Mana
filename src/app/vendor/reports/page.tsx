@@ -15,7 +15,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import { useAuthStore } from "@/store/authStore";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";

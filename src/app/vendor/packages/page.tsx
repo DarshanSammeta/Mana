@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import {
   Package,
   Plus,

@@ -33,6 +33,9 @@ export async function POST(req: Request) {
 
     // Razorpay Order
     const razorpay = getRazorpay();
+    if (!razorpay) {
+      return NextResponse.json({ message: "Payment service unavailable" }, { status: 503 });
+    }
     const amount = Number(plan.price) * 100; // in paisa
     const order = await razorpay.orders.create({
       amount,

@@ -1,6 +1,10 @@
+import "server-only";
 import { Resend } from 'resend';
 import { BookingConfirmationEmail } from '@/components/emails/BookingConfirmation';
 import { VendorNotificationEmail } from '@/components/emails/VendorNotification';
+import { VendorVerificationEmail, VerificationStatus } from '@/components/emails/VendorVerificationEmail';
+import { InvoiceEmail } from '@/components/emails/InvoiceEmail';
+import { RefundEmail } from '@/components/emails/RefundEmail';
 import React from 'react';
 
 import { EMAIL_CONFIG } from '@/config/email';
@@ -9,11 +13,24 @@ import { EMAIL_CONFIG } from '@/config/email';
 let resendInstance: Resend | null = null;
 
 const getResend = () => {
+  if (typeof window !== "undefined") {
+    return null;
+  }
+
   if (resendInstance) return resendInstance;
   const apiKey = EMAIL_CONFIG.resendApiKey;
-  if (!apiKey) return null;
-  resendInstance = new Resend(apiKey);
-  return resendInstance;
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY is missing, Resend service will be unavailable.');
+    return null;
+  }
+
+  try {
+    resendInstance = new Resend(apiKey);
+    return resendInstance;
+  } catch (error) {
+    console.error('Failed to initialize Resend:', error);
+    return null;
+  }
 };
 
 export const sendBookingConfirmationEmail = async (
@@ -28,10 +45,8 @@ export const sendBookingConfirmationEmail = async (
 ) => {
   try {
     const resend = getResend();
-    if (!resend) {
-      console.warn('Resend API key missing, skipping email');
-      return;
-    }
+    if (!resend) return;
+
     await resend.emails.send({
       from: EMAIL_CONFIG.from.bookings,
       to: email,
@@ -56,10 +71,8 @@ export const sendVendorNotificationEmail = async (
 ) => {
   try {
     const resend = getResend();
-    if (!resend) {
-      console.warn('Resend API key missing, skipping vendor email');
-      return;
-    }
+    if (!resend) return;
+
     await resend.emails.send({
       from: EMAIL_CONFIG.from.seller,
       to: email,
@@ -68,6 +81,79 @@ export const sendVendorNotificationEmail = async (
     });
   } catch (error) {
     console.error('Vendor Email sending failed:', error);
+  }
+};
+
+export const sendInvoiceEmail = async (
+  email: string,
+  data: {
+    customerName: string;
+    invoiceNumber: string;
+    bookingNumber: string;
+    amount: string;
+    pdfUrl: string;
+  }
+) => {
+  try {
+    const resend = getResend();
+    if (!resend) return;
+
+    await resend.emails.send({
+      from: EMAIL_CONFIG.from.bookings,
+      to: email,
+      subject: `Your Invoice for Booking ${data.bookingNumber}`,
+      react: React.createElement(InvoiceEmail, data),
+    });
+  } catch (error) {
+    console.error('Invoice Email sending failed:', error);
+  }
+};
+
+export const sendRefundEmail = async (
+  email: string,
+  data: {
+    customerName: string;
+    bookingNumber: string;
+    amount: string;
+    reason: string;
+  }
+) => {
+  try {
+    const resend = getResend();
+    if (!resend) return;
+
+    await resend.emails.send({
+      from: EMAIL_CONFIG.from.bookings,
+      to: email,
+      subject: `Refund Processed - ${data.bookingNumber}`,
+      react: React.createElement(RefundEmail, data),
+    });
+  } catch (error) {
+    console.error('Refund Email sending failed:', error);
+  }
+};
+
+export const sendVendorVerificationUpdateEmail = async (
+  email: string,
+  data: {
+    vendorName: string;
+    status: VerificationStatus;
+    message: string;
+    rejectionReason?: string;
+  }
+) => {
+  try {
+    const resend = getResend();
+    if (!resend) return;
+
+    await resend.emails.send({
+      from: EMAIL_CONFIG.from.auth,
+      to: email,
+      subject: `Account Verification Update - ${data.status}`,
+      react: React.createElement(VendorVerificationEmail, data),
+    });
+  } catch (error) {
+    console.error('Vendor Verification Email sending failed:', error);
   }
 };
 

@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Search, Loader2 } from "lucide-react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
 import { useSearchParams } from "next/navigation";
 import { useLocationStore } from "@/store/locationStore";
-import { fetchMoreVendors } from "./actions";
 import { useInView } from "react-intersection-observer";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { marketplaceService } from "@/services/client";
 
 import { MarketplaceFilters } from "@/components/marketplace/MarketplaceFilters";
 import { EventTypeSidebar } from "@/components/marketplace/EventTypeSidebar";
@@ -44,76 +45,115 @@ export default function MarketplaceClient({
   cities?: string[]
 }) {
   const searchParams = useSearchParams();
-  const { lat, lng } = useLocationStore();
+  const lat = useLocationStore(state => state.lat);
+  const lng = useLocationStore(state => state.lng);
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
+  const [isFirstMount, setIsFirstMount] = useState(true);
 
-  const [vendors, setVendors] = useState(initialVendors);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(initialVendors.length < initialTotal);
-
-  const loadMore = useCallback(async (reset = false) => {
-    if (loading || (!hasMore && !reset)) return;
-    setLoading(true);
-    try {
-      const nextPage = reset ? 1 : page + 1;
-      const params = searchParams ? Object.fromEntries(searchParams.entries()) : {};
-      const result = await fetchMoreVendors({
-        ...params,
-        lat: lat || undefined,
-        lng: lng || undefined,
-        page: nextPage,
-        limit: PAGINATION.MARKETPLACE_LIMIT
-      });
-
-      if (result.vendors && result.vendors.length > 0) {
-        setVendors(prev => {
-           if (reset) return result.vendors;
-           const existingIds = new Set(prev.map(v => v.id));
-           const newVendors = result.vendors.filter((v: any) => !existingIds.has(v.id));
-           return [...prev, ...newVendors];
-        });
-        setPage(nextPage);
-        setHasMore(result.vendors.length === PAGINATION.MARKETPLACE_LIMIT);
-      } else {
-        if (reset) setVendors([]);
-        setHasMore(false);
-      }
-    } catch (error) {
-      console.error("Failed to load more vendors:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [loading, hasMore, page, searchParams, lat, lng]);
-
-  // Re-fetch when location becomes available to get proximity ranking
   useEffect(() => {
-    if (lat && lng && vendors.length > 0 && !searchParams?.get('lat')) {
-      loadMore(true);
+    setIsFirstMount(false);
+  }, []);
+
+  // Extract current filters from URL
+  const eventTypeId = searchParams?.get("eventTypeId") || undefined;
+  const category = searchParams?.get("category") || searchParams?.get("subcategory") || undefined;
+  const query = searchParams?.get("query") || undefined;
+  const sort = searchParams?.get("sort") || "featured";
+  const city = searchParams?.get("city") || undefined;
+  const minPrice = searchParams?.get("minPrice") ? parseFloat(searchParams.get("minPrice")!) : undefined;
+  const maxPrice = searchParams?.get("maxPrice") ? parseFloat(searchParams.get("maxPrice")!) : undefined;
+  const rating = searchParams?.get("rating") ? parseFloat(searchParams.get("rating")!) : undefined;
+  const currentPage = searchParams?.get("page") ? parseInt(searchParams.get("page")!) : 1;
+
+  // Single Source of Truth for Active Event Type (Step 3 & 9)
+  const activeEventType = useMemo(() =>
+    eventTypes.find(t => t.id === eventTypeId),
+  [eventTypes, eventTypeId]);
+
+  // Unified Category Management (Step 4 & 6)
+  const { data: effectiveCategories = [] } = useQuery({
+    queryKey: ["categories", eventTypeId],
+    queryFn: () => marketplaceService.getCategories(eventTypeId),
+    initialData: isFirstMount ? categories : [],
+    staleTime: 1000 * 60 * 30,
+    select: (data) => Array.isArray(data) ? data : [],
+  });
+
+  // Optimized Infinite Loading with React Query (Step 4 & 7)
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery({
+    queryKey: ['marketplace', 'vendors', { eventTypeId, category, query, sort, city, minPrice, maxPrice, rating, lat, lng }],
+    queryFn: ({ pageParam = 1 }) => marketplaceService.searchVendors({
+      eventTypeId,
+      category,
+      query,
+      sort,
+      city,
+      minPrice,
+      maxPrice,
+      rating,
+      lat: lat || undefined,
+      lng: lng || undefined,
+      page: pageParam as number,
+      limit: PAGINATION.MARKETPLACE_LIMIT
+    }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: any) => {
+      const pagination = lastPage.pagination;
+      if (pagination && pagination.page < pagination.totalPages) {
+        return pagination.page + 1;
+      }
+      return undefined;
+    },
+    // Trust server data on first mount regardless of filters (since server uses same filters)
+    initialData: (isFirstMount && currentPage === 1) ? {
+      pages: [{
+        vendors: initialVendors,
+        pagination: {
+          page: 1,
+          totalPages: Math.ceil(initialTotal / PAGINATION.MARKETPLACE_LIMIT),
+          total: initialTotal
+        }
+      }],
+      pageParams: [1]
+    } : undefined,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Step 15: Development Logs (Identical Verification)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log("--- Marketplace Sync Audit ---");
+      console.log("URL EventType ID:", eventTypeId);
+      console.log("Active EventType Name:", activeEventType?.name);
+      console.log("Query Key EventType ID:", eventTypeId);
+      console.log("Category List Count:", effectiveCategories?.length);
+      console.log("------------------------------");
     }
-  }, [lat, lng, vendors.length, searchParams, loadMore]);
+  }, [eventTypeId, activeEventType, effectiveCategories]);
+
+  const vendors = useMemo(() => data?.pages.flatMap(page => page.vendors) || [], [data]);
+  const totalResults = data?.pages[0]?.pagination?.total || initialTotal;
 
   const { ref, inView } = useInView({
     threshold: 0,
     rootMargin: "400px",
   });
 
-  // Reset when initialVendors change (on filter change from server)
   useEffect(() => {
-    setVendors(initialVendors);
-    setPage(1);
-    setHasMore(initialVendors.length < initialTotal);
-  }, [initialVendors, initialTotal]);
-
-  useEffect(() => {
-    if (inView && hasMore && !loading) {
-      loadMore();
+    if (inView && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
     }
-  }, [inView, hasMore, loading, loadMore]);
+  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
-      <CategoryBar categories={categories} />
+      <CategoryBar categories={effectiveCategories} />
 
       <main className="flex-1 w-full max-w-[1500px] mx-auto px-4 lg:px-6 py-12 flex flex-col lg:flex-row gap-12">
         <aside className="hidden lg:block lg:w-72 shrink-0">
@@ -134,63 +174,73 @@ export default function MarketplaceClient({
 
         <div className="flex-1">
           <MarketplaceHeader
-            totalResults={initialTotal}
+            totalResults={totalResults}
             viewMode={viewMode}
             setViewMode={setViewMode}
             cities={cities}
+            activeEventType={activeEventType}
           />
 
-          <AnimatePresence mode="wait">
-            {vendors.length > 0 ? (
-              viewMode === "map" ? (
-                <VendorMapView vendors={vendors} center={{ lat: lat || MAPS_CONFIG.defaultCenter.lat, lng: lng || MAPS_CONFIG.defaultCenter.lng }} />
-              ) : (
-                <div className="space-y-12">
-                  <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-6 items-stretch" : "space-y-6"}>
-                    {vendors.map((vendor: any, i: number) => (
-                      <VendorCard
-                        key={`${vendor.id}-${i}`}
-                        vendor={vendor}
-                        index={i}
-                        viewMode={viewMode}
-                        priority={i < 4}
-                      />
-                    ))}
-                  </div>
+          {isLoading && vendors.length === 0 ? (
+             <div className="flex items-center justify-center py-24">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+             </div>
+          ) : (
+            <AnimatePresence mode="wait">
+              {vendors.length > 0 ? (
+                viewMode === "map" ? (
+                  <VendorMapView vendors={vendors} center={{ lat: lat || MAPS_CONFIG.defaultCenter.lat, lng: lng || MAPS_CONFIG.defaultCenter.lng }} />
+                ) : (
+                  <div className="space-y-12">
+                    <motion.div
+                      layout
+                      className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-6 items-stretch" : "space-y-6"}
+                    >
+                      {vendors.map((vendor: any, i: number) => (
+                        <VendorCard
+                          key={`${vendor.id}-${i}`}
+                          vendor={vendor}
+                          index={i}
+                          viewMode={viewMode}
+                          priority={i < 4}
+                        />
+                      ))}
+                    </motion.div>
 
-                  {hasMore && (
-                    <div ref={ref} className="flex justify-center pt-8">
-                      <Button
-                        onClick={() => loadMore(false)}
-                        disabled={loading}
-                        variant="outline"
-                        className="rounded-full px-12 h-14 font-black uppercase tracking-widest text-[11px] border-2 border-slate-100 hover:bg-slate-50 min-w-[240px]"
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Loading More...
-                          </>
-                        ) : (
-                          "Load More Professionals"
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )
-            ) : (
-              <EmptyState
-                icon={Search}
-                title="No matching vendors found"
-                description={`We couldn't find any results matching your filters. Try adjusting your search terms or clearing filters.`}
-                actionText="Clear All Filters"
-                onActionClick={() => {
-                  window.location.href = '/marketplace';
-                }}
-              />
-            )}
-          </AnimatePresence>
+                    {hasNextPage && (
+                      <div ref={ref} className="flex justify-center pt-8">
+                        <Button
+                          onClick={() => fetchNextPage()}
+                          disabled={isFetchingNextPage}
+                          variant="outline"
+                          className="rounded-full px-12 h-14 font-black uppercase tracking-widest text-[11px] border-2 border-slate-100 hover:bg-slate-50 min-w-[240px]"
+                        >
+                          {isFetchingNextPage ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Loading More...
+                            </>
+                          ) : (
+                            "Load More Professionals"
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )
+              ) : (
+                <EmptyState
+                  icon={Search}
+                  title="No matching vendors found"
+                  description={`We couldn't find any results matching your filters. Try adjusting your search terms or clearing filters.`}
+                  actionText="Clear All Filters"
+                  onActionClick={() => {
+                    window.location.href = '/marketplace';
+                  }}
+                />
+              )}
+            </AnimatePresence>
+          )}
         </div>
       </main>
 

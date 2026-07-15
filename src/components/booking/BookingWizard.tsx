@@ -43,7 +43,7 @@ import { toast } from "react-hot-toast";
 import { useAuthStore } from "@/store/authStore";
 import { useCommerceStore } from "@/store/commerceStore";
 import { Label } from "@/components/ui/label";
-import { bookingService } from "@/services";
+import { bookingService } from "@/services/client";
 
 import { useRouter } from "next/navigation";
 import { useCheckoutStore } from "@/store/checkoutStore";
@@ -509,7 +509,7 @@ function BookingWizard({ vendor }: { vendor: any }) {
 
                 <div className="relative">
                     <div className="absolute -inset-4 bg-gradient-to-b from-primary/10 to-transparent blur-3xl opacity-50 rounded-full" />
-                    <GlassCard className="p-10 flex flex-col justify-between h-full relative border-primary/20 bg-black/40 backdrop-blur-3xl shadow-2xl">
+                    <GlassCard className="p-10 flex flex-col relative border-primary/20 bg-black/40 backdrop-blur-3xl shadow-2xl">
                         <div>
                             <div className="flex justify-between items-center mb-8">
                                 <h4 className="font-black text-2xl italic">Payment Summary</h4>
@@ -554,7 +554,7 @@ function BookingWizard({ vendor }: { vendor: any }) {
                             </div>
                         </div>
 
-                        <div className="mt-12 space-y-4">
+                        <div className="mt-6 space-y-3">
                             <Button
                                 variant="premium"
                                 className="w-full h-20 rounded-[1.5rem] font-black text-xl uppercase tracking-widest shadow-2xl shadow-primary/20 group overflow-hidden relative"

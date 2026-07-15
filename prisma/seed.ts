@@ -24,37 +24,70 @@ const EVENT_TYPES = [
   { name: "Anniversary", description: "Celebrating milestones", icon: "anniversary-icon" },
 ];
 
-const CATEGORIES = [
-  { name: "Photography", icon: "camera", eventTypes: ["Wedding", "Birthday Party", "Corporate Event", "Social Gathering", "Anniversary"] },
-  { name: "Catering", icon: "utensils", eventTypes: ["Wedding", "Birthday Party", "Corporate Event", "Social Gathering", "Anniversary"] },
-  { name: "Decoration", icon: "palette", eventTypes: ["Wedding", "Birthday Party", "Social Gathering", "Anniversary"] },
-  { name: "DJ & Music", icon: "music", eventTypes: ["Wedding", "Birthday Party", "Corporate Event", "Social Gathering"] },
-  { name: "Entertainment", icon: "smile", eventTypes: ["Birthday Party", "Social Gathering", "Corporate Event"] },
-  { name: "Cakes", icon: "cake", eventTypes: ["Birthday Party", "Wedding", "Anniversary"] },
-  { name: "Transportation", icon: "car", eventTypes: ["Wedding", "Corporate Event"] },
-  { name: "Return Gifts", icon: "gift", eventTypes: ["Wedding", "Birthday Party", "Social Gathering"] },
+const EVENT_CATEGORY_CONFIG = [
+  {
+    eventTypeName: "Wedding",
+    categories: [
+      { name: "Photography", icon: "camera", subcategories: ["Wedding Photography", "Candid Wedding Photography", "Pre-Wedding Shoot", "Cinematic Wedding Film"] },
+      { name: "Catering", icon: "utensils", subcategories: ["Traditional South Indian Buffet", "North Indian Wedding Feast", "Wedding Live Counters", "Premium Wedding Plated Service"] },
+      { name: "Decoration", icon: "palette", subcategories: ["Mandap Decoration", "Floral Stage Decor", "Wedding Entrance Decor", "Thematic Wedding Decor"] },
+      { name: "Cakes", icon: "cake", subcategories: ["Multi-tier Wedding Cake", "Engagement Photo Cake", "Wedding Anniversary Special Cake"] },
+      { name: "Transportation", icon: "car", subcategories: ["Luxury Wedding Car Rental", "Vintage Car for Groom", "Guest Shuttle Buses"] },
+      { name: "Return Gifts", icon: "gift", subcategories: ["Traditional Wedding Return Gifts", "Premium Gift Hampers", "Silver Article Gifts"] },
+    ]
+  },
+  {
+    eventTypeName: "Corporate Event",
+    categories: [
+      { name: "Photography", icon: "camera", subcategories: ["Conference Highlights Photography", "Corporate Headshots", "Product Launch Coverage", "Corporate Event Documentary"] },
+      { name: "Catering", icon: "utensils", subcategories: ["Executive Working Lunch", "Corporate Dinner Buffet", "Networking High Tea & Snacks"] },
+      { name: "DJ & Music", icon: "music", subcategories: ["Corporate DJ Services", "Professional Audio Setup", "Live Instrumental Band for Networking"] },
+      { name: "Transportation", icon: "car", subcategories: ["Executive Airport Pickup", "Corporate Staff Shuttle"] },
+    ]
+  },
+  {
+    eventTypeName: "Birthday Party",
+    categories: [
+      { name: "Photography", icon: "camera", subcategories: ["Kids Birthday Photography", "Birthday Party Highlights"] },
+      { name: "Catering", icon: "utensils", subcategories: ["Kids Special Menu", "Birthday Party Buffet", "Live Popcorn & Candy Stall"] },
+      { name: "Decoration", icon: "palette", subcategories: ["Balloon Theme Decoration", "Superhero Theme Setup", "Princess Birthday Decor"] },
+      { name: "Cakes", icon: "cake", subcategories: ["Birthday Theme Cake", "Custom Photo Cake", "Number Shaped Cake"] },
+      { name: "Entertainment", icon: "smile", subcategories: ["Magic Show for Kids", "Puppet Show", "Face Painting Artist", "Mascot Performance"] },
+      { name: "DJ & Music", icon: "music", subcategories: ["Kids Party DJ", "Music System Rental for Birthday"] },
+      { name: "Return Gifts", icon: "gift", subcategories: ["Kids Return Gift Packs", "Creative Goodie Bags"] },
+    ]
+  },
+  {
+    eventTypeName: "Social Gathering",
+    categories: [
+      { name: "Photography", icon: "camera", subcategories: ["Social Event Coverage", "Candid Party Moments", "Family Gathering Photos"] },
+      { name: "Catering", icon: "utensils", subcategories: ["Small Batch Catering", "Home Party Special Menu", "Cocktail Party Snacks"] },
+      { name: "Decoration", icon: "palette", subcategories: ["House Party Decor", "Minimalist Floral Setup", "Garden Party Lighting"] },
+      { name: "DJ & Music", icon: "music", subcategories: ["House Party DJ", "Live Acoustic Performance", "Karaoke System Setup"] },
+      { name: "Entertainment", icon: "smile", subcategories: ["Stand-up Comedy", "Anchor/MC for Social Events"] },
+      { name: "Return Gifts", icon: "gift", subcategories: ["Custom Souvenirs", "Social Event Thank You Gifts"] },
+    ]
+  },
+  {
+    eventTypeName: "Anniversary",
+    categories: [
+      { name: "Photography", icon: "camera", subcategories: ["Anniversary Portrait Shoot", "Couple Journey Documentary"] },
+      { name: "Catering", icon: "utensils", subcategories: ["Fine Dining Anniversary Catering", "Anniversary Celebration Buffet"] },
+      { name: "Decoration", icon: "palette", subcategories: ["Romantic Anniversary Decor", "Anniversary Stage Setup"] },
+      { name: "Cakes", icon: "cake", subcategories: ["Anniversary Special Cake", "Couple Photo Cake for Anniversary"] },
+    ]
+  }
 ];
 
-const SUB_DATA = {
-  "Photography": ["Wedding Photography", "Candid Photography", "Cinematic Photography", "Traditional Photography", "Drone Photography", "Pre-Wedding Shoot", "Maternity Photography", "Event Photography"],
-  "Catering": ["South Indian Catering", "North Indian Catering", "Chinese Catering", "Buffet Catering", "Live Counters", "Premium Catering"],
-  "Decoration": ["Stage Decoration", "Floral Decoration", "Balloon Decoration", "Theme Decoration", "Wedding Decoration", "Birthday Decoration"],
-  "DJ & Music": ["DJ Services", "Live Band", "Orchestra", "Sound Systems", "Sangeet DJ"],
-  "Entertainment": ["Magic Show", "Dance Performance", "Kids Entertainment", "Anchors", "Celebrity Appearance"],
-  "Cakes": ["Birthday Cakes", "Wedding Cakes", "Theme Cakes", "Customized Cakes"],
-  "Transportation": ["Luxury Cars", "Wedding Cars", "Buses", "Guest Transportation"],
-  "Return Gifts": ["Wedding Gifts", "Birthday Gifts", "Corporate Gifts"]
-};
-
 const VENDOR_COUNTS = {
-  "Photography": 3,
-  "Catering": 3,
-  "Decoration": 3,
-  "DJ & Music": 2,
-  "Entertainment": 2,
-  "Cakes": 2,
-  "Transportation": 1,
-  "Return Gifts": 1
+  "Photography": 5,
+  "Catering": 4,
+  "Decoration": 4,
+  "DJ & Music": 3,
+  "Entertainment": 3,
+  "Cakes": 3,
+  "Transportation": 2,
+  "Return Gifts": 2
 };
 
 const PACKAGE_TEMPLATES = [
@@ -106,7 +139,7 @@ async function main() {
   for (const table of tables) {
     try {
       await prisma.$executeRawUnsafe(`TRUNCATE TABLE "${table}" CASCADE;`);
-    } catch (e) {
+    } catch (e: any) {
       // console.log(`⚠️ Could not truncate ${table}: ${e.message}`);
     }
   }
@@ -150,41 +183,45 @@ async function main() {
   }
 
   // 2. Create Categories, Subcategories and Service Types
-  console.log("📁 Creating categories...");
-  const serviceTypeMap: Record<string, any> = {};
+  console.log("📁 Creating scoped categories...");
+  const serviceTypeMap: Record<string, string[]> = {}; // Map catName to array of stIds
 
-  for (const cat of CATEGORIES) {
-    const created = await prisma.category.create({
-      data: {
-        id: randomUUID(),
-        name: cat.name,
-        description: `Professional ${cat.name} services.`,
-        icon: cat.icon,
-        eventtypes: {
-          connect: cat.eventTypes.map(etName => ({ id: eventTypeMap[etName].id }))
+  for (const etConfig of EVENT_CATEGORY_CONFIG) {
+    const et = eventTypeMap[etConfig.eventTypeName];
+    for (const catConfig of etConfig.categories) {
+      const createdCat = await prisma.category.create({
+        data: {
+          id: randomUUID(),
+          name: catConfig.name,
+          description: `Professional ${catConfig.name} services for ${etConfig.eventTypeName}.`,
+          icon: catConfig.icon,
+          eventTypeId: et.id
         }
+      });
+
+      if (!serviceTypeMap[catConfig.name]) {
+        serviceTypeMap[catConfig.name] = [];
       }
-    });
 
-    const subNames = (SUB_DATA as Record<string, string[]>)[cat.name] || [];
-    for (const subName of subNames) {
-      const sub = await prisma.subcategory.create({
-        data: {
-          id: randomUUID(),
-          name: subName,
-          categoryId: created.id
-        }
-      });
+      for (const subName of catConfig.subcategories) {
+        const sub = await prisma.subcategory.create({
+          data: {
+            id: randomUUID(),
+            name: subName,
+            categoryId: createdCat.id
+          }
+        });
 
-      const st = await prisma.servicetype.create({
-        data: {
-          id: randomUUID(),
-          name: `${subName} Service`,
-          subcategoryId: sub.id,
-          description: `Professional ${subName} services for your event.`
-        }
-      });
-      serviceTypeMap[subName] = st;
+        const st = await prisma.servicetype.create({
+          data: {
+            id: randomUUID(),
+            name: `${subName} Service`,
+            subcategoryId: sub.id,
+            description: `Professional ${subName} services for your ${etConfig.eventTypeName}.`
+          }
+        });
+        serviceTypeMap[catConfig.name].push(st.id);
+      }
     }
   }
 
@@ -252,8 +289,10 @@ async function main() {
         }
       });
 
-      const subNames = (SUB_DATA as Record<string, string[]>)[catName] || [];
-      const subName = getRandom(subNames);
+      const stIds = serviceTypeMap[catName] || [];
+      if (stIds.length === 0) continue;
+
+      const serviceTypeId = getRandom(stIds);
       const serviceId = randomUUID();
       const basePrice = (BASE_PRICES as Record<string, number>)[catName];
 
@@ -261,9 +300,9 @@ async function main() {
         data: {
           id: serviceId,
           vendorProfileId: vendorProfile.id,
-          serviceTypeId: serviceTypeMap[subName].id,
-          title: `${subName} - Professional Service`,
-          description: `Elite ${subName} by ${businessName}.`,
+          serviceTypeId: serviceTypeId,
+          title: `${catName} - Professional Service`,
+          description: `Elite ${catName} by ${businessName}.`,
           pricingType: catName === "Catering" ? "PER_GUEST" : "PACKAGE",
           basePrice: basePrice,
           updatedAt: new Date(),
@@ -341,7 +380,7 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
+  .catch((e: any) => {
     console.error(e);
     process.exit(1);
   })

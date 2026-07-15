@@ -41,7 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const firstItem = booking.bookingitem[0];
     const categoryId = firstItem?.service.servicetype.subcategory.categoryId;
 
-    const rate = await getCommissionRate(booking.vendorId, categoryId);
+    const rate = await getCommissionRate(booking.vendorId!, categoryId!);
     const revenue = await calculateRevenue(booking.totalAmount, rate);
 
     // Update Wallet and create transactions in a transaction
@@ -121,7 +121,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await tx.payout.create({
         data: {
           id: crypto.randomUUID(),
-          vendorId: booking.vendorId,
+          vendorId: booking.vendorId!,
           amount: revenue.vendorPayout,
           status: 'RELEASED',
           processedAt: new Date()

@@ -51,5 +51,5 @@ export async function POST(_req: Request) {
     response.cookies.set("accessToken", newAccessToken, { ...cookieOptions, maxAge: 15 * 60 });
 
     return response;
-  });
+  }, _req);
 }

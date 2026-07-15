@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMarketplaceVendors } from "@/lib/marketplace";
+import { auth } from "@/lib/auth";
+import { SearchIntelligenceService } from "@/services/server/search-intelligence.service";
 
 export async function GET(req: Request) {
   try {
@@ -19,6 +21,15 @@ export async function GET(req: Request) {
     };
 
     const { vendors } = await getMarketplaceVendors(filters);
+
+    // Track search intelligence
+    const session = await auth();
+    await SearchIntelligenceService.trackSearch(
+      filters.query || "",
+      session?.user?.id,
+      filters,
+      vendors.length
+    );
 
     return NextResponse.json(vendors);
   } catch (error: any) {

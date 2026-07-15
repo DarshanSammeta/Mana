@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(payouts);
-  });
+  }, req);
 }
 
 // Release/Process Payout
@@ -107,5 +107,5 @@ export async function PATCH(req: Request) {
     logger.info("Payout updated by admin", { adminId: admin.userId, payoutId, status });
 
     return NextResponse.json(updatedPayout);
-  });
+  }, req);
 }

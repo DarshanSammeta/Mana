@@ -14,11 +14,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Rough bounding box calculation (approximate)
+    const latDelta = radius / 111;
+    const lngDelta = radius / (111 * Math.cos(lat * (Math.PI / 180)));
+
     const vendors = await prisma.vendorprofile.findMany({
       where: {
         verificationStatus: 'APPROVED',
-        latitude: { not: null },
-        longitude: { not: null },
+        latitude: {
+          gte: lat - latDelta,
+          lte: lat + latDelta
+        },
+        longitude: {
+          gte: lng - lngDelta,
+          lte: lng + lngDelta
+        },
         ...(category || subcategory ? {
           service: {
             some: {

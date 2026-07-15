@@ -46,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
 
       const allApproved = allDocs.every(d => d.status === "APPROVED");
-      const requiredTypes = ["AADHAAR", "PAN", "BUSINESS_LICENSE"];
+      const requiredTypes = ["AADHAAR", "PAN"]; // GST is optional in onboarding
       const hasAllRequired = requiredTypes.every(type => allDocs.some(d => d.type === type && d.status === "APPROVED"));
 
       if (allApproved && hasAllRequired) {
@@ -67,5 +67,5 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     logger.info("Vendor document status updated by admin", { adminId: admin.userId, documentId: id, status });
 
     return NextResponse.json(document);
-  });
+  }, req);
 }

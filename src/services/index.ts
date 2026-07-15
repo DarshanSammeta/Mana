@@ -1,10 +1,10 @@
-export * from "./vendor.service";
-export * from "./auth.service";
-export * from "./customer.service";
-export * from "./booking.service";
-export * from "./marketplace.service";
-export * from "./chat.service";
-export * from "./notification.service";
-export * from "./review.service";
-export * from "./admin.service";
-export * from "./maps.service";
+/**
+ * DO NOT ADD EXPORTS HERE.
+ *
+ * This file is deprecated to prevent Client Components from accidentally
+ * importing server-only code.
+ *
+ * - For Client Components: Import from "@/services/client"
+ * - For Server Components/API: Import from "@/services/server"
+ */
+export {};

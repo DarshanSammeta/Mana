@@ -14,7 +14,7 @@ import {
   Settings,
   RefreshCw
 } from "lucide-react";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import { toast } from "react-hot-toast";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, GlassCard } from "@/components/ui/card";

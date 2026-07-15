@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { XCircle, RefreshCcw, Headphones } from "lucide-react";
-import Navbar from "@/components/common/Navbar";
 
 function FailedContent() {
   const searchParams = useSearchParams();
@@ -13,7 +12,6 @@ function FailedContent() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
       <main className="max-w-2xl mx-auto px-4 py-20">
         <div className="text-center">
           <div className="mb-10 flex justify-center">

@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
+import { booking_status } from "@prisma/client";
+
 export async function getCustomerStats(userId: string) {
   try {
     // Parallelize all independent Prisma calls
@@ -9,15 +11,15 @@ export async function getCustomerStats(userId: string) {
           customerId: userId,
           status: {
             in: [
-              'PENDING',
-              'ACCEPTED',
-              'CONFIRMED',
-              'VENDOR_ASSIGNED',
-              'VENDOR_TRAVELING',
-              'VENDOR_ARRIVED',
-              'OTP_VERIFICATION_PENDING',
-              'EVENT_STARTED',
-              'EVENT_ONGOING'
+              booking_status.PENDING,
+              booking_status.QUOTE_ACCEPTED,
+              booking_status.CONFIRMED,
+              booking_status.VENDOR_ASSIGNED,
+              booking_status.VENDOR_TRAVELING,
+              booking_status.VENDOR_ARRIVED,
+              booking_status.OTP_VERIFICATION_PENDING,
+              booking_status.EVENT_STARTED,
+              booking_status.EVENT_ONGOING
             ]
           }
         }
@@ -65,8 +67,8 @@ export async function getCustomerStats(userId: string) {
       recentBookings: recentBookings.map(b => ({
         id: b.id,
         bookingNumber: b.bookingNumber,
-        vendorName: b.vendorprofile.businessName,
-        vendorLogo: b.vendorprofile.logo,
+        vendorName: b.vendorprofile?.businessName || "Unknown Vendor",
+        vendorLogo: b.vendorprofile?.logo || null,
         eventDate: b.eventDate.toISOString(), // Ensure ISO string for serialization
         status: b.status,
         totalAmount: Number(b.totalAmount),

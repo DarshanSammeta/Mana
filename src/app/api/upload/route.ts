@@ -4,8 +4,6 @@ import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
 
-const cloudinary = getCloudinary();
-
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
     const token = req.headers.get("authorization")?.split(" ")[1];
@@ -50,6 +48,12 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    const cloudinary = getCloudinary();
+    if (!cloudinary) {
+        logger.error("Cloudinary instance not available in API route");
+        return NextResponse.json({ message: "Upload service unavailable" }, { status: 503 });
+    }
+
     const result = await new Promise((resolve, reject) => {
       cloudinary.uploader.upload_stream({
         resource_type: "auto",
@@ -67,5 +71,5 @@ export async function POST(req: Request) {
     logger.info("File upload successful", { userId: payload.userId, publicId: (result as any).public_id });
 
     return NextResponse.json(result);
-  });
+  }, req);
 }

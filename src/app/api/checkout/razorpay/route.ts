@@ -14,6 +14,10 @@ export async function POST(req: Request) {
 
     const { amount, bookingId, currency = "INR" } = await req.json();
     const razorpay = getRazorpay();
+    if (!razorpay) {
+        logger.error("Razorpay instance not available in API route");
+        return NextResponse.json({ message: "Payment service unavailable" }, { status: 503 });
+    }
 
     const options = {
       amount: Math.round(amount * 100), // Razorpay expects amount in paise
@@ -28,5 +32,5 @@ export async function POST(req: Request) {
     const order = await razorpay.orders.create(options);
     logger.info("Razorpay order created", { orderId: order.id, userId: payload.userId, bookingId });
     return NextResponse.json(order);
-  });
+  }, req);
 }

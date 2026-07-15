@@ -14,6 +14,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/register") ||
     pathname.startsWith("/marketplace") ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/health") ||
     pathname.startsWith("/api/socket") ||
     pathname.startsWith("/api/marketplace") ||
     pathname.startsWith("/api/categories") ||
@@ -89,12 +90,16 @@ export async function middleware(req: NextRequest) {
 
   const response = NextResponse.next();
 
+  // Add Request ID for tracing
+  const requestId = crypto.randomUUID();
+  response.headers.set("x-request-id", requestId);
+
   // Add Security Headers and Cache Control
   response.headers.set("Cache-Control", "no-store, max-age=0, must-revalidate");
   response.headers.set("Pragma", "no-cache");
   response.headers.set("Expires", "0");
 
-  response.headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://res.cloudinary.com https://images.unsplash.com https://picsum.photos https://maps.gstatic.com https://maps.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; connect-src 'self' ws: wss: https://api.razorpay.com https://maps.googleapis.com;");
+  response.headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://picsum.photos https://maps.gstatic.com https://maps.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; connect-src 'self' ws: wss: https://api.razorpay.com https://maps.googleapis.com;");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

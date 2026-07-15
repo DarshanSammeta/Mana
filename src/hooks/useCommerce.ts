@@ -5,7 +5,9 @@ import { useCommerceStore } from "@/store/commerceStore";
 import { toast } from "@/components/ui/use-toast";
 
 export const useWishlist = () => {
-  const { accessToken, user } = useAuthStore();
+  const accessToken = useAuthStore(state => state.accessToken);
+  const user = useAuthStore(state => state.user);
+  const isInitialized = useAuthStore(state => state.isInitialized);
   const setWishlistStore = useCommerceStore((state) => state.setWishlist);
 
   return useQuery({
@@ -19,7 +21,7 @@ export const useWishlist = () => {
       setWishlistStore(items);
       return res.data;
     },
-    enabled: !!accessToken && !!user,
+    enabled: isInitialized && !!accessToken && !!user,
   });
 };
 
@@ -62,7 +64,9 @@ export const useToggleWishlist = () => {
 };
 
 export const useCart = () => {
-  const { accessToken, user } = useAuthStore();
+  const accessToken = useAuthStore(state => state.accessToken);
+  const user = useAuthStore(state => state.user);
+  const isInitialized = useAuthStore(state => state.isInitialized);
   const setCartStore = useCommerceStore((state) => state.setCart);
 
   return useQuery({
@@ -73,7 +77,7 @@ export const useCart = () => {
       setCartStore(items);
       return res.data;
     },
-    enabled: !!accessToken && !!user,
+    enabled: isInitialized && !!accessToken && !!user,
   });
 };
 

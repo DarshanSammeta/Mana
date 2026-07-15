@@ -3,7 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getAuthPayload } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
 
+import logger from "@/lib/logger";
+
 export async function POST(req: Request) {
+  const startTime = process.hrtime();
   return withErrorHandler(async () => {
     const payload = await getAuthPayload(req);
     if (!payload) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -34,29 +37,36 @@ export async function POST(req: Request) {
       }
     });
 
+    let action = "added";
     if (existingItem) {
       await prisma.wishlistitem.delete({ where: { id: existingItem.id } });
-      return NextResponse.json({ message: "Removed from wishlist", action: "removed" });
+      action = "removed";
+    } else {
+      await prisma.wishlistitem.create({
+        data: {
+          id: crypto.randomUUID(),
+          wishlistId: wishlist.id,
+          type,
+          targetId
+        }
+      });
     }
 
-    const item = await prisma.wishlistitem.create({
-      data: {
-        id: crypto.randomUUID(),
-        wishlistId: wishlist.id,
-        type,
-        targetId
-      }
-    });
+    const endTime = process.hrtime(startTime);
+    const duration = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2);
+    logger.info(`Wishlist POST API Performance (${action}): ${duration}ms`);
 
-    return NextResponse.json({ ...item, action: "added" }, { status: 201 });
-  });
+    return NextResponse.json({ message: action === "added" ? "Added to wishlist" : "Removed from wishlist", action });
+  }, req);
 }
 
 export async function GET(req: Request) {
+  const startTime = process.hrtime();
   return withErrorHandler(async () => {
     const payload = await getAuthPayload(req);
     if (!payload) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
+    const dbStartTime = process.hrtime();
     const wishlist = await prisma.wishlist.findUnique({
       where: { userId: payload.userId },
       select: {
@@ -73,7 +83,14 @@ export async function GET(req: Request) {
       }
     });
 
-    if (!wishlist) return NextResponse.json({ items: [] });
+    if (!wishlist) {
+      const dbEndTime = process.hrtime(dbStartTime);
+      const dbDuration = (dbEndTime[0] * 1000 + dbEndTime[1] / 1000000).toFixed(2);
+      const endTime = process.hrtime(startTime);
+      const duration = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2);
+      logger.info(`Wishlist GET API Performance (Empty): ${duration}ms (DB: ${dbDuration}ms)`);
+      return NextResponse.json({ items: [] });
+    }
 
     const vendorIds = wishlist.wishlistitem.filter(i => i.type === "VENDOR").map(i => i.targetId);
     const serviceIds = wishlist.wishlistitem.filter(i => i.type === "SERVICE").map(i => i.targetId);
@@ -126,6 +143,8 @@ export async function GET(req: Request) {
         }
       }) : []
     ]);
+    const dbEndTime = process.hrtime(dbStartTime);
+    const dbDuration = (dbEndTime[0] * 1000 + dbEndTime[1] / 1000000).toFixed(2);
 
     const itemsWithDetails = wishlist.wishlistitem.map(item => {
       let details = null;
@@ -139,6 +158,11 @@ export async function GET(req: Request) {
       return { ...item, details };
     });
 
+    const endTime = process.hrtime(startTime);
+    const duration = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2);
+    logger.info(`Wishlist GET API Performance: ${duration}ms (DB: ${dbDuration}ms)`);
+
     return NextResponse.json({ ...wishlist, items: itemsWithDetails });
-  });
+  }, req);
 }
+

@@ -30,5 +30,5 @@ export async function POST(_req: Request) {
     response.cookies.set("refreshToken", "", cookieOptions);
 
     return response;
-  });
+  }, _req);
 }

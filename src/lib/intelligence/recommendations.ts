@@ -108,24 +108,28 @@ export async function getPersonalizedRecommendations(userId: string, limit: numb
   // Logic: Based on user's past bookings or recently viewed
   const userBookings = await prisma.booking.findMany({
     where: { customerId: userId },
-    include: {
-        bookingitem: {
-            include: {
-                service: {
-                    include: {
-                        servicetype: {
-                            include: {
-                                subcategory: {
-                                    include: {
-                                        category: true
-                                    }
-                                }
-                            }
+    select: {
+      bookingitem: {
+        select: {
+          service: {
+            select: {
+              servicetype: {
+                select: {
+                  subcategory: {
+                    select: {
+                      category: {
+                        select: {
+                          id: true
                         }
+                      }
                     }
+                  }
                 }
+              }
             }
+          }
         }
+      }
     },
     orderBy: { createdAt: 'desc' },
     take: 5
@@ -143,8 +147,9 @@ export async function getPersonalizedRecommendations(userId: string, limit: numb
   const categoryIds = new Set<string>();
   userBookings.forEach(b => {
     b.bookingitem.forEach(item => {
-        if (item.service.servicetype.subcategory.category.id) {
-            categoryIds.add(item.service.servicetype.subcategory.category.id);
+        const catId = item.service.servicetype.subcategory.category.id;
+        if (catId) {
+            categoryIds.add(catId);
         }
     });
   });

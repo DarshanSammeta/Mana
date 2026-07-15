@@ -5,15 +5,27 @@ import { sendSMS } from "@/lib/sms/twilio";
 import logger from "@/lib/logger";
 import { withErrorHandler } from "@/lib/error-handler";
 
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { AUTH_LIMITS } from "@/config/auth-limits";
+
 // POST /api/bookings/[id]/otp/verification - Request OTP
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
     const { id } = await params;
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
     const payload = verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
+    // Rate limit booking OTP requests
+    const identifier = `booking-otp-send:${ip}:${payload.userId}:${id}`;
+    const rateLimitResult = await rateLimit(identifier, AUTH_LIMITS.BOOKING_OTP);
+
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult, "Too many OTP requests for this booking.");
+    }
 
     logger.info("Requesting booking verification OTP", { bookingId: id, userId: payload.userId });
 
@@ -65,12 +77,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
     const { id } = await params;
-    const { otp } = await req.json();
+    const body = await req.json();
+    const { otp } = body;
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
     const payload = verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
+    // Rate limit booking OTP verification
+    const identifier = `booking-otp-verify:${ip}:${payload.userId}:${id}`;
+    const rateLimitResult = await rateLimit(identifier, AUTH_LIMITS.BOOKING_VERIFY);
+
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult, "Too many verification attempts.");
+    }
 
     logger.info("Verifying booking verification OTP", { bookingId: id, userId: payload.userId });
 

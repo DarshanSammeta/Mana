@@ -6,6 +6,7 @@ import { RAZORPAY_CONFIG } from "@/config/razorpay";
 let razorpayInstance: Razorpay | null = null;
 
 export const getRazorpay = () => {
+  if (typeof window !== "undefined") return null;
   if (razorpayInstance) return razorpayInstance;
 
   const key_id = RAZORPAY_CONFIG.keyId;
@@ -37,6 +38,7 @@ export const verifyWebhookSignature = (
 
 export const razorpayReconcile = async (orderId: string) => {
   const razorpay = getRazorpay();
+  if (!razorpay) throw new Error("Razorpay instance not available");
   try {
     const order = await razorpay.orders.fetch(orderId);
     const payments = await razorpay.orders.fetchPayments(orderId);

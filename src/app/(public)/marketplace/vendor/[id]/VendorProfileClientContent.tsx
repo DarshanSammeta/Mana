@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, memo } from "react";
-import Navbar from "@/components/common/Navbar";
 import {
   Star, MapPin, ShieldCheck, Heart,
   Trophy,
@@ -23,13 +22,9 @@ import { optimizeImage } from "@/lib/cloudinary";
 function VendorProfileClientContent({
   vendor,
   similarVendors,
-  initialEventTypes,
-  initialCategories
 }: {
   vendor: any,
   similarVendors: any[],
-  initialEventTypes: any[],
-  initialCategories: any[]
 }) {
   const [isMounted, setIsMounted] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -78,7 +73,6 @@ function VendorProfileClientContent({
 
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans text-slate-600">
-      <Navbar initialEventTypes={initialEventTypes} initialCategories={initialCategories} />
 
       {/* Breadcrumbs */}
       <nav className="bg-slate-50 px-4 py-4 text-[12px] text-slate-400 border-b border-slate-100 hidden sm:block">

@@ -4,6 +4,7 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { resourceFromAttributes } from '@opentelemetry/resources';
+import { logAuthLimits } from '@/config/auth-limits';
 
 const sdk = new NodeSDK({
   resource: resourceFromAttributes({
@@ -32,6 +33,9 @@ const sdk = new NodeSDK({
 
 if (process.env.NEXT_RUNTIME === 'nodejs') {
   sdk.start();
+
+  // Log auth rate limits on startup
+  logAuthLimits();
 
   process.on('SIGTERM', () => {
     sdk.shutdown()

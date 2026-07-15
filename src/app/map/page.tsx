@@ -3,10 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 import { useQuery } from '@tanstack/react-query';
-import { vendorService } from '@/services/vendor.service';
+import { vendorService } from '@/services/client/vendor.service';
+import { formatRating, formatDistance } from '@/lib/utils';
 import { Star, MapPin, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { MAPS_CONFIG } from '@/config/maps';
+import ErrorBoundary from '@/components/common/ErrorBoundary';
 
 const mapContainerStyle = {
   width: '100%',
@@ -18,7 +20,15 @@ const defaultCenter = {
   lng: 77.5946,
 };
 
-export default function GlobalMapPage() {
+const mapStyles = [
+  {
+    "featureType": "poi",
+    "elementType": "labels",
+    "stylers": [{ "visibility": "off" }]
+  }
+];
+
+function MapContent() {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: MAPS_CONFIG.apiKey || '',
@@ -28,9 +38,16 @@ export default function GlobalMapPage() {
   const [selectedVendor, setSelectedVendor] = useState<any>(null);
 
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition((pos) => {
-      setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-    });
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (error) => {
+        console.error("[MAP] Geolocation failed:", error.message);
+      }
+    );
   }, []);
 
   const { data: vendors } = useQuery({
@@ -74,9 +91,9 @@ export default function GlobalMapPage() {
               <h3 className="font-bold text-sm">{selectedVendor.businessName}</h3>
               <div className="flex items-center gap-1 mt-1">
                 <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-medium">{selectedVendor.rating.toFixed(1)}</span>
+                <span className="text-xs font-medium">{formatRating(selectedVendor.rating)}</span>
                 <span className="text-[10px] text-muted-foreground ml-1">
-                  ({selectedVendor.distance.toFixed(1)} km)
+                  ({formatDistance(selectedVendor.distance)})
                 </span>
               </div>
               <p className="text-[10px] text-muted-foreground mt-2 line-clamp-2">
@@ -109,10 +126,10 @@ export default function GlobalMapPage() {
   );
 }
 
-const mapStyles = [
-  {
-    "featureType": "poi",
-    "elementType": "labels",
-    "stylers": [{ "visibility": "off" }]
-  }
-];
+export default function GlobalMapPage() {
+  return (
+    <ErrorBoundary name="Maps">
+      <MapContent />
+    </ErrorBoundary>
+  );
+}

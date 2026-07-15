@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
-import { customerService } from "@/services/customer.service";
+import { customerService } from "@/services/client";
 import { toast } from "react-hot-toast";
 
 export default function WishlistPage() {

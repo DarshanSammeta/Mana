@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import CustomerDashboardClient from "./CustomerDashboardClient";
 import { Suspense } from "react";
 import CustomerDashboardSkeleton from "@/components/customer/CustomerDashboardSkeleton";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 export default async function CustomerDashboardPage() {
   const payload = await getAuthPayload();
@@ -13,9 +14,11 @@ export default async function CustomerDashboardPage() {
   }
 
   return (
-    <Suspense fallback={<CustomerDashboardSkeleton />}>
-      <CustomerDashboardDataWrapper userId={payload.userId} />
-    </Suspense>
+    <ErrorBoundary name="Customer Dashboard">
+      <Suspense fallback={<CustomerDashboardSkeleton />}>
+        <CustomerDashboardDataWrapper userId={payload.userId} />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

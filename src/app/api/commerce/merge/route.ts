@@ -10,10 +10,24 @@ export async function POST(req: Request) {
   if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
-    const { cartItems, wishlistItems } = await req.json();
+    const text = await req.text();
+
+    if (!text || text.trim().length === 0) {
+      return NextResponse.json({ message: "Empty request body" }, { status: 400 });
+    }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error("[Merge API] JSON parse error:", e);
+      return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
+    }
+
+    const { cartItems, wishlistItems } = data;
 
     // 1. Merge Cart
-    if (cartItems && cartItems.length > 0) {
+    if (cartItems && Array.isArray(cartItems) && cartItems.length > 0) {
       let cart = await prisma.cart.findUnique({
         where: { userId: payload.userId }
       });
@@ -54,7 +68,7 @@ export async function POST(req: Request) {
     }
 
     // 2. Merge Wishlist
-    if (wishlistItems && wishlistItems.length > 0) {
+    if (wishlistItems && Array.isArray(wishlistItems) && wishlistItems.length > 0) {
       let wishlist = await prisma.wishlist.findUnique({
         where: { userId: payload.userId }
       });
@@ -72,7 +86,7 @@ export async function POST(req: Request) {
       for (const item of wishlistItems) {
         // Handle wishlistItems which might be an array of strings (IDs) or objects
         const targetId = typeof item === "string" ? item : item.targetId;
-        const type = typeof item === "string" ? "SERVICE" : item.type; // Default to SERVICE if just ID
+        const type = typeof item === "string" ? "SERVICE" : item.type;
 
         await prisma.wishlistitem.upsert({
           where: {

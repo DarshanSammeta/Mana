@@ -25,7 +25,7 @@ import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { customerService } from "@/services/customer.service";
+import { customerService } from "@/services/client";
 import { toast } from "react-hot-toast";
 
 import { formatCurrency, formatDate } from "@/utils/format";
@@ -49,9 +49,13 @@ export default function BookingsPage() {
       const data = await customerService.getBookings({
         status: activeTab === "ALL" ? undefined : activeTab
       });
-      setBookings(data);
-    } catch {
+      // Ensure data is an array, handling various potential wrapper structures
+      const bookingsData = Array.isArray(data) ? data : (data?.bookings || data?.items || data?.data || []);
+      setBookings(bookingsData);
+    } catch (error) {
+      console.error("Fetch bookings error:", error);
       toast.error("Failed to load bookings");
+      setBookings([]);
     } finally {
       setLoading(false);
     }
@@ -78,7 +82,7 @@ export default function BookingsPage() {
 
   const filteredBookings = bookings.filter(b =>
     b.bookingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.vendorprofile.businessName.toLowerCase().includes(searchTerm.toLowerCase())
+    b.vendorprofile?.businessName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -177,10 +181,10 @@ export default function BookingsPage() {
                 {/* Booking Content */}
                 <div className="p-8 flex flex-col md:flex-row gap-8">
                   <div className="h-28 w-28 bg-slate-50 rounded-2xl flex items-center justify-center shrink-0 border border-slate-100 group-hover:border-primary/20 transition-all overflow-hidden shadow-inner relative">
-                    {booking.vendorprofile.logo ? (
+                    {booking.vendorprofile?.logo ? (
                       <Image
                         src={booking.vendorprofile.logo}
-                        alt={booking.vendorprofile.businessName}
+                        alt={booking.vendorprofile.businessName || 'Vendor'}
                         fill
                         className="h-full w-full object-cover transition-transform group-hover:scale-110"
                         sizes="112px"
@@ -194,7 +198,7 @@ export default function BookingsPage() {
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
                       <div className="space-y-4">
                         <div>
-                          <h3 className="text-2xl font-black text-slate-900 group-hover:text-primary transition-colors tracking-tight">{booking.vendorprofile.businessName}</h3>
+                          <h3 className="text-2xl font-black text-slate-900 group-hover:text-primary transition-colors tracking-tight">{booking.vendorprofile?.businessName || 'Vendor Profile Pending'}</h3>
                           <p className="text-sm text-slate-500 font-bold mt-1.5 flex items-center gap-2">
                             <span className="h-1.5 w-1.5 rounded-full bg-primary/40"></span>
                             {booking.bookingitem.map((it: any) => it.service.title).join(", ")}

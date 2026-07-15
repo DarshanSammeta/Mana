@@ -8,6 +8,7 @@ export interface User {
   role: UserRole;
   profileImage?: string;
   isEmailVerified: boolean;
+  verificationStatus?: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
   createdAt: Date;
   updatedAt: Date;
 }

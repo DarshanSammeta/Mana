@@ -33,7 +33,7 @@ export async function GET(req: Request) {
       }
     });
     return NextResponse.json(users);
-  });
+  }, req);
 }
 
 export async function PATCH(req: Request) {
@@ -63,5 +63,5 @@ export async function PATCH(req: Request) {
     logger.info("User updated by admin", { adminId: admin.userId, targetUserId: id, updates: data });
 
     return NextResponse.json(updatedUser);
-  });
+  }, req);
 }

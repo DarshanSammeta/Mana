@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
+import { verifyAccessToken } from "@/lib/auth";
+import { withErrorHandler } from "@/lib/error-handler";
+import { createAuditLog } from "@/lib/audit";
 
 export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    if (!userId) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
-      where: { userId },
+      where: { userId: payload.userId },
     });
 
     if (!vendorProfile) {
@@ -25,21 +29,27 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(payouts);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }
 
 export async function POST(req: Request) {
-  try {
-    const { userId, amount, bankDetails } = await req.json();
+  return withErrorHandler(async () => {
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    if (!userId || !amount) {
-      return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
+    const payload = verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    const { amount, bankDetails } = await req.json();
+
+    if (!amount) {
+      return NextResponse.json({ message: "Amount is required" }, { status: 400 });
     }
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
-      where: { userId },
+      where: { userId: payload.userId },
       include: {
         user: {
           include: {
@@ -100,8 +110,12 @@ export async function POST(req: Request) {
       return p;
     });
 
+    await createAuditLog({
+      userId: payload.userId,
+      action: "PAYOUT_REQUEST_CREATED",
+      details: { payoutId: payout.id, amount: withdrawalAmount },
+    });
+
     return NextResponse.json(payout);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
+  });
 }

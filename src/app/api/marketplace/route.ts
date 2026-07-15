@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { getMarketplaceVendors } from "@/lib/marketplace";
 import { withErrorHandler } from "@/lib/error-handler";
 
+import logger from "@/lib/logger";
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const startTime = process.hrtime();
   return withErrorHandler(async () => {
     const { searchParams } = new URL(req.url);
     const filters = {
@@ -24,6 +27,10 @@ export async function GET(req: Request) {
 
     const result = await getMarketplaceVendors(filters);
 
+    const endTime = process.hrtime(startTime);
+    const duration = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2);
+    logger.info(`Marketplace API Performance: ${duration}ms`, { filters });
+
     return NextResponse.json({
       vendors: result.vendors,
       pagination: {
@@ -33,5 +40,6 @@ export async function GET(req: Request) {
         totalPages: result.totalPages
       }
     });
-  });
+  }, req);
 }
+

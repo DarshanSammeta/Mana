@@ -9,7 +9,7 @@ datasource db {
 }
 
 model activitylog {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String
   action    String
   details   String?
@@ -20,7 +20,7 @@ model activitylog {
 }
 
 model auditlog {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String?
   action    String
   details   Json?
@@ -32,7 +32,7 @@ model auditlog {
 }
 
 model availability {
-  id                String        @id
+  id                String        @id @default(cuid())
   vendorProfileId   String
   date              DateTime
   isAvailable       Boolean       @default(true)
@@ -47,11 +47,11 @@ model availability {
 }
 
 model booking {
-  id                  String              @id
-  bookingNumber       String              @unique(map: "Booking_bookingNumber_key")
+  id                  String               @id @default(cuid())
+  bookingNumber       String               @unique(map: "Booking_bookingNumber_key")
   customerId          String
-  vendorId            String
-  status              booking_status      @default(PENDING)
+  vendorId            String?
+  status              booking_status       @default(PENDING)
   eventName           String?
   eventType           String?
   eventDescription    String?
@@ -59,13 +59,13 @@ model booking {
   city                String?
   state               String?
   pincode             String?
-  commissionRate      Decimal             @default(10.00) @db.Decimal(5, 2)
-  commissionAmount    Decimal             @default(0.00) @db.Decimal(10, 2)
-  vendorPayout        Decimal             @default(0.00) @db.Decimal(10, 2)
-  taxAmount           Decimal             @default(0.00) @db.Decimal(10, 2)
-  discountAmount      Decimal             @default(0.00) @db.Decimal(10, 2)
-  subTotal            Decimal             @default(0.00) @db.Decimal(10, 2)
-  totalAmount         Decimal             @db.Decimal(10, 2)
+  commissionRate      Decimal              @default(10.00) @db.Decimal(5, 2)
+  commissionAmount    Decimal              @default(0.00) @db.Decimal(10, 2)
+  vendorPayout        Decimal              @default(0.00) @db.Decimal(10, 2)
+  taxAmount           Decimal              @default(0.00) @db.Decimal(10, 2)
+  discountAmount      Decimal              @default(0.00) @db.Decimal(10, 2)
+  subTotal            Decimal              @default(0.00) @db.Decimal(10, 2)
+  totalAmount         Decimal              @db.Decimal(10, 2)
   couponId            String?
   eventDate           DateTime
   eventTime           String?
@@ -75,14 +75,14 @@ model booking {
   guestCount          Int
   specialInstructions String?
   otp                 String?
-  idempotencyKey      String?             @unique
+  idempotencyKey      String?              @unique
   vendorConfirmedAt5d Boolean?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   checklist           Json?
-  coupon              coupon?             @relation(fields: [couponId], references: [id], map: "Booking_couponId_fkey")
-  user                user                @relation(fields: [customerId], references: [id], map: "Booking_customerId_fkey")
-  vendorprofile       vendorprofile       @relation(fields: [vendorId], references: [id], map: "Booking_vendorId_fkey")
+  coupon              coupon?              @relation(fields: [couponId], references: [id], map: "Booking_couponId_fkey")
+  user                user                 @relation(fields: [customerId], references: [id], map: "Booking_customerId_fkey")
+  vendorprofile       vendorprofile?        @relation(fields: [vendorId], references: [id], map: "Booking_vendorId_fkey")
   bookingassignment   bookingassignment[]
   bookingitem         bookingitem[]
   bookingstatuslog    bookingstatuslog[]
@@ -96,6 +96,8 @@ model booking {
   refund              refund?
   review              review?
   staff               staff[]
+  cancellation_record cancellation_record?
+  vendor_penalty      vendor_penalty[]
 
   @@index([couponId], map: "Booking_couponId_idx")
   @@index([customerId], map: "Booking_customerId_idx")
@@ -106,7 +108,7 @@ model booking {
 }
 
 model bookingassignment {
-  id            String                   @id
+  id            String                   @id @default(cuid())
   bookingId     String
   vendorId      String
   status        bookingassignment_status @default(PENDING)
@@ -123,7 +125,7 @@ model bookingassignment {
 }
 
 model bookingitem {
-  id             String          @id
+  id             String          @id @default(cuid())
   bookingId      String
   serviceId      String
   packageId      String?
@@ -139,7 +141,7 @@ model bookingitem {
 }
 
 model bookingstatuslog {
-  id        String                  @id
+  id        String                  @id @default(cuid())
   bookingId String
   status    bookingstatuslog_status
   notes     String?
@@ -150,7 +152,7 @@ model bookingstatuslog {
 }
 
 model staff {
-  id        String   @id
+  id        String   @id @default(cuid())
   bookingId String
   name      String
   role      String
@@ -164,7 +166,7 @@ model staff {
 }
 
 model cart {
-  id        String     @id
+  id        String     @id @default(cuid())
   userId    String     @unique(map: "Cart_userId_key")
   createdAt DateTime   @default(now())
   updatedAt DateTime
@@ -173,7 +175,7 @@ model cart {
 }
 
 model cartitem {
-  id        String   @id
+  id        String   @id @default(cuid())
   cartId    String
   type      String
   targetId  String
@@ -186,7 +188,7 @@ model cartitem {
 }
 
 model eventtype {
-  id          String     @id
+  id          String     @id @default(cuid())
   name        String     @unique
   description String?
   image       String?
@@ -194,22 +196,28 @@ model eventtype {
   isActive    Boolean    @default(true)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-  categories  category[] @relation("EventTypeToCategory")
+  categories  category[]
+
+  @@index([isActive])
 }
 
 model category {
-  id             String        @id
-  name           String        @unique(map: "Category_name_key")
+  id             String        @id @default(cuid())
+  name           String
   description    String?
   icon           String?
   image          String?
   commissionRate Decimal?      @db.Decimal(5, 2)
+  eventTypeId    String
+  eventtype      eventtype     @relation(fields: [eventTypeId], references: [id])
   subcategory    subcategory[]
-  eventtypes     eventtype[]   @relation("EventTypeToCategory")
+
+  @@unique([name, eventTypeId])
+  @@index([eventTypeId])
 }
 
 model conversation {
-  id                      String                    @id
+  id                      String                    @id @default(cuid())
   bookingId               String?                   @unique(map: "Conversation_bookingId_key")
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime
@@ -219,7 +227,7 @@ model conversation {
 }
 
 model conversationparticipant {
-  id             String       @id
+  id             String       @id @default(cuid())
   conversationId String
   userId         String
   lastReadAt     DateTime     @default(now())
@@ -231,18 +239,78 @@ model conversationparticipant {
 }
 
 model coupon {
-  id               String    @id
-  code             String    @unique(map: "Coupon_code_key")
-  discountType     String
-  discountValue    Decimal   @db.Decimal(10, 2)
-  minBookingAmount Decimal?  @db.Decimal(10, 2)
-  expiryDate       DateTime
-  isActive         Boolean   @default(true)
-  booking          booking[]
+  id                 String              @id @default(cuid())
+  code               String              @unique(map: "Coupon_code_key")
+  discountType       String // FLAT, PERCENTAGE
+  discountValue      Decimal             @db.Decimal(10, 2)
+  maxDiscount        Decimal?            @db.Decimal(10, 2)
+  minBookingAmount   Decimal?            @db.Decimal(10, 2)
+  usageLimit         Int                 @default(1)
+  usedCount          Int                 @default(0)
+  expiryDate         DateTime
+  isActive           Boolean             @default(true)
+  isFirstBooking     Boolean             @default(false)
+  stackable          Boolean             @default(false)
+  campaignId         String?
+  categoryRestrict   String? // Category ID
+  vendorRestrict     String? // Vendor ID
+  marketing_campaign marketing_campaign? @relation(fields: [campaignId], references: [id])
+  booking            booking[]
+}
+
+model recently_viewed {
+  id        String        @id @default(cuid())
+  userId    String
+  vendorId  String
+  serviceId String?
+  timestamp DateTime      @default(now())
+  user      user          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendor    vendorprofile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([timestamp])
+}
+
+model saved_search {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String?
+  filters   Json
+  query     String?
+  createdAt DateTime @default(now())
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model referral {
+  id           String   @id @default(cuid())
+  referrerId   String
+  referredId   String   @unique
+  code         String
+  status       String   @default("PENDING") // PENDING, SIGNUP, BOOKING_COMPLETED
+  rewardPoints Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  referrer     user     @relation("Referrer", fields: [referrerId], references: [id])
+  referred     user     @relation("Referred", fields: [referredId], references: [id])
+}
+
+model loyalty_transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  points      Int
+  type        String // EARNED, REDEEMED, EXPIRED
+  reason      String // BOOKING, REVIEW, REFERRAL, PROMOTION
+  referenceId String? // ID of booking, review etc
+  createdAt   DateTime @default(now())
+  user        user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model dispute {
-  id          String         @id
+  id          String         @id @default(cuid())
   bookingId   String         @unique(map: "Dispute_bookingId_key")
   raisedBy    String
   reason      String
@@ -256,7 +324,7 @@ model dispute {
 }
 
 model eventcheckin {
-  id          String    @id
+  id          String    @id @default(cuid())
   bookingId   String    @unique(map: "EventCheckin_bookingId_key")
   otp         String
   generatedAt DateTime  @default(now())
@@ -266,23 +334,109 @@ model eventcheckin {
 }
 
 model globalsettings {
-  id          String  @id
+  id          String  @id @default(cuid())
   key         String  @unique(map: "GlobalSettings_key_key")
   value       String
   description String?
 }
 
+enum wallet_type {
+  USER
+  VENDOR
+  PLATFORM
+  ESCROW
+  COMMISSION
+  REFUND
+}
+
+model commission_rule {
+  id        String    @id @default(cuid())
+  name      String
+  type      String // GLOBAL, VENDOR, CATEGORY, CAMPAIGN, REFERRAL
+  targetId  String? // Vendor ID, Category ID, etc.
+  rate      Decimal   @db.Decimal(5, 2)
+  priority  Int       @default(0)
+  isActive  Boolean   @default(true)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([type, targetId])
+}
+
+model tax_config {
+  id          String   @id @default(cuid())
+  hsnCode     String   @unique
+  description String?
+  gstRate     Decimal  @db.Decimal(5, 2)
+  cgstRate    Decimal  @db.Decimal(5, 2)
+  sgstRate    Decimal  @db.Decimal(5, 2)
+  igstRate    Decimal  @db.Decimal(5, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model settlement {
+  id                String   @id @default(cuid())
+  vendorId          String
+  payoutId          String?  @unique
+  amount            Decimal  @db.Decimal(10, 2)
+  taxDeducted       Decimal  @default(0.00) @db.Decimal(10, 2)
+  commissionCharged Decimal  @db.Decimal(10, 2)
+  netAmount         Decimal  @db.Decimal(10, 2)
+  status            String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  periodStart       DateTime
+  periodEnd         DateTime
+  reference         String?  @unique
+  bankDetails       Json?
+  auditLog          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  vendor vendorprofile @relation(fields: [vendorId], references: [id])
+  payout payout?       @relation(fields: [payoutId], references: [id])
+
+  @@index([vendorId])
+  @@index([status])
+}
+
+model fraud_detection_log {
+  id          String   @id @default(cuid())
+  userId      String?
+  vendorId    String?
+  type        String // DUPLICATE_PAYMENT, REFUND_ABUSE, COUPON_ABUSE, etc.
+  severity    String   @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  description String
+  evidence    Json?
+  status      String   @default("OPEN") // OPEN, INVESTIGATING, RESOLVED, FALSE_POSITIVE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   user?          @relation(fields: [userId], references: [id])
+  vendor vendorprofile? @relation(fields: [vendorId], references: [id])
+
+  @@index([type])
+  @@index([severity])
+}
+
 model invoice {
-  id            String   @id
+  id            String   @id @default(cuid())
   bookingId     String   @unique(map: "Invoice_bookingId_key")
   invoiceNumber String   @unique(map: "Invoice_invoiceNumber_key")
+  type          String   @default("BOOKING") // BOOKING, TAX, CREDIT_NOTE, DEBIT_NOTE, SETTLEMENT, REFUND
   pdfUrl        String?
+  gstDetails    Json?
+  subTotal      Decimal  @default(0.00) @db.Decimal(10, 2)
+  taxAmount     Decimal  @default(0.00) @db.Decimal(10, 2)
+  totalAmount   Decimal  @default(0.00) @db.Decimal(10, 2)
   createdAt     DateTime @default(now())
   booking       booking  @relation(fields: [bookingId], references: [id], map: "Invoice_bookingId_fkey")
 }
 
 model locationtrackinglog {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String
   latitude  Float
   longitude Float
@@ -295,7 +449,7 @@ model locationtrackinglog {
 }
 
 model message {
-  id                String              @id
+  id                String              @id @default(cuid())
   conversationId    String
   senderId          String
   content           String
@@ -313,7 +467,7 @@ model message {
 }
 
 model messageattachment {
-  id        String   @id
+  id        String   @id @default(cuid())
   messageId String
   url       String
   type      String
@@ -324,7 +478,7 @@ model messageattachment {
 }
 
 model notification {
-  id        String                @id
+  id        String                @id @default(cuid())
   userId    String
   title     String
   message   String
@@ -346,7 +500,7 @@ model notification {
 }
 
 model notification_preference {
-  id       String                @id
+  id       String                @id @default(cuid())
   userId   String                @unique
   category notification_category
   email    Boolean               @default(true)
@@ -359,7 +513,7 @@ model notification_preference {
 
 /// This model has been renamed to 'Renamedpackage' during introspection, because the original name 'package' is reserved.
 model Renamedpackage {
-  id          String        @id
+  id          String        @id @default(cuid())
   serviceId   String
   name        String
   description String?
@@ -378,7 +532,7 @@ model Renamedpackage {
 }
 
 model payment {
-  id                String         @id
+  id                String         @id @default(cuid())
   bookingId         String
   amount            Decimal        @db.Decimal(10, 2)
   currency          String         @default("INR")
@@ -421,7 +575,7 @@ model payment_split {
 }
 
 model payout {
-  id            String        @id
+  id            String        @id @default(cuid())
   vendorId      String
   amount        Decimal       @db.Decimal(10, 2)
   status        payout_status @default(PENDING)
@@ -432,12 +586,13 @@ model payout {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   vendorprofile vendorprofile @relation(fields: [vendorId], references: [id], map: "Payout_vendorId_fkey")
+  settlement    settlement?
 
   @@index([vendorId], map: "Payout_vendorId_idx")
 }
 
 model portfolio {
-  id              String        @id
+  id              String        @id @default(cuid())
   vendorProfileId String
   serviceId       String?
   mediaUrl        String
@@ -452,7 +607,7 @@ model portfolio {
 }
 
 model pricingrule {
-  id             String         @id
+  id             String         @id @default(cuid())
   packageId      String
   minGuests      Int
   maxGuests      Int
@@ -464,7 +619,7 @@ model pricingrule {
 }
 
 model refreshtoken {
-  id         String   @id
+  id         String   @id @default(cuid())
   token      String   @unique(map: "RefreshToken_token_key") @db.VarChar(500)
   userId     String
   expiryDate DateTime
@@ -476,7 +631,7 @@ model refreshtoken {
 }
 
 model refund {
-  id          String        @id
+  id          String        @id @default(cuid())
   bookingId   String        @unique(map: "Refund_bookingId_key")
   amount      Decimal       @db.Decimal(10, 2)
   reason      String?
@@ -487,7 +642,7 @@ model refund {
 }
 
 model review {
-  id               String                  @id
+  id               String                  @id @default(cuid())
   userId           String
   vendorId         String
   bookingId        String                  @unique
@@ -517,7 +672,7 @@ model review {
 }
 
 model service {
-  id              String           @id
+  id              String           @id @default(cuid())
   vendorProfileId String
   serviceTypeId   String
   title           String
@@ -540,7 +695,7 @@ model service {
 }
 
 model servicetype {
-  id            String      @id
+  id            String      @id @default(cuid())
   subcategoryId String
   name          String
   description   String?
@@ -551,7 +706,7 @@ model servicetype {
 }
 
 model subcategory {
-  id          String        @id
+  id          String        @id @default(cuid())
   categoryId  String
   name        String
   servicetype servicetype[]
@@ -561,7 +716,7 @@ model subcategory {
 }
 
 model transaction {
-  id          String             @id
+  id          String             @id @default(cuid())
   walletId    String
   bookingId   String?
   amount      Decimal            @db.Decimal(10, 2)
@@ -577,7 +732,7 @@ model transaction {
 }
 
 model user {
-  id                      String                    @id
+  id                      String                    @id @default(cuid())
   email                   String                    @unique(map: "User_email_key")
   password                String
   fullName                String
@@ -587,10 +742,16 @@ model user {
   otp                     String?
   otpExpiry               DateTime?
   profileImage            String?
+  fcmToken                String?
+  lastSeen                DateTime?
+  deviceId                String?
+  interests               Json?
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
   lockUntil               DateTime?
   loginAttempts           Int                       @default(0)
+  referralCode            String?                   @unique
+  loyaltyPoints           Int                       @default(0)
   activitylog             activitylog[]
   addresses               address[]
   auditlog                auditlog[]
@@ -607,8 +768,426 @@ model user {
   vendorprofile           vendorprofile?
   wallet                  wallet?
   wishlist                wishlist?
+  recently_viewed         recently_viewed[]
+  saved_search            saved_search[]
+  referrals_made          referral[]                @relation("Referrer")
+  referral_received       referral?                 @relation("Referred")
+  point_transactions      loyalty_transaction[]
+  event_workspaces        event_workspace[]
+  collaborating_events    event_collaborator[]
+  assigned_tasks          event_checklist_item[]
+  event_notes             event_note[]
+  event_files             event_file[]
+  marketing_analytics     marketing_analytics[]
+  customer_crm            customer_crm_data?
+  referral_fraud_logs     referral_fraud_log[]
+  support_tickets         support_ticket[]
+  support_messages        support_ticket_message[]
+  fraud_detection_log     fraud_detection_log[]
 
   @@index([fullName])
+}
+
+model support_ticket {
+  id          String    @id @default(cuid())
+  userId      String
+  category    String // BILLING, TECHNICAL, VENDOR_ISSUE, GENERAL
+  subject     String
+  description String    @db.Text
+  priority    String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status      String    @default("OPEN") // OPEN, WAITING, IN_PROGRESS, ESCALATED, RESOLVED, CLOSED
+  assignedTo  String? // Admin User ID
+  slaDeadline DateTime?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user     user                     @relation(fields: [userId], references: [id])
+  messages support_ticket_message[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([category])
+}
+
+model support_ticket_message {
+  id          String   @id @default(cuid())
+  ticketId    String
+  senderId    String
+  content     String   @db.Text
+  attachments Json?
+  isInternal  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  ticket support_ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender user           @relation(fields: [senderId], references: [id])
+}
+
+model quality_metrics {
+  id             String   @id @default(cuid())
+  targetId       String   @unique // Vendor or Customer ID
+  targetType     String // VENDOR, CUSTOMER
+  nps            Float    @default(0)
+  responseTime   Int      @default(0) // in seconds
+  completionRate Float    @default(0)
+  trustScore     Float    @default(50) // 0-100
+  lastCalculated DateTime @default(now())
+}
+
+model cancellation_record {
+  id            String   @id @default(cuid())
+  bookingId     String   @unique
+  cancelledBy   String // USER_ID
+  role          String // CUSTOMER, VENDOR, SYSTEM
+  reason        String
+  penaltyAmount Decimal  @default(0.00) @db.Decimal(10, 2)
+  refundAmount  Decimal  @default(0.00) @db.Decimal(10, 2)
+  status        String   @default("PROCESSED")
+  createdAt     DateTime @default(now())
+
+  booking booking @relation(fields: [bookingId], references: [id])
+}
+
+model marketing_campaign {
+  id              String                @id @default(cuid())
+  name            String
+  description     String?
+  type            String // FESTIVAL, SEASONAL, VENDOR, CATEGORY, CITY, FLASH_SALE, SCHEDULED
+  status          String                @default("DRAFT") // DRAFT, SCHEDULED, ACTIVE, COMPLETED, PAUSED
+  startDate       DateTime
+  endDate         DateTime
+  budget          Decimal?              @db.Decimal(10, 2)
+  spent           Decimal               @default(0.00) @db.Decimal(10, 2)
+  targetSegmentId String?
+  city            String?
+  categoryIds     Json? // Array of category IDs
+  vendorIds       Json? // Array of vendor IDs
+  title           String
+  message         String
+  image           String?
+  link            String?
+  pushEnabled     Boolean               @default(false)
+  emailEnabled    Boolean               @default(false)
+  smsEnabled      Boolean               @default(false)
+  whatsappEnabled Boolean               @default(false)
+  impressions     Int                   @default(0)
+  clicks          Int                   @default(0)
+  conversions     Int                   @default(0)
+  revenue         Decimal               @default(0.00) @db.Decimal(10, 2)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  segment         customer_segment?     @relation(fields: [targetSegmentId], references: [id])
+  coupons         coupon[]
+  analytics       marketing_analytics[]
+}
+
+model customer_segment {
+  id          String               @id @default(cuid())
+  name        String               @unique
+  description String?
+  filters     Json // Rules for the segment
+  userCount   Int                  @default(0)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  campaigns   marketing_campaign[]
+}
+
+model marketing_analytics {
+  id         String              @id @default(cuid())
+  campaignId String?
+  userId     String?
+  eventType  String // VIEW, CLICK, CONVERSION, BOUNCE
+  source     String? // EMAIL, PUSH, WHATSAPP, DIRECT
+  metadata   Json?
+  timestamp  DateTime            @default(now())
+  campaign   marketing_campaign? @relation(fields: [campaignId], references: [id])
+  user       user?               @relation(fields: [userId], references: [id])
+
+  @@index([campaignId])
+  @@index([userId])
+  @@index([eventType])
+}
+
+model customer_crm_data {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  lifecycleStage      String    @default("REGISTERED") // LEAD, REGISTERED, ACTIVE, VIP, INACTIVE, BLOCKED
+  bookingFrequency    Float     @default(0)
+  lifetimeValue       Decimal   @default(0.00) @db.Decimal(10, 2)
+  preferredCategories Json?
+  preferredVendors    Json?
+  averageSpend        Decimal   @default(0.00) @db.Decimal(10, 2)
+  lastBookingDate     DateTime?
+  retentionScore      Float     @default(0)
+  churnRisk           Float     @default(0)
+  updatedAt           DateTime  @updatedAt
+  user                user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model vendor_crm_data {
+  id             String        @id @default(cuid())
+  vendorId       String        @unique
+  growthRate     Float         @default(0)
+  qualityScore   Float         @default(0)
+  rankingScore   Float         @default(0)
+  revenueYTD     Decimal       @default(0.00) @db.Decimal(10, 2)
+  marketShare    Float         @default(0)
+  competitorRank Int?
+  updatedAt      DateTime      @updatedAt
+  vendor         vendorprofile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+}
+
+model message_template {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  type      String // EMAIL, SMS, WHATSAPP, PUSH
+  channel   String
+  subject   String?
+  content   String   @db.Text
+  variables Json? // List of allowed variables
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model seo_metadata {
+  id            String   @id @default(cuid())
+  path          String   @unique // The URL path
+  title         String?
+  description   String?
+  keywords      String?
+  ogImage       String?
+  ogTitle       String?
+  ogDescription String?
+  canonicalUrl  String?
+  schemaMarkup  Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model referral_fraud_log {
+  id        String   @id @default(cuid())
+  userId    String
+  reason    String
+  evidence  Json?
+  severity  String   @default("LOW")
+  createdAt DateTime @default(now())
+  user      user     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model event_workspace {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  eventType   String?
+  eventDate   DateTime?
+  location    String?
+  status      String    @default("PLANNING") // PLANNING, ONGOING, COMPLETED, CANCELLED
+  budget      Decimal   @default(0.00) @db.Decimal(10, 2)
+  currency    String    @default("INR")
+  isPublic    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user               user                      @relation(fields: [userId], references: [id])
+  collaborators      event_collaborator[]
+  checklist_items    event_checklist_item[]
+  guests             event_guest[]
+  budget_items       event_budget_item[]
+  timeline_items     event_timeline_item[]
+  notes              event_note[]
+  files              event_file[]
+  emergency_contacts event_emergency_contact[]
+  incident_reports   event_incident_report[]
+  invitations        event_invitation[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model event_collaborator {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String?
+  email       String
+  role        String    @default("VIEWER") // OWNER, EDITOR, VIEWER, COMMENTER
+  status      String    @default("PENDING") // PENDING, ACTIVE
+  invitedAt   DateTime  @default(now())
+  joinedAt    DateTime?
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      user?           @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, email])
+}
+
+model event_checklist_item {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  description String?
+  category    String?
+  status      String    @default("PENDING") // PENDING, COMPLETED
+  priority    String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  dueDate     DateTime?
+  assignedTo  String?
+  attachments Json? // Array of file URLs
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee  user?           @relation(fields: [assignedTo], references: [id])
+
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model event_guest {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  name             String
+  email            String?
+  phone            String?
+  group            String? // Family, Friends, Colleagues
+  isVip            Boolean  @default(false)
+  rsvpStatus       String   @default("PENDING") // PENDING, CONFIRMED, DECLINED
+  mealPreference   String?
+  tableNumber      String?
+  invitationStatus String   @default("NOT_SENT") // NOT_SENT, SENT, OPENED, RESPONDED
+  attendanceStatus String   @default("PENDING") // PENDING, PRESENT, ABSENT
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace   event_workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitations event_invitation[]
+
+  @@index([workspaceId])
+  @@index([rsvpStatus])
+}
+
+model event_budget_item {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  category        String
+  itemName        String
+  estimatedAmount Decimal  @default(0.00) @db.Decimal(10, 2)
+  actualAmount    Decimal  @default(0.00) @db.Decimal(10, 2)
+  paidAmount      Decimal  @default(0.00) @db.Decimal(10, 2)
+  status          String   @default("PENDING") // PENDING, PARTIAL, PAID
+  vendorId        String? // Reference to vendorprofile if booked via platform
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model event_timeline_item {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime?
+  type        String    @default("PLANNING") // PLANNING, PREPARATION, CEREMONY, RECEPTION, etc.
+  status      String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  location    String?
+  color       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([startTime])
+}
+
+model event_note {
+  id          String   @id @default(cuid())
+  workspaceId String
+  authorId    String
+  title       String?
+  content     String   @db.Text
+  isPrivate   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author    user            @relation(fields: [authorId], references: [id])
+
+  @@index([workspaceId])
+}
+
+model event_file {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  name        String
+  url         String
+  fileType    String // IMAGE, VIDEO, PDF, DOCUMENT
+  fileSize    Int
+  folder      String?
+  tags        Json?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploader  user            @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId])
+}
+
+model event_invitation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  guestId     String
+  type        String    @default("EMAIL") // EMAIL, SMS, WHATSAPP
+  status      String    @default("SENT") // SENT, DELIVERED, READ, RESPONDED
+  qrCode      String?
+  sentAt      DateTime  @default(now())
+  expiresAt   DateTime?
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  guest     event_guest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([guestId])
+}
+
+model event_emergency_contact {
+  id             String  @id @default(cuid())
+  workspaceId    String
+  name           String
+  role           String
+  phone          String
+  email          String?
+  isBackupVendor Boolean @default(false)
+  notes          String?
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model event_incident_report {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  description String
+  severity    String    @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  status      String    @default("OPEN") // OPEN, RESOLVED
+  reportedAt  DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  workspace event_workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 model address {
@@ -658,7 +1237,7 @@ model search_analytics {
 }
 
 model vendordocument {
-  id              String                @id
+  id              String                @id @default(cuid())
   vendorProfileId String
   type            String
   url             String
@@ -669,8 +1248,55 @@ model vendordocument {
   @@index([vendorProfileId], map: "VendorDocument_vendorProfileId_idx")
 }
 
+model vendor_payout {
+  id          String        @id @default(cuid())
+  vendorId    String
+  amount      Decimal       @db.Decimal(10, 2)
+  status      payout_status @default(PENDING)
+  reference   String?       @unique
+  bankDetails Json?
+  notes       String?
+  processedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  vendor      vendorprofile @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId])
+}
+
+model vendorteam {
+  id              String        @id @default(cuid())
+  vendorProfileId String
+  name            String
+  role            String
+  email           String?
+  phone           String?
+  avatar          String?
+  status          String        @default("Active")
+  joinedAt        DateTime      @default(now())
+  vendorprofile   vendorprofile @relation(fields: [vendorProfileId], references: [id])
+
+  @@index([vendorProfileId])
+}
+
+model vendor_penalty {
+  id             String   @id @default(cuid())
+  vendorId       String
+  bookingId      String?
+  type           String
+  pointsDeducted Int
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  vendor  vendorprofile @relation(fields: [vendorId], references: [id])
+  booking booking?      @relation(fields: [bookingId], references: [id])
+
+  @@index([vendorId])
+  @@index([bookingId])
+}
+
 model vendorprofile {
-  id                    String                           @id
+  id                    String                           @id @default(cuid())
   userId                String                           @unique(map: "VendorProfile_userId_key")
   businessName          String
   description           String?
@@ -700,11 +1326,17 @@ model vendorprofile {
   vacationEndDate       DateTime?
   advanceBookingDays    Int                              @default(365)
   minBookingNotice      Int                              @default(24)
+  experienceYears       Int                              @default(0)
+  cancellationPolicy    String?
+  rejectionReason       String?
+  rejectedDocuments     Json?
+  isActive              Boolean                          @default(true)
   createdAt             DateTime                         @default(now())
   updatedAt             DateTime                         @updatedAt
   baseTravelCharge      Decimal?                         @default(0.00) @db.Decimal(10, 2)
   maxTravelDistance     Float?                           @default(100)
   travelChargesPerKm    Decimal?                         @default(0.00) @db.Decimal(10, 2)
+  reliabilityScore      Int                              @default(100)
   availability          availability[]
   booking               booking[]
   bookingassignment     bookingassignment[]
@@ -720,8 +1352,16 @@ model vendorprofile {
   user                  user                             @relation(fields: [userId], references: [id], map: "VendorProfile_userId_fkey")
   vendorscore           vendorscore?
   vendorsubscription    vendorsubscription?
+  recently_viewed       recently_viewed[]
+  settlement            settlement[]
+  fraud_detection_log   fraud_detection_log[]
+  vendor_crm_data       vendor_crm_data?
+  vendor_payout         vendor_payout[]
+  vendorteam            vendorteam[]
+  vendor_penalty        vendor_penalty[]
 
   @@index([verificationStatus])
+  @@index([userId, verificationStatus])
   @@index([city])
   @@index([rating])
   @@index([reviewCount])
@@ -731,10 +1371,12 @@ model vendorprofile {
   @@index([createdAt])
   @@index([city, verificationStatus, rating])
   @@index([verificationStatus, searchScore])
+  @@index([latitude])
+  @@index([longitude])
 }
 
 model recurringavailability {
-  id              String        @id
+  id              String        @id @default(cuid())
   vendorProfileId String
   dayOfWeek       Int
   isAvailable     Boolean       @default(true)
@@ -748,7 +1390,7 @@ model recurringavailability {
 }
 
 model vendorscore {
-  id                String        @id
+  id                String        @id @default(cuid())
   vendorProfileId   String        @unique(map: "VendorScore_vendorProfileId_key")
   ratingScore       Float         @default(0)
   reviewScore       Float         @default(0)
@@ -761,7 +1403,7 @@ model vendorscore {
 }
 
 model wallet {
-  id               String        @id
+  id               String        @id @default(cuid())
   userId           String?       @unique(map: "Wallet_userId_key")
   balance          Decimal       @default(0.00) @db.Decimal(10, 2)
   pendingBalance   Decimal       @default(0.00) @db.Decimal(10, 2)
@@ -774,7 +1416,7 @@ model wallet {
 }
 
 model webhookevent {
-  id        String   @id
+  id        String   @id @default(cuid())
   eventId   String   @unique(map: "WebhookEvent_eventId_key")
   source    String
   type      String
@@ -784,7 +1426,7 @@ model webhookevent {
 }
 
 model wishlist {
-  id           String         @id
+  id           String         @id @default(cuid())
   userId       String         @unique(map: "Wishlist_userId_key")
   createdAt    DateTime       @default(now())
   updatedAt    DateTime
@@ -793,7 +1435,7 @@ model wishlist {
 }
 
 model wishlistitem {
-  id         String   @id
+  id         String   @id @default(cuid())
   wishlistId String
   type       String
   targetId   String
@@ -804,7 +1446,7 @@ model wishlistitem {
 }
 
 model passwordresettoken {
-  id        String   @id
+  id        String   @id @default(cuid())
   token     String   @unique(map: "PasswordResetToken_token_key")
   userId    String
   expiresAt DateTime
@@ -814,7 +1456,7 @@ model passwordresettoken {
 }
 
 model subscriptionpayment {
-  id                 String                     @id
+  id                 String                     @id @default(cuid())
   subscriptionId     String
   amount             Decimal                    @db.Decimal(10, 2)
   currency           String                     @default("INR")
@@ -830,7 +1472,7 @@ model subscriptionpayment {
 }
 
 model subscriptionplan {
-  id                 String               @id
+  id                 String               @id @default(cuid())
   name               String               @unique(map: "SubscriptionPlan_name_key")
   price              Decimal              @db.Decimal(10, 2)
   durationMonths     Int                  @default(1)
@@ -843,7 +1485,7 @@ model subscriptionplan {
 }
 
 model vendorsubscription {
-  id                  String                    @id
+  id                  String                    @id @default(cuid())
   vendorProfileId     String                    @unique(map: "VendorSubscription_vendorProfileId_key")
   planId              String
   startDate           DateTime                  @default(now())
@@ -919,12 +1561,18 @@ enum review_moderationStatus {
 }
 
 enum bookingstatuslog_status {
+  DRAFT
+  SEARCHING
   PENDING
-  ACCEPTED
-  REJECTED
+  VENDORS_NOTIFIED
+  QUOTE_RECEIVED
   NEGOTIATING
+  QUOTE_ACCEPTED
+  PAYMENT_PENDING
+  REJECTED
   CONFIRMED
   CANCELLED
+  PREPARATION
   VENDOR_ASSIGNED
   VENDOR_TRAVELING
   VENDOR_ARRIVED
@@ -932,6 +1580,12 @@ enum bookingstatuslog_status {
   EVENT_STARTED
   EVENT_ONGOING
   EVENT_COMPLETED
+  CUSTOMER_CONFIRMED
+  PAYMENT_RELEASED
+  CLOSED
+  DISPUTED
+  IN_PROGRESS
+  EMERGENCY
 }
 
 enum bookingassignment_status {
@@ -950,12 +1604,18 @@ enum payout_status {
 }
 
 enum booking_status {
+  DRAFT
+  SEARCHING
   PENDING
-  ACCEPTED
-  REJECTED
+  VENDORS_NOTIFIED
+  QUOTE_RECEIVED
   NEGOTIATING
+  QUOTE_ACCEPTED
+  PAYMENT_PENDING
+  REJECTED
   CONFIRMED
   CANCELLED
+  PREPARATION
   VENDOR_ASSIGNED
   VENDOR_TRAVELING
   VENDOR_ARRIVED
@@ -963,6 +1623,12 @@ enum booking_status {
   EVENT_STARTED
   EVENT_ONGOING
   EVENT_COMPLETED
+  CUSTOMER_CONFIRMED
+  PAYMENT_RELEASED
+  CLOSED
+  DISPUTED
+  IN_PROGRESS
+  EMERGENCY
 }
 
 enum payment_status {
@@ -970,6 +1636,7 @@ enum payment_status {
   SUCCESS
   FAILED
   REFUNDED
+  COMPLETED
 }
 
 enum refund_status {
@@ -1011,18 +1678,15 @@ enum dispute_status {
   UNDER_INVESTIGATION
   RESOLVED
   CLOSED
-}
-
-enum wallet_type {
-  USER
-  VENDOR
-  PLATFORM
+  REJECTED
 }
 
 enum vendorprofile_verificationStatus {
   PENDING
   APPROVED
   REJECTED
+  CHANGES_REQUIRED
+  SUSPENDED
 }
 
 enum vendorsubscription_status {

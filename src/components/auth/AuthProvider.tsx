@@ -16,7 +16,13 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { user, accessToken, setUser, logout: storeLogout, isInitialized, setInitialized } = useAuthStore();
+  const user = useAuthStore(state => state.user);
+  const accessToken = useAuthStore(state => state.accessToken);
+  const setUser = useAuthStore(state => state.setUser);
+  const storeLogout = useAuthStore(state => state.logout);
+  const isInitialized = useAuthStore(state => state.isInitialized);
+  const setInitialized = useAuthStore(state => state.setInitialized);
+
   const [isLoading, setIsLoading] = useState(!isInitialized);
   const queryClient = useQueryClient();
   const router = useRouter();

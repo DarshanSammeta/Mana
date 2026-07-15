@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
-import { meiliClient, VENDORS_INDEX } from "./meilisearch";
+import { getMeiliSearch, VENDORS_INDEX } from "./meilisearch";
 import { trackSearch } from "./intelligence/search-analytics";
 import { setCachedData, getCachedData } from "./redis";
 
@@ -49,6 +49,7 @@ export async function getMarketplaceVendors(filters: MarketplaceFilters) {
 
     // Search Analytics & Meilisearch (Level 11)
     let meiliIds: string[] | null = null;
+    const meiliClient = getMeiliSearch();
     if (query && meiliClient) {
       try {
         const index = meiliClient.index(VENDORS_INDEX);
@@ -104,6 +105,13 @@ export async function getMarketplaceVendors(filters: MarketplaceFilters) {
             c.name = ${category} OR sc.name = ${category}
           )
       )` : Prisma.empty}
+      ${filters.eventTypeId ? Prisma.sql` AND EXISTS (
+          SELECT 1 FROM service s
+          JOIN servicetype st ON s."serviceTypeId" = st.id
+          JOIN subcategory sc ON st."subcategoryId" = sc.id
+          JOIN category c ON sc."categoryId" = c.id
+          WHERE s."vendorProfileId" = v.id AND c."eventTypeId" = ${filters.eventTypeId}
+      )` : Prisma.empty}
       ${(minPrice !== undefined || maxPrice !== undefined) ? Prisma.sql` AND (
         EXISTS (
           SELECT 1 FROM "package" p
@@ -119,11 +127,6 @@ export async function getMarketplaceVendors(filters: MarketplaceFilters) {
       ${rating !== undefined && rating > 0 ? Prisma.sql` AND v.rating >= ${rating}` : Prisma.empty}
     `;
 
-
-    const countResult = await prisma.$queryRaw<any[]>(Prisma.sql`
-      SELECT COUNT(DISTINCT v.id)::text as total ${baseQuery}
-    `);
-    const total = parseInt(countResult[0]?.total || "0");
 
     const minPriceSql = Prisma.sql`(
       SELECT MIN(price_val)
@@ -159,16 +162,18 @@ export async function getMarketplaceVendors(filters: MarketplaceFilters) {
         ) ASC`;
     }
 
-    const vendorsData = await prisma.$queryRaw<any[]>(Prisma.sql`
+    const vendorsData = await getPrisma().$queryRaw<any[]>(Prisma.sql`
       SELECT
         v.id,
         ${minPriceSql} as "minPrice",
-        ${distanceSql} as distance
+        ${distanceSql} as distance,
+        COUNT(*) OVER()::text as "totalCount"
       ${baseQuery}
       ${orderBy}
       LIMIT ${limit} OFFSET ${skip}
     `);
 
+    const total = parseInt(vendorsData[0]?.totalCount || "0");
     const vendorIds = vendorsData.map(v => v.id);
 
     if (vendorIds.length === 0) {
@@ -177,7 +182,7 @@ export async function getMarketplaceVendors(filters: MarketplaceFilters) {
       return emptyResult;
     }
 
-    const fullVendors = await prisma.vendorprofile.findMany({
+    const fullVendors = await getPrisma().vendorprofile.findMany({
       where: { id: { in: vendorIds } },
       select: {
         id: true,
@@ -188,7 +193,6 @@ export async function getMarketplaceVendors(filters: MarketplaceFilters) {
         rating: true,
         reviewCount: true,
         totalBookings: true,
-        searchScore: true,
         featured: true,
         verificationStatus: true,
         latitude: true,
@@ -200,7 +204,6 @@ export async function getMarketplaceVendors(filters: MarketplaceFilters) {
         service: {
           take: 1,
           select: {
-            id: true,
             title: true,
             basePrice: true,
             servicetype: {
@@ -256,11 +259,10 @@ export async function getMarketplaceVendors(filters: MarketplaceFilters) {
 
 export async function getMarketplaceCategories(eventTypeId?: string) {
   const fetchCategories = async (eid?: string) => {
+    const prisma = getPrisma();
     const categories = await prisma.category.findMany({
       where: eid ? {
-        eventtypes: {
-          some: { id: eid }
-        }
+        eventTypeId: eid
       } : undefined,
       orderBy: { name: "asc" },
       select: {
@@ -270,10 +272,12 @@ export async function getMarketplaceCategories(eventTypeId?: string) {
         description: true,
         commissionRate: true,
         subcategory: {
+          take: 10, // Limit nested subcategories
           select: {
             id: true,
             name: true,
             servicetype: {
+              take: 5, // Limit nested servicetypes
               select: {
                 id: true,
                 name: true,
@@ -286,18 +290,14 @@ export async function getMarketplaceCategories(eventTypeId?: string) {
     });
 
     const rawCounts = await prisma.$queryRaw<any[]>`
-      SELECT sc."id" as "categoryId", COUNT(DISTINCT s."vendorProfileId")::int as "vendorCount"
+      SELECT sc."categoryId", COUNT(DISTINCT s."vendorProfileId")::int as "vendorCount"
       FROM "service" s
       JOIN "servicetype" st ON s."serviceTypeId" = st.id
-      JOIN "subcategory" stub ON st."subcategoryId" = stub.id
-      JOIN "category" sc ON stub."categoryId" = sc.id
+      JOIN "subcategory" sc ON st."subcategoryId" = sc.id
       JOIN "vendorprofile" v ON s."vendorProfileId" = v.id
       WHERE v."verificationStatus" = 'APPROVED'
-      ${eid ? Prisma.sql` AND EXISTS (
-        SELECT 1 FROM "_EventTypeToCategory" etc
-        WHERE etc."A" = sc.id AND etc."B" = ${eid}
-      )` : Prisma.empty}
-      GROUP BY sc."id"
+      ${eid ? Prisma.sql` AND EXISTS (SELECT 1 FROM "category" c WHERE c.id = sc."categoryId" AND c."eventTypeId" = ${eid})` : Prisma.empty}
+      GROUP BY sc."categoryId"
     `;
 
     const countMap = rawCounts.reduce((acc, curr) => {
@@ -321,6 +321,7 @@ export async function getMarketplaceCategories(eventTypeId?: string) {
 export async function getEventTypes() {
   return unstable_cache(
     async () => {
+      const prisma = getPrisma();
       return await prisma.eventtype.findMany({
         where: { isActive: true },
         select: {
@@ -340,6 +341,7 @@ export async function getEventTypes() {
 export async function getVendorById(id: string) {
   const fetchVendor = async (vendorId: string) => {
     try {
+      const prisma = getPrisma();
       // Parallelize vendor fetch and similar vendors search
       const [vendor] = await Promise.all([
         prisma.vendorprofile.findUnique({
@@ -380,19 +382,17 @@ export async function getVendorById(id: string) {
                     description: true,
                     price: true,
                     inclusions: true
-                  }
+                  },
+                  take: 5 // Limit packages fetched
                 },
                 servicetype: {
                   select: {
-                    id: true,
                     name: true,
                     subcategory: {
                       select: {
-                        id: true,
                         name: true,
                         category: {
                           select: {
-                            id: true,
                             name: true
                           }
                         }
@@ -408,7 +408,8 @@ export async function getVendorById(id: string) {
                 mediaUrl: true,
                 mediaType: true,
                 title: true
-              }
+              },
+              take: 10 // Limit portfolio items
             },
             review: {
               select: {
@@ -416,7 +417,7 @@ export async function getVendorById(id: string) {
                 rating: true,
                 comment: true,
                 createdAt: true,
-                user: { select: { fullName: true } }
+                user: { select: { fullName: true, profileImage: true } }
               },
               orderBy: { createdAt: "desc" },
               take: 5
@@ -425,7 +426,7 @@ export async function getVendorById(id: string) {
               where: {
                 date: { gte: new Date() }
               },
-              take: 15,
+              take: 10,
               orderBy: { date: "asc" }
             },
           }
@@ -434,10 +435,10 @@ export async function getVendorById(id: string) {
 
       if (!vendor) return null;
 
-      const primaryCategoryId = vendor.service?.[0]?.servicetype?.subcategory?.category?.id;
+      const primaryCategory = vendor.service?.[0]?.servicetype?.subcategory?.category?.name;
       let similarVendors: any[] = [];
 
-      if (primaryCategoryId) {
+      if (primaryCategory) {
         const rawSimilar = await prisma.vendorprofile.findMany({
           where: {
             id: { not: vendorId },
@@ -446,7 +447,7 @@ export async function getVendorById(id: string) {
               some: {
                 servicetype: {
                   subcategory: {
-                    categoryId: primaryCategoryId
+                    category: { name: primaryCategory }
                   }
                 }
               }
@@ -464,33 +465,22 @@ export async function getVendorById(id: string) {
             service: {
               take: 1,
               select: {
-                basePrice: true,
-                Renamedpackage: {
-                  take: 1,
-                  select: {
-                    price: true
-                  }
-                }
+                basePrice: true
               }
             }
           }
         });
 
-        similarVendors = rawSimilar.map(v => {
-          const s = v.service[0];
-          const startingPrice = s?.Renamedpackage?.[0]?.price ?? s?.basePrice ?? 0;
-
-          return {
-            id: v.id,
-            businessName: v.businessName,
-            coverImage: v.coverImage,
-            rating: v.rating ? Number(v.rating).toFixed(1) : "0.0",
-            reviewCount: v.reviewCount || 0,
-            basePrice: Number(startingPrice),
-            city: v.city,
-            featured: v.featured
-          };
-        });
+        similarVendors = rawSimilar.map(v => ({
+          id: v.id,
+          businessName: v.businessName,
+          coverImage: v.coverImage,
+          rating: v.rating ? Number(v.rating).toFixed(1) : "0.0",
+          reviewCount: v.reviewCount || 0,
+          basePrice: Number(v.service[0]?.basePrice || 0),
+          city: v.city,
+          featured: v.featured
+        }));
       }
 
       const serializedVendor = {

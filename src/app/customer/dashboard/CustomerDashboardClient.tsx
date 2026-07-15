@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/authStore";
-import { customerService } from "@/services";
+import { customerService } from "@/services/client";
 import {
   ChevronRight,
   ShieldCheck,
@@ -25,6 +25,7 @@ import Image from "next/image";
 import { CustomerStats } from "@/types";
 import { CUSTOMER_QUICK_LINKS, SMART_MATCH_FALLBACKS } from "@/data/dashboard/customer-dashboard";
 import { RecentlyViewed } from "@/components/home/RecentlyViewed";
+import { useCustomerAnalytics, useWallet } from "@/hooks/use-customer-experience";
 
 interface CustomerDashboardClientProps {
   initialStats: CustomerStats;
@@ -32,12 +33,14 @@ interface CustomerDashboardClientProps {
 
 export default function CustomerDashboardClient({ initialStats }: CustomerDashboardClientProps) {
   const { user } = useAuthStore();
+  const { data: analytics } = useCustomerAnalytics();
+  const { data: wallet } = useWallet();
 
   const { data: stats } = useQuery({
     queryKey: ["customer-stats"],
     queryFn: () => customerService.getStats(),
     initialData: initialStats,
-    refetchOnMount: false // Since we hydrated with SSR data
+    refetchOnMount: false
   });
 
   return (
@@ -48,15 +51,42 @@ export default function CustomerDashboardClient({ initialStats }: CustomerDashbo
           <h1 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">Welcome back, {user?.fullName?.split(' ')[0] || 'there'}!</h1>
           <p className="text-sm md:text-base text-slate-500 mt-1 font-medium">Here&apos;s what&apos;s happening with your events.</p>
         </div>
-        <div className="w-full md:w-auto bg-white border border-slate-200 rounded-2xl p-4 md:p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
-           <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center text-primary">
-              <Wallet className="h-6 w-6" />
-           </div>
-           <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Wallet Balance</p>
-              <p className="text-xl font-extrabold text-slate-900">₹<CountUp end={stats?.walletBalance || 0} decimals={2} duration={1} /></p>
-           </div>
+        <div className="flex gap-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
+             <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                <Star className="h-5 w-5 fill-current" />
+             </div>
+             <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Loyalty Points</p>
+                <p className="text-lg font-extrabold text-slate-900">{(user as any)?.loyaltyPoints || 0}</p>
+             </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
+             <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-primary">
+                <Wallet className="h-5 w-5" />
+             </div>
+             <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wallet Balance</p>
+                <p className="text-lg font-extrabold text-slate-900">₹<CountUp end={Number(wallet?.balance || 0)} decimals={2} duration={1} /></p>
+             </div>
+          </div>
         </div>
+      </div>
+
+      {/* Analytics Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Total Bookings", value: analytics?.totalBookings || 0, icon: Search, color: "text-blue-600" },
+          { label: "Total Spent", value: `₹${Math.round(analytics?.totalSpent || 0)}`, icon: Wallet, color: "text-emerald-600" },
+          { label: "Favorite Category", value: analytics?.favoriteCategory || "None", icon: Sparkles, color: "text-purple-600" },
+          { label: "Reviews Written", value: analytics?.reviewsWritten || 0, icon: Star, color: "text-amber-600" },
+        ].map((item, i) => (
+          <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <item.icon className={cn("h-5 w-5 mb-2", item.color)} />
+            <p className="text-xs font-bold text-slate-500 uppercase">{item.label}</p>
+            <p className="text-lg font-black text-slate-900">{item.value}</p>
+          </div>
+        ))}
       </div>
 
       {/* Quick Actions Grid */}

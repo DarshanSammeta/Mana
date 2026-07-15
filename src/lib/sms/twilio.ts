@@ -2,15 +2,23 @@ import twilio from 'twilio';
 
 import { SMS_CONFIG } from '@/config/sms';
 
-const accountSid = SMS_CONFIG.twilio.accountSid;
-const authToken = SMS_CONFIG.twilio.authToken;
+let twilioInstance: any = null;
 
 const getTwilioClient = () => {
+  if (typeof window !== "undefined") return null;
+
+  const accountSid = SMS_CONFIG.twilio.accountSid;
+  const authToken = SMS_CONFIG.twilio.authToken;
+
   if (!accountSid || !authToken) {
     console.warn('Twilio credentials not found');
     return null;
   }
-  return twilio(accountSid, authToken);
+
+  if (!twilioInstance) {
+    twilioInstance = twilio(accountSid, authToken);
+  }
+  return twilioInstance;
 };
 
 export const sendSMS = async (to: string, message: string) => {

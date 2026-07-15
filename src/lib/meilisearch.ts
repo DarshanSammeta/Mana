@@ -1,18 +1,10 @@
 import * as MeiliSearchModule from 'meilisearch';
-
 import { MEILISEARCH_CONFIG } from "@/config/meilisearch";
 
-const host = MEILISEARCH_CONFIG.host;
-const apiKey = MEILISEARCH_CONFIG.apiKey;
+let _meiliClient: any = null;
 
-/**
- * Next.js 15 / RSC Resilient Constructor Discovery
- * Specifically handles 'Meilisearch' and 'MeiliSearch' exports.
- */
 const getMeiliSearchConstructor = () => {
   const ms = MeiliSearchModule as any;
-
-  // Try all known export patterns
   const Constructor =
     ms.Meilisearch ||
     ms.MeiliSearch ||
@@ -24,35 +16,88 @@ const getMeiliSearchConstructor = () => {
   return typeof Constructor === 'function' ? Constructor : null;
 };
 
-const Constructor = getMeiliSearchConstructor();
+export function getMeiliSearch() {
+  if (typeof window !== "undefined") return null;
 
-if (!Constructor) {
-  console.error('[Meilisearch] Failed to find constructor. Available keys:', Object.keys(MeiliSearchModule));
+  const host = MEILISEARCH_CONFIG.host;
+  const apiKey = MEILISEARCH_CONFIG.apiKey;
+
+  if (!host) {
+    return null;
+  }
+
+  if (!_meiliClient) {
+    const Constructor = getMeiliSearchConstructor();
+    if (Constructor) {
+      _meiliClient = new (Constructor as any)({
+        host,
+        apiKey,
+      });
+    }
+  }
+
+  return _meiliClient;
 }
 
-// Instantiate client if constructor found
-export const meiliClient = Constructor ? new (Constructor as any)({
-  host,
-  apiKey,
-}) : null;
+export const meiliClient = getMeiliSearch();
 
 export const VENDORS_INDEX = MEILISEARCH_CONFIG.indexes.vendors;
 export const SERVICES_INDEX = MEILISEARCH_CONFIG.indexes.services;
 
 export const initMeilisearch = async () => {
-  if (!meiliClient) return;
+  const client = getMeiliSearch();
+  if (!client) return;
   try {
-    await meiliClient.createIndex(VENDORS_INDEX, { primaryKey: 'id' });
-    await meiliClient.createIndex(SERVICES_INDEX, { primaryKey: 'id' });
+    await client.createIndex(VENDORS_INDEX, { primaryKey: 'id' });
+    await client.createIndex(SERVICES_INDEX, { primaryKey: 'id' });
 
-    const vendorIndex = meiliClient.index(VENDORS_INDEX);
+    const vendorIndex = client.index(VENDORS_INDEX);
     await vendorIndex.updateSettings({
-      searchableAttributes: ['businessName', 'description', 'city', 'state', 'categories', 'serviceTypes'],
-      filterableAttributes: ['city', 'state', 'rating', 'verificationStatus', 'categories', 'serviceTypes', 'searchScore'],
-      sortableAttributes: ['rating', 'totalBookings', 'searchScore', 'createdAt'],
-      rankingRules: ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness', 'searchScore:desc', 'rating:desc'],
+      searchableAttributes: [
+        'businessName',
+        'serviceTypes',
+        'categories',
+        'city',
+        'state',
+        'description'
+      ],
+      filterableAttributes: [
+        'city',
+        'state',
+        'rating',
+        'verificationStatus',
+        'categories',
+        'serviceTypes',
+        'searchScore',
+        'totalBookings'
+      ],
+      sortableAttributes: [
+        'rating',
+        'totalBookings',
+        'searchScore',
+        'createdAt'
+      ],
+      rankingRules: [
+        'words',
+        'typo',
+        'proximity',
+        'attribute',
+        'sort',
+        'exactness',
+        'searchScore:desc',
+        'rating:desc',
+        'totalBookings:desc'
+      ],
+      stopWords: ['the', 'a', 'an', 'in', 'and', 'or', 'for', 'with', 'at', 'by', 'from'],
+      synonyms: {
+        'photographer': ['photography', 'photoshoot', 'cameraman'],
+        'decorator': ['decoration', 'decor', 'stage decor'],
+        'venue': ['banquet hall', 'marriage hall', 'convention center'],
+        'makeup': ['make up', 'mua', 'bridal makeup'],
+        'catering': ['caterer', 'food service', 'cook']
+      }
     });
-    console.log('Meilisearch initialized');
+    console.log('Meilisearch initialized with fine-tuned settings');
   } catch (error) {
     console.error('Meilisearch init failed:', error);
   }

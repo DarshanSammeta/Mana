@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useInView } from "react-intersection-observer";
 
@@ -53,7 +53,7 @@ export default function EarningsPage() {
   const { ref, inView } = useInView();
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
-  const { socket } = useSocketStore();
+  const _socket = useSocketStore((state) => state.socket);
 
   const { data: earningsData, isLoading: loading } = useQuery({
     queryKey: ['vendor-earnings'],
@@ -78,16 +78,6 @@ export default function EarningsPage() {
       fetchNextPage();
     }
   }, [inView, fetchNextPage, hasNextPage]);
-
-  useEffect(() => {
-    if (!socket) return;
-    socket.on("wallet:updated", (data: { amount: number }) => {
-      toast.success(`Wallet Updated: ₹${data.amount}`, { icon: '💰' });
-      queryClient.invalidateQueries({ queryKey: ['vendor-earnings'] });
-      queryClient.invalidateQueries({ queryKey: ['vendor-transactions-earnings'] });
-    });
-    return () => { socket.off("wallet:updated"); };
-  }, [socket, queryClient]);
 
   const withdrawMutation = useMutation({
     mutationFn: (amount: number) => vendorService.requestPayout(amount),

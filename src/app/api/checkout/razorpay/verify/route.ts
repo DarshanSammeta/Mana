@@ -33,6 +33,10 @@ export async function POST(req: Request) {
     if (isAuthentic) {
        // Fetch full payment details from Razorpay to ensure we have all notes
        const razorpay = getRazorpay();
+       if (!razorpay) {
+           logger.error("Razorpay instance not available in verify route");
+           return NextResponse.json({ message: "Payment service unavailable" }, { status: 503 });
+       }
        const payment = await razorpay.payments.fetch(razorpay_payment_id);
 
        // Force notes if missing (defensive)
@@ -47,5 +51,5 @@ export async function POST(req: Request) {
       logger.error("Payment verification failed: Invalid signature", { orderId: razorpay_order_id });
       return NextResponse.json({ message: "Invalid signature" }, { status: 400 });
     }
-  });
+  }, req);
 }

@@ -8,47 +8,65 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { MarketplaceFilters } from "./MarketplaceFilters";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
 
 import { useSavedSearchesStore } from "@/store/useSavedSearchesStore";
 import { useLocationStore } from "@/store/locationStore";
 import { toast } from "react-hot-toast";
 import { Bookmark } from "lucide-react";
+import { DialogClose } from "@/components/ui/dialog";
 
 interface MarketplaceHeaderProps {
   totalResults: number;
   viewMode: "grid" | "list" | "map";
   setViewMode: (mode: "grid" | "list" | "map") => void;
   cities: string[];
+  activeEventType?: any;
 }
 
-export function MarketplaceHeader({ totalResults, viewMode, setViewMode, cities }: MarketplaceHeaderProps) {
+export function MarketplaceHeader({ totalResults, viewMode, setViewMode, cities, activeEventType }: MarketplaceHeaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { saveSearch } = useSavedSearchesStore();
-  const { locality, city } = useLocationStore();
-  const [localSearch, setLocalSearch] = useState(searchParams?.get("query") || "");
+  const locality = useLocationStore(state => state.locality);
+  const city = useLocationStore(state => state.city);
+  const currentQuery = searchParams?.get("query") || "";
+  const [localSearch, setLocalSearch] = useState(currentQuery);
+  const debouncedSearch = useDebounce(localSearch, 400);
+
+  // Sync localSearch state with URL changes (handles back/forward navigation)
+  useEffect(() => {
+    if (currentQuery !== localSearch) {
+      setLocalSearch(currentQuery);
+    }
+  }, [currentQuery, localSearch]);
+
+  // Update URL based on debounced search
+  useEffect(() => {
+    if (debouncedSearch !== currentQuery) {
+      const params = new URLSearchParams(searchParams?.toString() || "");
+      if (debouncedSearch) params.set("query", debouncedSearch);
+      else params.delete("query");
+
+      // Reset pagination on search change
+      params.delete("page");
+
+      router.replace(`/marketplace?${params.toString()}`, { scroll: false });
+    }
+  }, [debouncedSearch, router, currentQuery, searchParams]);
 
   const handleSaveSearch = () => {
     const filters = Object.fromEntries(searchParams?.entries() || []);
-    const name = selectedSubcategory || selectedCategory || eventNameParam || localSearch || "My Search";
+    const selectedCategory = searchParams?.get("category");
+    const selectedSubcategory = searchParams?.get("subcategory");
+    const name = selectedSubcategory || selectedCategory || activeEventType?.name || localSearch || "My Search";
     const url = window.location.href;
     saveSearch(name, url, filters);
     toast.success("Search saved to your account");
   };
 
-  const eventNameParam = searchParams?.get("eventName") || "All Events";
+  const eventNameDisplay = activeEventType?.name || "All Events";
   const selectedCategory = searchParams?.get("category");
-  const selectedSubcategory = searchParams?.get("subcategory");
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const params = new URLSearchParams(searchParams?.toString() || "");
-      if (localSearch) params.set("query", localSearch);
-      else params.delete("query");
-      router.push(`/marketplace?${params.toString()}`, { scroll: false });
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [localSearch, router, searchParams]);
 
   return (
     <>
@@ -78,9 +96,9 @@ export function MarketplaceHeader({ totalResults, viewMode, setViewMode, cities 
                 <MarketplaceFilters cities={cities} />
               </div>
               <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t">
-                <DialogTrigger asChild>
+                <DialogClose asChild>
                   <Button className="w-full bg-primary h-12 rounded-xl font-bold">Show Results</Button>
-                </DialogTrigger>
+                </DialogClose>
               </div>
             </DialogContent>
           </Dialog>
@@ -91,7 +109,7 @@ export function MarketplaceHeader({ totalResults, viewMode, setViewMode, cities 
         <div className="flex items-center gap-3">
           <span className="text-[13px] font-black text-slate-400 uppercase tracking-widest">{totalResults} results for</span>
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Badge className="bg-primary text-white border-none px-3 py-1 font-bold">{eventNameParam}</Badge>
+            <Badge className="bg-primary text-white border-none px-3 py-1 font-bold">{eventNameDisplay}</Badge>
             {selectedCategory && (
               <>
                 <ChevronRight className="h-4 w-4 text-slate-300" />

@@ -7,13 +7,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = APP_CONFIG.url;
 
   try {
-    // Fetch all vendors to include in sitemap
-    const vendors = await prisma.vendorprofile.findMany({
-      where: { verificationStatus: 'APPROVED' },
-      select: { id: true, updatedAt: true }
-    });
+    const BATCH_SIZE = 500;
+    let skip = 0;
+    let allVendors: { id: string, updatedAt: Date }[] = [];
 
-    const vendorUrls = vendors.map((vendor) => ({
+    while (true) {
+      const vendors = await prisma.vendorprofile.findMany({
+        where: { verificationStatus: 'APPROVED' },
+        select: { id: true, updatedAt: true },
+        take: BATCH_SIZE,
+        skip: skip,
+        orderBy: { updatedAt: 'desc' }
+      });
+
+      if (vendors.length === 0) break;
+      allVendors = [...allVendors, ...vendors];
+      skip += BATCH_SIZE;
+    }
+
+    const vendorUrls = allVendors.map((vendor) => ({
       url: `${baseUrl}/marketplace/vendor/${vendor.id}`,
       lastModified: vendor.updatedAt,
       changeFrequency: 'weekly' as const,

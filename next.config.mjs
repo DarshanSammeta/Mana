@@ -5,6 +5,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  output: 'standalone',
   images: {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
@@ -31,11 +32,10 @@ const nextConfig = {
   },
   async rewrites() {
     return [
-      // Example for Micro-Frontend / Multi-zone routing
-      // {
-      //   source: '/checkout/:path*',
-      //   destination: `${process.env.CHECKOUT_APP_URL}/checkout/:path*`,
-      // },
+      {
+        source: '/api/v1/:path*',
+        destination: '/api/:path*',
+      },
     ];
   },
   // Security Headers
@@ -77,6 +77,19 @@ const nextConfig = {
         ],
       },
     ];
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        child_process: false,
+        readline: false,
+      };
+    }
+    return config;
   },
 };
 

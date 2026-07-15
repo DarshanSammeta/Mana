@@ -8,7 +8,7 @@ import { Star, MapPin, Navigation } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
-import { vendorService } from '@/services';
+import { vendorService } from '@/services/client';
 
 interface Vendor {
   id: string;
@@ -69,7 +69,7 @@ export const NearbyVendors = () => {
                 <div className="absolute top-2 right-2">
                   <Badge variant="secondary" className="bg-white/90 backdrop-blur-sm">
                     <Navigation className="h-3 w-3 mr-1" />
-                    {vendor.distance.toFixed(1)} km
+                    {vendor.distance != null ? vendor.distance.toFixed(1) : '0.0'} km
                   </Badge>
                 </div>
               </div>
@@ -82,7 +82,7 @@ export const NearbyVendors = () => {
                 <div className="flex items-center justify-between mt-4">
                   <div className="flex items-center gap-1">
                     <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold">{vendor.rating.toFixed(1)}</span>
+                    <span className="font-semibold">{vendor.rating != null ? vendor.rating.toFixed(1) : '0.0'}</span>
                     <span className="text-xs text-muted-foreground">({vendor.reviewCount})</span>
                   </div>
                   <Badge variant="outline" className="text-xs">

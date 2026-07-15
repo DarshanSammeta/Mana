@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
+import { cn, formatRating, formatDistance, formatCurrency } from "@/lib/utils";
 import { optimizeImage } from "@/lib/cloudinary";
 import { IMAGES } from "@/constants";
 
@@ -90,17 +90,19 @@ export const VendorCard = memo(function VendorCard({ vendor, index: _index, view
     return (
       <div className="flex flex-col md:flex-row bg-card border border-border rounded-xl overflow-hidden hover:shadow-lg transition-all group">
         <div className="relative w-full md:w-72 h-72 md:h-auto overflow-hidden bg-slate-50 shrink-0">
-          <Link href={`/marketplace/vendor/${vendor.id}`}>
-            <Image
-              src={optimizedCover || IMAGES.DEFAULT_EVENT}
-              alt={vendor.businessName}
-              fill
-              className="object-cover transition-transform duration-700 group-hover:scale-110"
-              sizes="(max-width: 768px) 100vw, 300px"
-              priority={priority}
-              placeholder="blur"
-              blurDataURL={BLUR_DATA_URL}
-            />
+          <Link href={`/marketplace/vendor/${vendor.id}`} className="block w-full h-full">
+            <div className="relative w-full h-full">
+              <Image
+                src={optimizedCover || IMAGES.DEFAULT_EVENT}
+                alt={vendor.businessName}
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-110"
+                sizes="(max-width: 768px) 100vw, 300px"
+                priority={priority}
+                placeholder="blur"
+                blurDataURL={BLUR_DATA_URL}
+              />
+            </div>
           </Link>
           <button
             onClick={handleToggleWishlist}
@@ -153,14 +155,14 @@ export const VendorCard = memo(function VendorCard({ vendor, index: _index, view
                <div className="flex items-center gap-2 text-sm text-card-foreground">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">{vendor.city || "Hyderabad"}</span>
-                  {vendor.distance !== undefined && vendor.distance !== Infinity && (
-                    <span className="text-muted-foreground font-normal">• {vendor.distance.toFixed(1)} km away</span>
+                  {vendor.distance != null && vendor.distance !== Infinity && (
+                    <span className="text-muted-foreground font-normal">• {formatDistance(vendor.distance)} away</span>
                   )}
                </div>
                {vendor.travelCharge > 0 && (
                  <div className="flex items-center gap-2 text-xs font-bold text-orange-600">
                     <Zap className="h-3.5 w-3.5 fill-current" />
-                    <span>Travel Charge: ₹{vendor.travelCharge.toFixed(0)} apply for your location</span>
+                    <span>Travel Charge: {formatCurrency(vendor.travelCharge)} apply for your location</span>
                  </div>
                )}
                <div className="flex items-center gap-2 text-sm text-success font-bold">
@@ -212,17 +214,19 @@ export const VendorCard = memo(function VendorCard({ vendor, index: _index, view
   return (
     <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden flex flex-col hover:shadow-2xl transition-all duration-500 group h-full hover:-translate-y-1">
       <div className="relative aspect-[4/3] overflow-hidden bg-slate-50">
-        <Link href={`/marketplace/vendor/${vendor.id}`}>
-          <Image
-            src={optimizedCover || IMAGES.DEFAULT_EVENT}
-            alt={vendor.businessName}
-            fill
-            className="object-cover transition-transform duration-1000 group-hover:scale-110"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 300px"
-            priority={priority}
-            placeholder="blur"
-            blurDataURL={BLUR_DATA_URL}
-          />
+        <Link href={`/marketplace/vendor/${vendor.id}`} className="block w-full h-full">
+          <div className="relative w-full h-full">
+            <Image
+              src={optimizedCover || IMAGES.DEFAULT_EVENT}
+              alt={vendor.businessName}
+              fill
+              className="object-cover transition-transform duration-1000 group-hover:scale-110"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 300px"
+              priority={priority}
+              placeholder="blur"
+              blurDataURL={BLUR_DATA_URL}
+            />
+          </div>
         </Link>
         <div className="absolute top-3 left-3 flex flex-col gap-2">
            {vendor.verificationStatus === "APPROVED" && (
@@ -272,16 +276,16 @@ export const VendorCard = memo(function VendorCard({ vendor, index: _index, view
            </Link>
            <div className="flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100 shrink-0">
               <Star className="h-3.5 w-3.5 fill-[#F59E0B] text-[#F59E0B]" />
-              <span className="text-xs font-black text-[#92400E]">{vendor.rating || "4.8"}</span>
+              <span className="text-xs font-black text-[#92400E]">{formatRating(vendor.rating || "4.8")}</span>
            </div>
         </div>
 
         <div className="flex items-center gap-1.5 text-[12px] text-slate-500 mb-6 font-bold">
            <MapPin className="h-3.5 w-3.5 text-blue-500" />
            <span className="truncate">{vendor.city || "Contact for location"}</span>
-           {vendor.distance !== undefined && vendor.distance !== Infinity && (
+           {vendor.distance != null && vendor.distance !== Infinity && (
               <span className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md ml-1">
-                {vendor.distance < 1 ? `${(vendor.distance * 1000).toFixed(0)}m` : `${vendor.distance.toFixed(1)}km`} away
+                {formatDistance(vendor.distance)} away
               </span>
            )}
            <span className="text-slate-300 mx-1">•</span>
@@ -291,7 +295,7 @@ export const VendorCard = memo(function VendorCard({ vendor, index: _index, view
         {vendor.travelCharge > 0 && (
           <div className="mb-4 flex items-center gap-2 text-[11px] font-bold text-orange-600 bg-orange-50 px-3 py-2 rounded-xl border border-orange-100">
             <Zap className="h-3.5 w-3.5 fill-current" />
-            <span>Travel Charge: ₹{vendor.travelCharge.toFixed(0)}</span>
+            <span>Travel Charge: {formatCurrency(vendor.travelCharge)}</span>
             <Info className="h-3 w-3 ml-auto opacity-50" />
           </div>
         )}
@@ -301,7 +305,7 @@ export const VendorCard = memo(function VendorCard({ vendor, index: _index, view
               <div className="flex flex-col gap-0.5">
                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Base Package</span>
                  <div className="flex items-center gap-1">
-                    <span className="text-2xl font-black text-[#111827]">₹{basePrice?.toLocaleString() || "2,500"}</span>
+                    <span className="text-2xl font-black text-[#111827]">{formatCurrency(basePrice || 2500)}</span>
                     <span className="text-[10px] font-bold text-slate-400 mb-1">/event</span>
                  </div>
               </div>

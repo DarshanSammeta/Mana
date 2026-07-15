@@ -17,7 +17,7 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "react-hot-toast";
-import { notificationService } from "@/services/notification.service";
+import { notificationService } from "@/services/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,8 +39,17 @@ export default function NotificationsPage() {
     status,
   } = useInfiniteQuery({
     queryKey: ['notifications'],
-    queryFn: ({ pageParam }) => notificationService.getNotifications(20, pageParam),
-    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await notificationService.getNotifications(20, pageParam as any);
+      // Backend returns { notifications: [], unreadCount: 0 }
+      // The component expects items and nextCursor
+      return {
+        items: response.notifications || [],
+        unreadCount: response.unreadCount || 0,
+        nextCursor: response.notifications?.length === 20 ? (pageParam as number) + 20 : undefined
+      };
+    },
+    initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
 
@@ -78,8 +87,8 @@ export default function NotificationsPage() {
     }
   };
 
-  const notifications = data?.pages.flatMap((page) => page.items) || [];
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const notifications = data?.pages.flatMap((page) => page?.items || []).filter(Boolean) || [];
+  const unreadCount = notifications.filter(n => n && !n.isRead).length;
 
   return (
     <div className="space-y-6">
@@ -112,7 +121,8 @@ export default function NotificationsPage() {
         <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
           <div className="divide-y divide-border/50">
             {notifications.map((notification) => {
-              const config = getIcon(notification.type);
+              if (!notification) return null;
+              const config = getIcon(notification.type || 'SYSTEM');
               return (
                 <div
                   key={notification.id}
@@ -135,14 +145,14 @@ export default function NotificationsPage() {
                          "text-sm leading-tight",
                          !notification.isRead ? "font-bold text-foreground" : "text-muted-foreground"
                        )}>
-                         {notification.title}
+                         {notification.title || 'Notification'}
                        </h3>
                        <span className="text-[10px] font-medium text-muted-foreground/60 whitespace-nowrap pt-0.5">
-                         {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                         {notification.createdAt ? formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true }) : 'recently'}
                        </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      {notification.message}
+                      {notification.message || ''}
                     </p>
 
                     {notification.link && (

@@ -4,6 +4,8 @@ import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
 import { revalidateTag } from "next/cache";
+import { createAuditLog } from "@/lib/audit";
+import { vendorProfileSchema } from "@/validations/vendor";
 
 export async function GET(req: Request) {
   return withErrorHandler(async () => {
@@ -95,7 +97,7 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json(profile);
-  });
+  }, req);
 }
 
 export async function PATCH(req: Request) {
@@ -124,8 +126,16 @@ export async function PATCH(req: Request) {
 
     revalidateTag('vendors');
     logger.info("Vendor settings updated", { userId: payload.userId });
+
+    await createAuditLog({
+        userId: payload.userId,
+        action: "VENDOR_SETTINGS_UPDATED",
+        details: body,
+        ipAddress: req.headers.get("x-forwarded-for") || "unknown"
+    });
+
     return NextResponse.json(profile);
-  });
+  }, req);
 }
 
 export async function PUT(req: Request) {
@@ -140,28 +150,35 @@ export async function PUT(req: Request) {
 
     const body = await req.json();
 
+    const validatedData = vendorProfileSchema.parse(body);
+
+    const oldProfile = await prisma.vendorprofile.findUnique({
+        where: { userId: payload.userId },
+        select: { bankDetails: true }
+    });
+
     // Perform update in a transaction if subcategoryIds are provided to create initial services
     const result = await prisma.$transaction(async (tx) => {
-      const profile = await tx.vendorprofile.update({
+    const profile = await tx.vendorprofile.update({
         where: { userId: payload.userId },
         data: {
-          businessName: body.businessName,
-          description: body.description,
-          address: body.address,
-          city: body.city,
-          state: body.state,
-          zipCode: body.zipCode,
-          latitude: body.latitude,
-          longitude: body.longitude,
-          serviceRadius: body.serviceRadius,
-          gstNumber: body.gstNumber,
-          bankDetails: body.bankDetails,
+          businessName: validatedData.businessName,
+          description: validatedData.description,
+          address: validatedData.address,
+          city: validatedData.city,
+          state: validatedData.state,
+          zipCode: validatedData.zipCode,
+          serviceRadius: validatedData.serviceRadius,
+          gstNumber: validatedData.gstNumber,
+          bankDetails: validatedData.bankDetails as any,
+          logo: validatedData.logo,
+          coverImage: validatedData.coverImage,
         },
       });
 
       // If subcategoryIds are provided, create initial services for them if they don't exist
-      if (body.subcategoryIds && Array.isArray(body.subcategoryIds)) {
-        for (const subId of body.subcategoryIds) {
+      if (validatedData.subcategoryIds && Array.isArray(validatedData.subcategoryIds)) {
+        for (const subId of validatedData.subcategoryIds) {
           // Find first service type for this subcategory as default
           const serviceType = await tx.servicetype.findFirst({
             where: { subcategoryId: subId }
@@ -197,11 +214,31 @@ export async function PUT(req: Request) {
       return profile;
     });
 
+    // Audit logs for critical changes
+    if (JSON.stringify(oldProfile?.bankDetails) !== JSON.stringify(body.bankDetails)) {
+        await createAuditLog({
+            userId: payload.userId,
+            action: "VENDOR_BANK_DETAILS_UPDATED",
+            details: {
+                old: { bankDetails: oldProfile?.bankDetails },
+                new: { bankDetails: body.bankDetails }
+            },
+            ipAddress: req.headers.get("x-forwarded-for") || "unknown"
+        });
+    }
+
+    await createAuditLog({
+        userId: payload.userId,
+        action: "VENDOR_PROFILE_UPDATED",
+        details: { fields: Object.keys(body) },
+        ipAddress: req.headers.get("x-forwarded-for") || "unknown"
+    });
+
     // Revalidate marketplace data
     revalidateTag('vendors');
     revalidateTag('marketplace');
 
     logger.info("Vendor profile updated", { userId: payload.userId, vendorId: result.id });
     return NextResponse.json(result);
-  });
+  }, req);
 }

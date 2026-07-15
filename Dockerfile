@@ -27,6 +27,8 @@ COPY . .
 
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
+# Compile custom server and build Next.js
+RUN npx esbuild server.ts --bundle --platform=node --outfile=server.js --external:next --external:socket.io --external:express
 RUN npm run build
 
 # -----------------------------
@@ -44,6 +46,7 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/server.js ./server.js
 
 RUN mkdir .next
 RUN chown nextjs:nodejs .next

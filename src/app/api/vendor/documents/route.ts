@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { vendorDocumentSchema } from "@/validations/vendor";
 
 export async function POST(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
@@ -12,11 +13,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { type, url } = await req.json(); // type: 'AADHAAR', 'PAN', 'TRADE_LICENSE', etc.
-
-    if (!type || !url) {
-      return NextResponse.json({ message: "Type and URL are required" }, { status: 400 });
-    }
+    const body = await req.json();
+    const { type, url } = vendorDocumentSchema.parse(body);
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId }
@@ -35,6 +33,22 @@ export async function POST(req: Request) {
         status: "PENDING"
       }
     });
+
+    // If there were rejected documents, check if this upload addresses one
+    if (vendorProfile.rejectedDocuments) {
+        const rejected = vendorProfile.rejectedDocuments as string[];
+        if (rejected.includes(type)) {
+            const newRejected = rejected.filter(doc => doc !== type);
+            await prisma.vendorprofile.update({
+                where: { id: vendorProfile.id },
+                data: {
+                    rejectedDocuments: newRejected,
+                    // If all rejected documents are replaced, we can potentially auto-trigger a re-review status
+                    // verificationStatus: newRejected.length === 0 ? "PENDING" : vendorProfile.verificationStatus
+                }
+            });
+        }
+    }
 
     // Notify Admin (optional, could use a utility here)
     await prisma.notification.create({

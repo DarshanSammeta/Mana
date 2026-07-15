@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { vendorService } from "@/services";
+import { vendorService } from "@/services/client";
 
 export function useSubscription() {
   return useQuery({

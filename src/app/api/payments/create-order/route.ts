@@ -29,6 +29,9 @@ export async function POST(req: Request) {
     }
 
     const razorpay = getRazorpay();
+    if (!razorpay) {
+      return NextResponse.json({ message: "Payment service unavailable" }, { status: 503 });
+    }
 
     const options = {
       amount: Math.round(amount * 100), // amount in the smallest currency unit
@@ -41,5 +44,5 @@ export async function POST(req: Request) {
     const order = await razorpay.orders.create(options);
 
     return NextResponse.json(order);
-  });
+  }, req);
 }

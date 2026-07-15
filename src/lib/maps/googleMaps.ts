@@ -27,14 +27,28 @@ export const geocodeAddress = async (address: string): Promise<Coordinates | nul
 };
 
 export const calculateDistance = async (origin: Coordinates, destination: Coordinates): Promise<number | null> => {
+  const result = await calculateDetailedDistance(origin, destination);
+  return result?.distanceKm || null;
+};
+
+export const calculateDetailedDistance = async (origin: Coordinates, destination: Coordinates): Promise<{ distanceKm: number, durationSec: number, trafficDelaySec: number } | null> => {
   try {
     const response = await axios.get(
-      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&key=${GOOGLE_MAPS_API_KEY}`
+      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&departure_time=now&traffic_model=best_guess&key=${GOOGLE_MAPS_API_KEY}`
     );
 
     if (response.data.status === 'OK' && response.data.rows[0].elements[0].status === 'OK') {
-      // distance is in meters, return in kilometers
-      return response.data.rows[0].elements[0].distance.value / 1000;
+      const element = response.data.rows[0].elements[0];
+      const distanceKm = element.distance.value / 1000;
+      const durationSec = element.duration.value;
+      const durationInTrafficSec = element.duration_in_traffic?.value || durationSec;
+      const trafficDelaySec = Math.max(0, durationInTrafficSec - durationSec);
+
+      return {
+        distanceKm,
+        durationSec: durationInTrafficSec,
+        trafficDelaySec
+      };
     }
     return null;
   } catch (error) {

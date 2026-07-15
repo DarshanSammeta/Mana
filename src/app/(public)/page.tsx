@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
 import dynamic from "next/dynamic";
 
@@ -34,6 +34,7 @@ export const metadata: Metadata = {
 const getEventTypes = unstable_cache(
   async () => {
     try {
+      const prisma = getPrisma();
       return await prisma.eventtype.findMany({
         where: { isActive: true },
         select: {
@@ -65,9 +66,13 @@ const getEventTypes = unstable_cache(
 const getFeaturedVendorsData = unstable_cache(
   async () => {
     try {
+      const prisma = getPrisma();
       const vendors = await prisma.vendorprofile.findMany({
-        where: { verificationStatus: "APPROVED" },
-        take: 12,
+        where: {
+          verificationStatus: "APPROVED",
+          rating: { gte: 4 } // Better utilize index [city, verificationStatus, rating]
+        },
+        take: 8, // Reduced from 12 for faster initial paint and less data
         orderBy: { rating: "desc" },
         select: {
           id: true,
@@ -76,7 +81,6 @@ const getFeaturedVendorsData = unstable_cache(
           rating: true,
           reviewCount: true,
           city: true,
-          verificationStatus: true,
           service: {
             take: 1,
             select: {
@@ -102,10 +106,14 @@ const getFeaturedVendorsData = unstable_cache(
 const getTrendingVendorsData = unstable_cache(
   async () => {
     try {
+      const prisma = getPrisma();
       const vendors = await prisma.vendorprofile.findMany({
-        where: { verificationStatus: "APPROVED" },
-        take: 12,
-        orderBy: { reviewCount: "desc" },
+        where: {
+          verificationStatus: "APPROVED",
+          totalBookings: { gte: 1 } // Better utilize index
+        },
+        take: 8, // Reduced from 12
+        orderBy: { totalBookings: "desc" },
         select: {
           id: true,
           businessName: true,
@@ -113,7 +121,6 @@ const getTrendingVendorsData = unstable_cache(
           rating: true,
           reviewCount: true,
           city: true,
-          verificationStatus: true,
           service: {
             take: 1,
             select: {

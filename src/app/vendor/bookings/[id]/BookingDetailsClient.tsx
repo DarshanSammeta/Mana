@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { vendorService } from "@/services";
+import { vendorService } from "@/services/client";
 import { BookingStatusTracker } from "@/components/common/BookingStatusTracker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,12 +19,25 @@ import {
   ShieldCheck,
   ClipboardList,
   MessageSquare,
-  Trash2
+  Trash2,
+  History,
+  TrendingUp,
+  DollarSign
 } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { BookingTimeline } from "@/components/booking/timeline/BookingTimeline";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 import { Booking, BookingStatus, BookingTeamMember, BookingChecklistItem } from "@/types/booking";
 
@@ -39,7 +52,10 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
   const queryClient = useQueryClient();
   const [otp, setOtp] = useState("");
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
-  const [newStaff, setNewStaff] = useState({ name: "", role: "", phone: "" });
+  const [isNegotiateOpen, setIsNegotiateOpen] = useState(false);
+  const [counterPrice, setCounterPrice] = useState(initialBooking.totalAmount.toString());
+  const [negotiationNotes, setNegotiationNotes] = useState("");
+  const [newStaff, setNewStaff] = useState({ name: "", role: "", phone: "", memberId: "" });
 
   const { data: booking } = useQuery({
     queryKey: ["booking", id],
@@ -49,7 +65,7 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
     refetchOnMount: false
   });
 
-  const [checklist, setChecklist] = useState<BookingChecklistItem[]>(booking?.checklist || [
+  const [checklist, setChecklist] = useState<BookingChecklistItem[]>(initialBooking.checklist || [
     { id: 1, task: "Equipment Check", completed: false },
     { id: 2, task: "Team Briefing", completed: false },
     { id: 3, task: "Venue Arrival", completed: false },
@@ -94,13 +110,29 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
   });
 
   const { mutate: addStaff, isPending: isAddingStaff } = useMutation({
-    mutationFn: (staffData: typeof newStaff) => vendorService.addBookingTeamMember(id, staffData),
+    mutationFn: (staffData: typeof newStaff) => vendorService.addBookingTeamMember(id, {
+        name: staffData.name,
+        role: staffData.role,
+        phone: staffData.phone
+    } as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["booking-team", id] });
       setIsStaffModalOpen(false);
-      setNewStaff({ name: "", role: "", phone: "" });
+      setNewStaff({ name: "", role: "", phone: "", memberId: "" });
       toast.success("Staff member added");
     },
+  });
+
+  const { mutate: negotiate, isPending: isNegotiating } = useMutation({
+    mutationFn: (data: { totalAmount: number, notes?: string }) => vendorService.sendCounterQuote(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["booking", id] });
+      setIsNegotiateOpen(false);
+      toast.success("Counter-quote sent!");
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || "Negotiation failed");
+    }
   });
 
   const { mutate: removeStaff } = useMutation({
@@ -211,6 +243,13 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
               <Badge className="bg-primary/10 text-primary border-none font-bold uppercase text-[10px]">
                 {booking.status.replace(/_/g, ' ')}
               </Badge>
+              {booking.status === "PENDING" && (
+                <div className="flex items-center gap-2">
+                   <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-[10px] rounded-lg" onClick={() => updateStatus("CONFIRMED")}>Accept Booking</Button>
+                   <Button size="sm" variant="outline" className="h-7 text-[10px] rounded-lg" onClick={() => setIsNegotiateOpen(true)}>Send Counter Quote</Button>
+                   <Button size="sm" variant="destructive" className="h-7 text-[10px] rounded-lg" onClick={() => updateStatus("REJECTED")}>Decline</Button>
+                </div>
+              )}
               {booking.vendorConfirmedAt5d === null && booking.status === "CONFIRMED" && (
                 <div className="flex items-center gap-2">
                    <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-[10px] rounded-lg" onClick={() => confirm5dAvailability(true)}>Confirm Availability</Button>
@@ -246,6 +285,20 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Management Hub */}
         <div className="lg:col-span-8 space-y-8">
+
+           {/* Booking Timeline */}
+           <Card className="border-gray-100 rounded-3xl shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between border-b border-gray-50">
+                 <div className="flex items-center gap-2">
+                    <History className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg font-bold">Booking Timeline</CardTitle>
+                 </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                 {/* @ts-expect-error - bookingstatuslog might not be typed correctly in the Prisma generated client */}
+                 <BookingTimeline logs={booking.bookingstatuslog || []} />
+              </CardContent>
+           </Card>
 
            {/* Event Day Checklist */}
            <Card className="border-gray-100 rounded-3xl shadow-sm">
@@ -480,11 +533,40 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
              </CardHeader>
              <CardContent className="p-6 space-y-4">
                 <div className="space-y-2">
+                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Select from Global Team</label>
+                   <select
+                      className="w-full h-12 rounded-xl bg-secondary/50 border-none font-bold px-4 outline-none appearance-none"
+                      onChange={(e) => {
+                         const member = (initialBooking as any).globalTeam?.find((m: any) => m.id === e.target.value);
+                         if (member) {
+                            setNewStaff({
+                               name: member.name,
+                               role: member.role,
+                               phone: member.phone || "",
+                               memberId: member.id
+                            });
+                         }
+                      }}
+                   >
+                      <option value="">-- Select Team Member --</option>
+                      {(initialBooking as any).globalTeam?.map((member: any) => (
+                         <option key={member.id} value={member.id}>{member.name} ({member.role})</option>
+                      ))}
+                   </select>
+                </div>
+
+                <div className="relative flex items-center py-2">
+                    <div className="flex-grow border-t border-gray-200"></div>
+                    <span className="flex-shrink mx-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Or Manual Entry</span>
+                    <div className="flex-grow border-t border-gray-200"></div>
+                </div>
+
+                <div className="space-y-2">
                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Full Name</label>
                    <Input
                       placeholder="e.g. John Doe"
                       value={newStaff.name}
-                      onChange={(e) => setNewStaff({...newStaff, name: e.target.value})}
+                      onChange={(e) => setNewStaff({...newStaff, name: e.target.value, memberId: ""})}
                       className="rounded-xl border-gray-200"
                    />
                 </div>
@@ -526,6 +608,58 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
           </Card>
         </div>
       )}
+
+      {/* Counter Quote Modal */}
+      <Dialog open={isNegotiateOpen} onOpenChange={setIsNegotiateOpen}>
+        <DialogContent className="rounded-[32px] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Negotiate Price</DialogTitle>
+            <DialogDescription className="font-bold text-gray-500">
+              Send a counter-quote if you want to adjust the service fee.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">New Proposed Amount (₹)</label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="number"
+                  value={counterPrice}
+                  onChange={(e) => setCounterPrice(e.target.value)}
+                  className="pl-10 h-14 rounded-2xl border-gray-200 font-black text-xl"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Add Notes for Client</label>
+              <Textarea
+                value={negotiationNotes}
+                onChange={(e) => setNegotiationNotes(e.target.value)}
+                placeholder="Explain why you are proposing this price..."
+                className="rounded-2xl border-gray-200 min-h-[100px] font-medium"
+              />
+            </div>
+            <div className="bg-indigo-50 p-4 rounded-2xl flex items-start gap-3">
+               <TrendingUp className="h-5 w-5 text-indigo-600 mt-0.5" />
+               <p className="text-xs font-bold text-indigo-700 leading-relaxed">
+                  The client will be notified immediately. They can either accept your quote or reject it.
+               </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" className="rounded-xl font-bold" onClick={() => setIsNegotiateOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-primary text-white rounded-xl font-black"
+              onClick={() => negotiate({ totalAmount: Number(counterPrice), notes: negotiationNotes })}
+              disabled={isNegotiating || !counterPrice}
+            >
+              {isNegotiating ? "Sending..." : "Send Counter Quote"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

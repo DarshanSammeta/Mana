@@ -204,7 +204,7 @@ export default function CartPage() {
                         </div>
 
                         <Button className="w-full h-16 rounded-2xl text-lg font-black group/btn" size="lg" asChild variant="premium" onClick={handleCheckoutClick}>
-                            <Link href="/customer/checkout">
+                            <Link href="/customer/checkout" className="flex items-center justify-center">
                                 Secure Checkout
                                 <ArrowRight className="ml-2 h-5 w-5 group-hover/btn:translate-x-1 transition-transform" />
                             </Link>

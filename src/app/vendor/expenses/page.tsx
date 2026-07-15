@@ -38,7 +38,7 @@ import {
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 
 // Categories for expenses
 const CATEGORIES = [

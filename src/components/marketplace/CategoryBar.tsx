@@ -16,24 +16,26 @@ export function CategoryBar({ categories }: CategoryBarProps) {
   const searchParams = useSearchParams();
   const [isExpanded, setIsExpanded] = useState(true);
 
-  const selectedCategory = searchParams?.get("category") || categories?.[0]?.name;
+  const selectedCategory = searchParams?.get("category");
   const selectedSubcategory = searchParams?.get("subcategory");
 
-  const activeCategoryData = categories?.find((c: any) => c.name === selectedCategory) || categories?.[0];
+  const activeCategoryData = categories?.find((c: any) => c.name === selectedCategory);
 
   const updateUrl = (newCategory?: string, newSubcategory?: string | null) => {
     const params = new URLSearchParams(searchParams?.toString() || "");
     if (newCategory) {
       params.set("category", newCategory);
       params.delete("subcategory");
+      params.delete("page"); // Reset pagination on category change
     } else if (newSubcategory !== undefined) {
       if (newSubcategory) params.set("subcategory", newSubcategory);
       else params.delete("subcategory");
+      params.delete("page");
     }
     router.push(`/marketplace?${params.toString()}`, { scroll: false });
   };
 
-  if (!selectedCategory) return null;
+  if (!selectedCategory || !activeCategoryData) return null;
 
   return (
     <AnimatePresence>

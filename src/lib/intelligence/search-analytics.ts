@@ -1,5 +1,5 @@
 import { safeRedis } from "@/lib/redis";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 import { Prisma } from "@prisma/client";
 
@@ -36,7 +36,7 @@ export async function trackSearch(data: SearchTrackData) {
       await safeRedis.geoadd(SEARCH_DEMAND_GEOSPATIAL_KEY, lng, lat, `${Date.now()}:${category || 'general'}`);
 
       // Also store in Postgres for long-term analytics and complex heatmaps
-      await prisma.search_analytics.create({
+      await getPrisma().search_analytics.create({
         data: {
           query: query || null,
           category: category || null,
@@ -66,7 +66,7 @@ export async function getSearchHeatmap(category?: string, city?: string) {
 
   const where = Prisma.sql`WHERE ${Prisma.join(whereConditions, ' AND ')}`;
 
-  return await prisma.$queryRaw`
+  return await getPrisma().$queryRaw`
     SELECT
       ROUND(latitude::numeric, 3) as lat,
       ROUND(longitude::numeric, 3) as lng,

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { marketplaceService, bookingService } from "@/services";
+import { marketplaceService, bookingService } from "@/services/client";
 
 export const useEventTypes = () => {
   return useQuery({

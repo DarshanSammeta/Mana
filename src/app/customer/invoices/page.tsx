@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { customerService } from "@/services/customer.service";
+import { customerService } from "@/services/client";
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -26,18 +26,20 @@ export default function InvoicesPage() {
 
   const fetchInvoices = async () => {
     try {
+      setLoading(true);
       const data = await customerService.getInvoices();
-      setInvoices(data);
+      setInvoices(Array.isArray(data) ? data : (data?.invoices || data?.items || data?.data || []));
     } catch (error) {
       console.error("Failed to fetch invoices", error);
+      setInvoices([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredInvoices = invoices.filter(inv =>
-    inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    inv.booking.vendorprofile.businessName.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredInvoices = (Array.isArray(invoices) ? invoices : []).filter(inv =>
+    inv?.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    inv?.booking?.vendorprofile?.businessName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (

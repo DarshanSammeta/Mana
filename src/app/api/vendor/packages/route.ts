@@ -1,6 +1,28 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { z } from "zod";
+
+const packageSchema = z.object({
+  serviceId: z.string().uuid(),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  price: z.number().positive(),
+  features: z.array(z.string()).optional(),
+  inclusions: z.array(z.string()).optional(),
+  exclusions: z.array(z.string()).optional(),
+  extraCharges: z.record(z.any()).optional(),
+  discount: z.number().optional(),
+  taxes: z.number().optional(),
+  images: z.array(z.string()).optional(),
+  videos: z.array(z.string()).optional(),
+  pricingRules: z.array(z.object({
+    minGuests: z.number().int().min(0),
+    maxGuests: z.number().int().min(0),
+    pricePerGuest: z.number().positive(),
+    flatFee: z.number().min(0).optional(),
+  })).optional(),
+});
 
 export async function POST(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
@@ -13,11 +35,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { serviceId, name, description, price, inclusions, exclusions, images } = body;
+    const validatedData = packageSchema.parse(body);
 
     const service = await prisma.service.findFirst({
         where: {
-            id: serviceId,
+            id: validatedData.serviceId,
             vendorprofile: { userId: payload.userId }
         }
     });
@@ -27,18 +49,36 @@ export async function POST(req: Request) {
     const pkg = await prisma.renamedpackage.create({
       data: {
         id: crypto.randomUUID(),
-        serviceId,
-        name,
-        description,
-        price,
-        inclusions,
-        exclusions,
-        images,
+        serviceId: validatedData.serviceId,
+        name: validatedData.name,
+        description: validatedData.description,
+        price: validatedData.price,
+        inclusions: validatedData.inclusions,
+        exclusions: validatedData.exclusions,
+        images: validatedData.images,
+        videos: validatedData.videos,
+        pricingrule: validatedData.pricingRules ? {
+          createMany: {
+            data: validatedData.pricingRules.map(rule => ({
+              id: crypto.randomUUID(),
+              minGuests: rule.minGuests,
+              maxGuests: rule.maxGuests,
+              pricePerGuest: rule.pricePerGuest,
+              flatFee: rule.flatFee || 0,
+            }))
+          }
+        } : undefined
       },
+      include: {
+        pricingrule: true
+      }
     });
 
     return NextResponse.json(pkg, { status: 201 });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ message: "Validation Error", errors: error.errors }, { status: 400 });
+    }
     const message = error instanceof Error ? error.message : "Bad Request";
     return NextResponse.json({ message }, { status: 400 });
   }

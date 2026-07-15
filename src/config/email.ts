@@ -5,5 +5,6 @@ export const EMAIL_CONFIG = {
     seller: 'Mana Events <seller-alerts@manaevents.in>',
     auth: 'Mana Events <auth@manaevents.in>',
     reports: 'Mana Events <reports@manaevents.in>',
+    system: 'Mana Events <system@manaevents.in>',
   },
 };

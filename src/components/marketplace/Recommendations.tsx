@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { marketplaceService } from '@/services/marketplace.service';
+import { marketplaceService } from '@/services/client/marketplace.service';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from '@/components/ui/card';
 import { Star, TrendingUp, Award, MapPin } from 'lucide-react';
@@ -52,7 +52,7 @@ export const Recommendations = () => {
                       <h4 className="font-bold line-clamp-1">{vendor.businessName}</h4>
                       <div className="flex items-center gap-1 mt-2">
                         <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm font-medium">{vendor.rating.toFixed(1)}</span>
+                        <span className="text-sm font-medium">{vendor.rating != null ? vendor.rating.toFixed(1) : '0.0'}</span>
                         <span className="text-xs text-muted-foreground ml-auto">{vendor.totalBookings} bookings</span>
                       </div>
                     </CardContent>

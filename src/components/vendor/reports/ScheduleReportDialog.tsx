@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Settings2, Loader2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 
 export function ScheduleReportDialog() {
   const [open, setOpen] = useState(false);

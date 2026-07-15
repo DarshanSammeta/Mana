@@ -18,8 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { marketplaceService } from "@/services/marketplace.service";
-import { vendorService } from "@/services/vendor.service";
+import { marketplaceService } from "@/services/client";
+import { vendorService } from "@/services/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 

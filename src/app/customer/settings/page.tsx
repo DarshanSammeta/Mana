@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "react-hot-toast";
-import { customerService } from "@/services/customer.service";
-import { notificationService } from "@/services/notification.service";
+import { customerService } from "@/services/client";
+import { notificationService } from "@/services/client";
 
 export default function CustomerSettings() {
   const { user } = useAuthStore();
@@ -51,9 +51,10 @@ export default function CustomerSettings() {
   const fetchPreferences = async () => {
     try {
       const data = await notificationService.getPreferences();
-      setNotificationPreferences(data);
+      setNotificationPreferences(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch preferences", error);
+      setNotificationPreferences([]);
     }
   };
 
@@ -323,7 +324,7 @@ export default function CustomerSettings() {
 
                 <div className="space-y-6">
                   {["BOOKING", "PAYMENT", "CHAT", "SYSTEM"].map((category) => {
-                    const pref = notificationPreferences.find(p => p.category === category) || {
+                    const pref = (Array.isArray(notificationPreferences) ? notificationPreferences : []).find(p => p?.category === category) || {
                       email: true, sms: false, push: true
                     };
                     return (

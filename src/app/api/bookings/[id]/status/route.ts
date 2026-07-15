@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
-import { sendSMS } from "@/lib/sms/twilio";
-import { generateAndUploadInvoice } from "@/lib/pdf/generator";
 import logger from "@/lib/logger";
 import { withErrorHandler } from "@/lib/error-handler";
+import { isValidTransition } from "@/lib/booking-state-machine";
+import { createAuditLog } from "@/lib/audit";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
@@ -45,8 +45,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
 
+    // State Transition Validation
+    if (!isValidTransition(booking.status, status)) {
+        logger.warn("Invalid status transition attempted", {
+            bookingId,
+            currentStatus: booking.status,
+            requestedStatus: status,
+            userId: payload.userId
+        });
+        return NextResponse.json({
+            message: `Invalid status transition from ${booking.status} to ${status}`
+        }, { status: 400 });
+    }
+
     // Permission check
-    if (payload.role === "VENDOR" && booking.vendorprofile.userId !== payload.userId) {
+    if (payload.role === "VENDOR" && (!booking.vendorprofile || booking.vendorprofile.userId !== payload.userId)) {
         logger.warn("Unauthorized status update attempt", { bookingId, userId: payload.userId });
         return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
     }
@@ -156,119 +169,109 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
       }
 
-      // Step 10: Handle Payout when event is completed
-      if (status === "EVENT_COMPLETED" && booking.status !== "EVENT_COMPLETED") {
-        const vendorUserId = updated.vendorprofile.userId;
-        const payoutAmount = updated.vendorPayout;
+      // Step 2: "Start Journey" logic integrated within status update
+      // When status becomes VENDOR_TRAVELING, it "unlocks" customer address visibility
+      // (handled in the GET /api/bookings/[id] route) and we can log the journey start.
+      if (status === "VENDOR_TRAVELING") {
+          // Additional logging or logic for journey start can be added here
+      }
 
-        let wallet = await tx.wallet.findUnique({
-          where: { userId: vendorUserId }
-        });
+    // Step 10: Handle Payout when event is completed (REMOVED: Payout should happen after CUSTOMER_CONFIRMED/PAYMENT_RELEASED phase)
+    if (status === "PAYMENT_RELEASED" && booking.status !== "PAYMENT_RELEASED" && updated.vendorprofile) {
+      const vendorUserId = updated.vendorprofile.userId;
+      const payoutAmount = updated.vendorPayout;
 
-        if (!wallet) {
-          wallet = await tx.wallet.create({
-            data: {
-              id: crypto.randomUUID(),
-              userId: vendorUserId,
-              balance: 0,
-              type: "VENDOR"
-            }
-          });
-        }
+      let wallet = await tx.wallet.findUnique({
+        where: { userId: vendorUserId }
+      });
 
-        await tx.wallet.update({
-          where: { id: wallet.id },
-          data: {
-            balance: { increment: payoutAmount },
-            lifetimeEarnings: { increment: payoutAmount },
-            withdrawable: { increment: payoutAmount }
-          }
-        });
-
-        await tx.transaction.create({
+      if (!wallet) {
+        wallet = await tx.wallet.create({
           data: {
             id: crypto.randomUUID(),
-            walletId: wallet.id,
-            bookingId: bookingId,
-            amount: payoutAmount,
-            type: "CREDIT",
-            status: "COMPLETED",
-            description: `Payout for booking #${updated.bookingNumber}`
+            userId: vendorUserId,
+            balance: 0,
+            type: "VENDOR"
           }
         });
       }
+
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: {
+          balance: { increment: payoutAmount },
+          lifetimeEarnings: { increment: payoutAmount },
+          withdrawable: { increment: payoutAmount }
+        }
+      });
+
+      await tx.transaction.create({
+        data: {
+          id: crypto.randomUUID(),
+          walletId: wallet.id,
+          bookingId: bookingId,
+          amount: payoutAmount,
+          type: "CREDIT",
+          status: "COMPLETED",
+          description: `Payout for booking #${updated.bookingNumber}`
+        }
+      });
+
+      // --- NEW: Settlement Record for Finance module ---
+      await tx.settlement.create({
+          data: {
+              id: crypto.randomUUID(),
+              vendorId: updated.vendorprofile!.id,
+              amount: updated.totalAmount,
+              commissionCharged: (updated as any).commissionAmount || 0,
+              taxDeducted: updated.taxAmount,
+              netAmount: payoutAmount,
+              status: "COMPLETED",
+              periodStart: new Date(),
+              periodEnd: new Date(),
+              reference: updated.bookingNumber,
+              auditLog: { source: "status_update_payment_released" }
+          }
+      });
+    }
 
       return updated;
     });
 
-    // Background Processing for Notifications, SMS, and Invoices
-    (async () => {
-      try {
-        if (status === "VENDOR_TRAVELING") {
-          await sendSMS(booking.user.mobileNumber, `Your vendor ${booking.vendorprofile?.businessName} is on the way for "${booking.eventName}"!`);
-        }
-
-        if (status === "VENDOR_ARRIVED") {
-          const checkin = await prisma.eventcheckin.findUnique({ where: { bookingId } });
-          if (checkin) {
-            await sendSMS(booking.user.mobileNumber, `Your vendor has arrived! Provide OTP ${checkin.otp} to start the event.`);
-          }
-        }
-
-        if (status === "EVENT_COMPLETED" && booking.status !== "EVENT_COMPLETED") {
-          // Generate and Save Invoice
-          const { invoiceNumber, pdfUrl } = await generateAndUploadInvoice(updatedBooking);
-          await prisma.invoice.create({
-            data: {
-              id: crypto.randomUUID(),
-              bookingId: updatedBooking.id,
-              invoiceNumber,
-              pdfUrl,
-              createdAt: new Date()
-            }
-          });
-
-          await sendSMS(booking.user.mobileNumber, `Event Completed! Your invoice #${invoiceNumber} is now available in the app. Please rate your experience!`);
-        }
-      } catch (err) {
-        logger.error("Background processing error in booking status update", { error: err, bookingId });
-      }
-    })();
-
-    // Create notification for the other party
-    const notificationUserId = payload.role === "VENDOR" ? booking.customerId : booking.vendorprofile.userId;
-    const notification = await prisma.notification.create({
-        data: {
-            id: crypto.randomUUID(),
-            userId: notificationUserId,
-            title: "Booking Update",
-            message: `Booking ${booking.bookingNumber} status changed to ${status}`,
-            category: "BOOKING",
-            link: `/customer/bookings/${booking.id}`
-        }
-    });
-
-    // Real-time Update via Socket
+    // Background Processing for Notifications, SMS, and Invoices moved to Inngest
     try {
-      const { emitSocketEvent } = await import("@/lib/socket-helper");
-      emitSocketEvent(notificationUserId, "NOTIFICATION_RECEIVED", notification);
-      emitSocketEvent(notificationUserId, "BOOKING_UPDATED", {
-        bookingId: booking.id,
-        status: status,
-        message: `Your booking status is now ${status}`
+      const { inngest } = await import("@/lib/inngest");
+      await inngest.send({
+        name: "booking/status.updated",
+        data: {
+          bookingId: updatedBooking.id,
+          status: status,
+          previousStatus: booking.status
+        }
       });
-    } catch (socketError) {
-      logger.error("Socket emission failed for booking status update", { error: socketError, bookingId: booking.id });
+    } catch (inngestError) {
+      logger.error("Failed to trigger inngest for booking status update", { error: inngestError, bookingId });
+    }
+
+    // Centralized Notification Trigger (Phase 2)
+    try {
+      const { NotificationTriggers } = await import("@/lib/notifications");
+      await NotificationTriggers.bookingStatusUpdated(updatedBooking, status);
+    } catch (notifyError) {
+      logger.error("Failed to trigger notification for booking status update", { error: notifyError, bookingId });
     }
 
     // Create Activity Log
-    await prisma.activitylog.create({
-        data: {
-            id: crypto.randomUUID(),
-            userId: payload.userId,
-            action: "BOOKING_STATUS_UPDATE",
-            details: `Changed booking ${booking.bookingNumber} status to ${status}`
-        }
+    await createAuditLog({
+        userId: payload.userId,
+        action: "BOOKING_STATUS_UPDATE",
+        details: {
+            bookingId: booking.id,
+            bookingNumber: booking.bookingNumber,
+            status,
+            previousStatus: booking.status
+        },
+        ipAddress: req.headers.get("x-forwarded-for") || "unknown"
     });
 
     return NextResponse.json(updatedBooking);

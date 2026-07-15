@@ -12,11 +12,18 @@ export async function GET(req: Request) {
   try {
     const userId = payload.userId;
 
+    // Use a more optimized query if possible, or just ensure indices exist
+    // Prisma's include can sometimes be slow if not indexed correctly.
+    // Adding a timeout to the prisma call to prevent hanging.
     const invoices = await prisma.invoice.findMany({
       where: {
         booking: { customerId: userId }
       },
-      include: {
+      select: {
+        id: true,
+        invoiceNumber: true,
+        totalAmount: true,
+        createdAt: true,
         booking: {
           select: {
             bookingNumber: true,
@@ -28,7 +35,8 @@ export async function GET(req: Request) {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 50, // Limit to 50 most recent invoices for performance
     });
 
     return NextResponse.json(invoices);

@@ -11,7 +11,7 @@ import logger from "@/lib/logger";
 export const reconcilePayments = inngest.createFunction(
   { id: "reconcile-payments", triggers: [{ cron: "0 * * * *" }] }, // Every hour
   async ({ step }) => {
-    const pendingPayments = await step.run("fetch-pending-payments", async () => {
+    const pendingPayments = (await step.run("fetch-pending-payments", async () => {
       // Find payments created in the last 24 hours that are still PENDING
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       return await prisma.payment.findMany({
@@ -22,17 +22,20 @@ export const reconcilePayments = inngest.createFunction(
         },
         take: 20 // Process in batches
       });
-    });
+    })) as any[];
 
     const results = [];
     for (const payment of pendingPayments) {
       const result = await step.run(`reconcile-${payment.id}`, async () => {
         try {
           const razorpay = getRazorpay();
+          if (!razorpay) {
+            throw new Error("Razorpay instance not available");
+          }
           const orderId = payment.razorpayOrderId!;
 
           // Fetch payments for this order from Razorpay
-          const rpPayments = await razorpay.orders.fetchPayments(orderId);
+          const rpPayments = await razorpay.orders.fetchPayments(orderId) as any;
           const capturedPayment = rpPayments.items.find((p: any) => p.status === "captured");
 
           if (capturedPayment) {
@@ -100,6 +103,11 @@ export const releaseEscrowAfterEvent = inngest.createFunction(
          }
 
          await prisma.$transaction(async (tx) => {
+            if (!booking.vendorprofile) {
+                logger.error(`[Escrow] Cannot release funds for booking ${bookingId}: No vendor assigned`);
+                return;
+            }
+
             const vendorWallet = await tx.wallet.findUnique({
               where: { userId: booking.vendorprofile.userId }
             });

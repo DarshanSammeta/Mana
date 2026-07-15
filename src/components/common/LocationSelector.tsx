@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocationStore, LocationDetails } from "@/store/locationStore";
 import { useLocation } from "@/hooks/useLocation";
-import { mapsService } from "@/services/maps.service";
+import { mapsService } from "@/services/client";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
 
@@ -23,13 +23,18 @@ export function LocationSelector({ trigger }: LocationSelectorProps) {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
-  const {
-    city, locality, address, setLocation, setCity,
-    savedAddresses, recentLocations, addRecentLocation,
-    removeSavedAddress
-  } = useLocationStore();
+  const city = useLocationStore(state => state.city);
+  const locality = useLocationStore(state => state.locality);
+  const address = useLocationStore(state => state.address);
+  const setLocation = useLocationStore(state => state.setLocation);
+  const setCity = useLocationStore(state => state.setCity);
+  const savedAddresses = useLocationStore(state => state.savedAddresses);
+  const recentLocations = useLocationStore(state => state.recentLocations);
+  const addRecentLocation = useLocationStore(state => state.addRecentLocation);
+  const removeSavedAddress = useLocationStore(state => state.removeSavedAddress);
+
   const { detectLocation: autoDetect, permissionStatus } = useLocation();
-  const { user } = useAuthStore();
+  const user = useAuthStore(state => state.user);
 
   const handleAutoDetect = async () => {
     setIsLocating(true);

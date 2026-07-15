@@ -10,9 +10,13 @@ export async function GET(req: Request) {
   if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
-    const preferences = await prisma.notification_preference.findMany({
-      where: { userId: payload.userId }
-    });
+    // Attempt to fetch with a shorter timeout if the DB is under load
+    const preferences = await Promise.race([
+      prisma.notification_preference.findMany({
+        where: { userId: payload.userId }
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Database timeout")), 5000))
+    ]);
 
     return NextResponse.json(preferences);
   } catch (error: any) {

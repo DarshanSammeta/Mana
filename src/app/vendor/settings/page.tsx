@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { vendorService } from "@/services/vendor.service";
+import { vendorService } from "@/services/client";
 import { toast } from "react-hot-toast";
 
 export default function VendorSettings() {

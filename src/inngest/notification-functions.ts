@@ -17,7 +17,7 @@ export const dispatchExternalNotification = inngest.createFunction(
         where: { id: userId },
         select: { email: true, mobileNumber: true, fullName: true }
       });
-    });
+    }) as any;
 
     if (!user) return { status: "user_not_found" };
 
@@ -29,7 +29,7 @@ export const dispatchExternalNotification = inngest.createFunction(
 
     // 1. Send Email via Resend
     if (channels.email && user.email) {
-      results.email = await step.run("send-email", async () => {
+      const emailResult = await step.run("send-email", async () => {
         try {
           // You can expand this to use templates based on category/metadata
           await sendVendorNotificationEmail(user.email!, {
@@ -46,19 +46,21 @@ export const dispatchExternalNotification = inngest.createFunction(
           return false;
         }
       });
+      results.email = !!emailResult;
     }
 
     // 2. Send SMS via Twilio
     if (channels.sms && user.mobileNumber) {
-      results.sms = await step.run("send-sms", async () => {
+      const smsResult = await step.run("send-sms", async () => {
         try {
-          const smsResult = await sendSMS(user.mobileNumber!, `${payload.title}: ${payload.message}`);
-          return !!smsResult;
+          const res = await sendSMS(user.mobileNumber!, `${payload.title}: ${payload.message}`);
+          return !!res;
         } catch (e) {
           logger.error("SMS delivery failed in Inngest", e);
           return false;
         }
       });
+      results.sms = !!smsResult;
     }
 
     // 3. Update Notification Record with delivery status

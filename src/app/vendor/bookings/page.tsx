@@ -16,7 +16,7 @@ import {
   Inbox
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { vendorService } from "@/services";
+import { vendorService } from "@/services/client";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "@/components/vendor/TableSkeleton";

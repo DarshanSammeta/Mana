@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tansta
 import { useAuthStore } from "@/store/authStore";
 import { useSocketStore } from "@/store/socketStore";
 import { useEffect } from "react";
-import { chatService } from "@/services";
+import { chatService } from "@/services/client";
+import { SOCKET_EVENTS } from "@/constants/socket-events";
 
 export const useConversations = () => {
   const { accessToken: _accessToken } = useAuthStore();
@@ -54,13 +55,13 @@ export const useMessages = (conversationId: string) => {
       });
     };
 
-    socket.on("message:receive", handleNewMessage);
+    socket.on(SOCKET_EVENTS.MESSAGE_NEW, handleNewMessage);
     socket.on("message:status", handleMessageStatus);
 
     return () => {
-      socket.off("message:receive", handleNewMessage);
+      socket.off(SOCKET_EVENTS.MESSAGE_NEW, handleNewMessage);
       socket.off("message:status", handleMessageStatus);
-      socket.emit("conversation:leave", conversationId);
+      socket.emit(SOCKET_EVENTS.CONVERSATION_LEAVE, conversationId);
     };
   }, [socket, conversationId, queryClient, user?.id]);
 

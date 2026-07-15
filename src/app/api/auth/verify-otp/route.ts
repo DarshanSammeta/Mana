@@ -5,7 +5,8 @@ import { z } from "zod";
 import { createAuditLog } from "@/lib/audit";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { AUTH_LIMITS } from "@/config/auth-limits";
 
 const verifyOTPSchema = z.object({
   userId: z.string(),
@@ -14,21 +15,33 @@ const verifyOTPSchema = z.object({
 
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
-
-    // Rate limit OTP verification attempts (3 attempts per minute)
-    const rateLimitResult = await rateLimit(`otp-verify-${ip}`, { limit: 3, window: 60 });
-    if (!rateLimitResult.success) {
-      return NextResponse.json({ message: "Too many attempts. Please try again later." }, { status: 429 });
-    }
-
     const body = await req.json();
     const validated = verifyOTPSchema.parse(body);
+
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
+
+    // Rate limit OTP verification attempts
+    const identifier = `otp-verify:${ip}:${validated.userId}`;
+    const rateLimitResult = await rateLimit(identifier, AUTH_LIMITS.OTP_VERIFY);
+
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(
+        rateLimitResult,
+        `Too many verification attempts. Please wait ${Math.ceil(rateLimitResult.reset / 60)} minutes.`
+      );
+    }
 
     logger.info("OTP Verification attempt", { userId: validated.userId, ip });
 
     const user = await prisma.user.findUnique({
       where: { id: validated.userId },
+      include: {
+        vendorprofile: {
+          select: {
+            verificationStatus: true
+          }
+        }
+      }
     });
 
     if (!user) {
@@ -121,6 +134,7 @@ export async function POST(req: Request) {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        verificationStatus: user.role === 'VENDOR' ? (user as any).vendorprofile?.verificationStatus : undefined
       },
       accessToken,
     });

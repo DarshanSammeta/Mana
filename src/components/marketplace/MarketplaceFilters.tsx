@@ -16,13 +16,23 @@ interface MarketplaceFiltersProps {
 export function MarketplaceFilters({ cities }: MarketplaceFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { lat, lng } = useLocationStore();
+  const lat = useLocationStore(state => state.lat);
+  const lng = useLocationStore(state => state.lng);
   const { detectLocation } = useLocation();
 
   const [localMinPrice, setLocalMinPrice] = useState(searchParams?.get("minPrice") || "");
   const [localMaxPrice, setLocalMaxPrice] = useState(searchParams?.get("maxPrice") || "");
   const debouncedMin = useDebounce(localMinPrice, 500);
   const debouncedMax = useDebounce(localMaxPrice, 500);
+
+  // Sync local state with URL changes (for multi-instance sync)
+  useEffect(() => {
+    const urlMin = searchParams?.get("minPrice") || "";
+    const urlMax = searchParams?.get("maxPrice") || "";
+
+    if (urlMin !== localMinPrice) setLocalMinPrice(urlMin);
+    if (urlMax !== localMaxPrice) setLocalMaxPrice(urlMax);
+  }, [searchParams, localMinPrice, localMaxPrice]);
 
   const updateFilters = useCallback((updates: Record<string, string | number | undefined | null>) => {
     const params = new URLSearchParams(searchParams?.toString() || "");
@@ -43,21 +53,21 @@ export function MarketplaceFilters({ cities }: MarketplaceFiltersProps) {
     // Reset to page 1 when filters change
     if (!updates.page) params.delete("page");
 
-    // Add locality to metadata/analytics if needed
-
-    router.push(`/marketplace?${params.toString()}`, { scroll: false });
+    router.replace(`/marketplace?${params.toString()}`, { scroll: false });
   }, [router, searchParams, lat, lng]);
 
   useEffect(() => {
     const currentMin = searchParams?.get("minPrice") || "";
     const currentMax = searchParams?.get("maxPrice") || "";
+
+    // Only update if the debounced value actually differs from the URL
     if (debouncedMin !== currentMin || debouncedMax !== currentMax) {
       updateFilters({
         minPrice: debouncedMin,
         maxPrice: debouncedMax
       });
     }
-  }, [debouncedMin, debouncedMax, updateFilters, searchParams]);
+  }, [debouncedMin, debouncedMax, updateFilters, searchParams, localMinPrice, localMaxPrice]);
 
   const rating = searchParams?.get("rating") ? parseInt(searchParams.get("rating")!) : 0;
   const selectedCity = searchParams?.get("city") || "";

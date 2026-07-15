@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                     select: {
                       id: true,
                       name: true,
-                      eventtypes: {
+                      eventtype: {
                         select: {
                           id: true,
                           name: true
@@ -53,7 +53,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         }
     });
 
-    if (!service || service.vendorprofile.userId !== payload.userId) {
+    if (!service || service.vendorprofile?.userId !== payload.userId) {
         return NextResponse.json({ message: "Not authorized to view this service" }, { status: 403 });
     }
 

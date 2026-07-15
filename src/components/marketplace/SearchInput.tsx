@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, History, TrendingUp, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { marketplaceService } from "@/services";
+import { marketplaceService } from "@/services/client";
 
 export function SearchInput({
   initialValue = "",
@@ -19,6 +19,11 @@ export function SearchInput({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Sync with initialValue when URL changes externally
+  useEffect(() => {
+    setQuery(initialValue);
+  }, [initialValue]);
 
   useEffect(() => {
     const saved = localStorage.getItem("recent_searches");

@@ -11,13 +11,14 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/store/authStore";
 import { useCommerceStore } from "@/store/commerceStore";
-import { authService } from "@/services/auth.service";
+import { authService } from "@/services/client";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { loginSchema, LoginFormInput } from "@/validations";
 
 export default function LoginClient() {
   const [step, setStep] = useState(1); // 1: Email, 2: Password, 3: OTP
+  const [role, setRole] = useState<"CUSTOMER" | "VENDOR">("CUSTOMER");
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [otp, setOtp] = useState("");
@@ -82,7 +83,7 @@ export default function LoginClient() {
   const onSubmit = async (data: LoginFormInput) => {
     setIsLoading(true);
     try {
-      const result = await authService.login(data);
+      const result = await authService.login({ ...data, role });
 
       if (result.requiresOTP) {
         setUserId(result.userId);
@@ -153,8 +154,37 @@ export default function LoginClient() {
         >
           <div className="mb-6">
             <h2 className="text-2xl font-semibold text-slate-900">
-              {step === 3 ? "Verify OTP" : "Sign In"}
+              {step === 3 ? "Verify OTP" : role === "VENDOR" ? "Vendor Login" : "Sign In"}
             </h2>
+            {step === 1 && (
+              <div className="mt-4 space-y-2">
+                <p className="text-sm font-medium text-slate-500">Continue As</p>
+                <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setRole("CUSTOMER")}
+                    className={`flex-1 py-2 px-3 rounded-md text-sm font-bold transition-all ${
+                      role === "CUSTOMER"
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    👤 Customer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole("VENDOR")}
+                    className={`flex-1 py-2 px-3 rounded-md text-sm font-bold transition-all ${
+                      role === "VENDOR"
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    🏪 Vendor
+                  </button>
+                </div>
+              </div>
+            )}
             {redirectMsg && step !== 3 && (
               <p className="mt-4 text-sm font-medium text-destructive bg-destructive/5 py-2 px-4 border border-destructive/10 rounded-lg">
                 {redirectMsg}
@@ -278,13 +308,22 @@ export default function LoginClient() {
           )}
 
           {step === 1 && (
-            <div className="mt-8 pt-6 border-t border-slate-100">
-               <div className="text-center mb-4">
-                  <span className="text-xs text-slate-500 font-medium">New to Mana Events?</span>
-                </div>
-              <Button variant="outline" className="w-full h-10 rounded-md font-bold text-sm border-slate-300 hover:bg-slate-50 text-slate-700" asChild>
-                <Link href="/register">Create an Account</Link>
-              </Button>
+            <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+              {role === "CUSTOMER" ? (
+                <>
+                  <p className="text-xs text-slate-500 font-medium mb-4">New to Mana Events?</p>
+                  <Button variant="outline" className="w-full h-10 rounded-md font-bold text-sm border-slate-300 hover:bg-slate-50 text-slate-700" asChild>
+                    <Link href="/register">Create Customer Account</Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-500 font-medium mb-4">Not a Vendor?</p>
+                  <Button variant="outline" className="w-full h-10 rounded-md font-bold text-sm border-slate-300 hover:bg-slate-50 text-slate-700" asChild>
+                    <Link href="/vendor">Become a Vendor</Link>
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </motion.div>

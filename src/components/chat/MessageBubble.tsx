@@ -61,9 +61,9 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
         </span>
         {isOwn && (
             <div className="flex">
-                {message.status === "read" || message.isRead ? (
+                {(message?.status === "read" || message?.isRead) ? (
                     <CheckCheck className="h-3 w-3 text-blue-500" />
-                ) : message.status === "sent" ? (
+                ) : message?.status === "sent" ? (
                     <CheckCheck className="h-3 w-3 text-gray-300" />
                 ) : (
                     <Check className="h-3 w-3 text-gray-300" />

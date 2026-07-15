@@ -18,8 +18,14 @@ import { QUERY_CLIENT_CONFIG } from "@/config/query";
 
 export default function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient(QUERY_CLIENT_CONFIG));
-  const { accessToken, isInitialized, user } = useAuthStore();
-  const { connect, disconnect } = useSocketStore();
+
+  // Use selective selectors to prevent root-level re-renders
+  const accessToken = useAuthStore(state => state.accessToken);
+  const isInitialized = useAuthStore(state => state.isInitialized);
+  const user = useAuthStore(state => state.user);
+
+  const connect = useSocketStore(state => state.connect);
+  const disconnect = useSocketStore(state => state.disconnect);
 
   useEffect(() => {
     // Prevent connecting with potentially stale/invalid token during hydration/initialization
