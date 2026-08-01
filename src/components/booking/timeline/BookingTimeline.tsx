@@ -1,6 +1,6 @@
 "use client";
 
-import { format } from "date-fns";
+import { formatSafe, toISOSafe } from "@/lib/utils/date";
 import {
   CheckCircle2,
   Clock,
@@ -94,8 +94,8 @@ export function BookingTimeline({ logs }: BookingTimelineProps) {
                       )}
                     </div>
                     <div className="whitespace-nowrap text-right text-xs text-gray-500">
-                      <time dateTime={new Date(event.createdAt).toISOString()}>
-                        {format(new Date(event.createdAt), "MMM d, h:mm a")}
+                      <time dateTime={toISOSafe(event.createdAt) || undefined}>
+                        {formatSafe(event.createdAt, "MMM d, h:mm a")}
                       </time>
                     </div>
                   </div>

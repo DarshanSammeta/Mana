@@ -1,17 +1,30 @@
-import "server-only";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
-import { verifyAccessToken, signAccessToken as jwtSignAccessToken, signRefreshToken as jwtSignRefreshToken } from "./jwt";
+import { verifyAccessToken as verifyAccessTokenCore, signAccessToken as signAccessTokenCore, signRefreshToken as signRefreshTokenCore } from "./auth-core";
 
-export * from "./jwt";
+export * from "./auth-core";
 
-export const signAccessToken = (payload: { userId: string; role: string }) => {
-  return jwtSignAccessToken(payload);
-};
+export const signAccessToken = signAccessTokenCore;
+export const signRefreshToken = signRefreshTokenCore;
 
-export const signRefreshToken = (payload: { userId: string; role: string }) => {
-  return jwtSignRefreshToken(payload);
-};
+export const ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN", "SUPPORT_ADMIN", "CONTENT_ADMIN", "FINANCE_ADMIN", "OPERATIONS_ADMIN"];
+
+/**
+ * Verifies if the request is from an authorized Admin.
+ */
+export async function verifyAdminRequest(req: Request) {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+
+  const token = authHeader.split(" ")[1];
+  const payload = await verifyAccessTokenCore(token);
+
+  if (!payload || !ADMIN_ROLES.includes(payload.role?.toUpperCase())) {
+    return null;
+  }
+
+  return payload;
+}
 
 /**
  * Password Helpers
@@ -38,7 +51,7 @@ export const auth = async () => {
     const token = cookieStore.get("accessToken")?.value;
     if (!token) return null;
 
-    const payload = await verifyAccessToken(token);
+    const payload = await verifyAccessTokenCore(token);
     if (!payload) return null;
     return {
       user: {
@@ -67,7 +80,7 @@ export const getAuthPayload = async (req?: Request) => {
   if (!token) return null;
 
   try {
-    return await verifyAccessToken(token);
+    return await verifyAccessTokenCore(token);
   } catch {
     return null;
   }

@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { vendorService } from "@/services/client";
+import { formatSafe } from "@/lib/utils/date";
 import { toast } from "react-hot-toast";
 
 interface Document {
@@ -195,7 +196,7 @@ export default function DocumentCenter() {
                               )}>
                                   {doc.status}
                               </span>
-                              <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-tighter">Updated: {new Date(doc.updatedAt).toLocaleDateString()}</p>
+                              <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-tighter">Updated: {formatSafe(doc.updatedAt)}</p>
                           </div>
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button

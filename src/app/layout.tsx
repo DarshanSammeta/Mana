@@ -51,6 +51,7 @@ import GlobalLoadingOverlay from "@/components/common/GlobalLoadingOverlay";
 import RouteLoadingHandler from "@/components/common/RouteLoadingHandler";
 import { GoogleMapsLoader } from "@/components/common/GoogleMapsLoader";
 import NavbarWrapper from "@/components/common/NavbarWrapper";
+// import FloatingCartWrapper from "@/components/commerce/FloatingCartWrapper";
 
 import FooterWrapper from "@/components/common/FooterWrapper";
 
@@ -81,17 +82,20 @@ export default function RootLayout({
         />
         <Providers>
           <div className="flex flex-col min-h-screen">
-            <NavbarWrapper />
+            <Suspense fallback={<div className="h-16 w-full bg-[#6C3CF0]" />}>
+              <NavbarWrapper />
+            </Suspense>
             <GlobalLoadingOverlay />
             <Suspense fallback={null}>
               <RouteLoadingHandler />
             </Suspense>
             <GoogleMapsLoader />
-            <main className="flex-1">
+            <main className="flex-1 relative w-full">
               <PageTransition>
                 {children}
               </PageTransition>
             </main>
+            {/* <FloatingCartWrapper /> */}
             <FooterWrapper />
           </div>
           <Toaster />

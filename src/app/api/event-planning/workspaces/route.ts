@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-
-const prisma = new PrismaClient();
 
 export async function GET(_req: Request) {
   const session = await auth();
@@ -13,7 +11,7 @@ export async function GET(_req: Request) {
     const workspaces = await prisma.event_workspace.findMany({
       where: {
         OR: [
-          { userId: session.user.id },
+          { customerprofile: { userId: session.user.id } },
           userEmail ? { collaborators: { some: { email: userEmail } } } : {}
         ]
       },

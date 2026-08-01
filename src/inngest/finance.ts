@@ -47,9 +47,12 @@ export const processRefundJob = inngest.createFunction(
         const { bookingId, amount, reason } = event.data;
 
         await step.run("detect-fraud", async () => {
-            const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-            if (booking) {
-                await FinanceService.detectAnomalies(booking.customerId, "REFUND_REQUEST", { amount });
+            const booking = await prisma.booking.findUnique({
+                where: { id: bookingId },
+                include: { customerprofile: true }
+            });
+            if (booking && booking.customerprofile) {
+                await FinanceService.detectAnomalies(booking.customerprofile.userId, "REFUND_REQUEST", { amount });
             }
         });
 
@@ -69,12 +72,16 @@ export const processRefundJob = inngest.createFunction(
         await step.run("send-refund-notification", async () => {
             const booking = await prisma.booking.findUnique({
                 where: { id: bookingId },
-                include: { user: true }
+                include: {
+                    customerprofile: {
+                        include: { user: true }
+                    }
+                }
             });
-            if (booking && booking.user.email) {
+            if (booking && booking.customerprofile?.user?.email) {
                 const { sendRefundEmail } = await import("@/lib/mail/resend");
-                await sendRefundEmail(booking.user.email, {
-                    customerName: booking.user.fullName,
+                await sendRefundEmail(booking.customerprofile.user.email, {
+                    customerName: booking.customerprofile.user.fullName,
                     bookingNumber: booking.bookingNumber,
                     amount: amount.toString(),
                     reason: reason || "Standard Refund"

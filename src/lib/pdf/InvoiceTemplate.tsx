@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { formatSafe } from '../utils/date';
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 12, fontFamily: 'Helvetica' },
@@ -32,7 +33,7 @@ export const InvoiceTemplate = ({ data }: InvoiceProps) => (
         <View>
           <Text style={styles.title}>INVOICE</Text>
           <Text>#{data.invoiceNumber}</Text>
-          <Text>Date: {new Date(data.createdAt).toLocaleDateString()}</Text>
+          <Text>Date: {formatSafe(data.createdAt, "dd/MM/yyyy")}</Text>
         </View>
         <View style={{ textAlign: 'right' }}>
           <Text style={{ fontWeight: 'bold' }}>MANA EVENTS</Text>
@@ -62,7 +63,7 @@ export const InvoiceTemplate = ({ data }: InvoiceProps) => (
         <Text style={styles.sectionTitle}>Booking Details</Text>
         <Text>Event: {data.eventName} ({data.eventType})</Text>
         <Text>Location: {data.eventLocation}</Text>
-        <Text>Date: {new Date(data.eventDate).toLocaleDateString()}</Text>
+        <Text>Date: {formatSafe(data.eventDate, "dd/MM/yyyy")}</Text>
       </View>
 
       {/* Items Table */}

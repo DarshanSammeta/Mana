@@ -7,20 +7,23 @@ import logger from "@/lib/logger";
 import { processSuccessfulPayment } from "@/lib/payments";
 import { getRazorpay } from "@/lib/razorpay";
 
+import { razorpayVerifySchema } from "@/validations";
+
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
+    const bodyData = await req.json();
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
       bookingId,
-    } = await req.json();
+    } = razorpayVerifySchema.parse(bodyData);
 
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
@@ -41,7 +44,7 @@ export async function POST(req: Request) {
 
        // Force notes if missing (defensive)
        payment.notes = payment.notes || {};
-       payment.notes.bookingId = bookingId;
+       payment.notes.bookingId = bookingId || "";
 
        await processSuccessfulPayment(payment);
 

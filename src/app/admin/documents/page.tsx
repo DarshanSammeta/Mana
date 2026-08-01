@@ -8,6 +8,8 @@ import { ExternalLink } from "lucide-react";
 import { adminService } from "@/services/client";
 import { toast } from "react-hot-toast";
 import Image from "next/image";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 export default function AdminDocumentReview() {
   const [documents, setDocuments] = useState<any[]>([]);
@@ -95,8 +97,4 @@ export default function AdminDocumentReview() {
   );
 }
 
-import Link from "next/link";
 
-function cn(...inputs: any[]) {
-    return inputs.filter(Boolean).join(' ');
-}

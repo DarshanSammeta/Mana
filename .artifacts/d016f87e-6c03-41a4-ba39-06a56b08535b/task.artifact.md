@@ -1,0 +1,23 @@
+- `[ ]` Refactor `prisma/schema.prisma`:
+    - `[ ]` Move customer-specific fields (`interests`, `loyaltyPoints`, `referralCode`, `profileImage`) from `user` to new `customerprofile` model.
+    - `[ ]` Create `customerprofile` model with one-to-one relation to `user`.
+    - `[ ]` Update `booking.customerId` to point to `customerprofile.id`.
+    - `[ ]` Update `review.userId` to point to `customerprofile.id`.
+    - `[ ]` Update `cart.userId` to point to `customerprofile.id`.
+    - `[ ]` Update `wishlist.userId` to point to `customerprofile.id`.
+    - `[ ]` Update other customer-related models (`address`, `recently_viewed`, `referral`, `loyalty_transaction`, `saved_search`, `event_workspace`, etc.) to point to `customerprofile`.
+- `[ ]` Apply Prisma migrations:
+    - `[ ]` `npx prisma migrate dev --name refactor_user_profile_architecture`
+- `[ ]` Update API Endpoints:
+    - `[ ]` `src/app/api/auth/register/route.ts`: Handle `customerprofile` and `vendorprofile` creation.
+    - `[ ]` `src/app/api/auth/me/route.ts`: Return both User and Profile data.
+    - `[ ]` `src/app/api/auth/login/route.ts`: Update response structure.
+    - `[ ]` `src/app/api/auth/verify-otp/route.ts`: Update response structure.
+- `[ ]` Refactor `prisma/seed.ts`:
+    - `[ ]` Step 1: Create User identities.
+    - `[ ]` Step 2: Create CustomerProfiles.
+    - `[ ]` Step 3: Create VendorProfiles.
+    - `[ ]` Step 4: Create marketplace data using Profile IDs.
+- `[ ]` Verification:
+    - `[ ]` Run `npx prisma db seed`.
+    - `[ ]` Perform automated and manual checks on logins and profile loading.

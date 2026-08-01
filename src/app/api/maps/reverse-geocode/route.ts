@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { reverseGeocode } from '@/lib/maps/googleMaps';
+import { MAPS_CONFIG } from '@/config/maps';
 
 export async function GET(req: NextRequest) {
   try {
+    if (!MAPS_CONFIG.apiKey) {
+      console.error("[Maps API] Missing GOOGLE_MAPS_API_KEY in environment");
+      return NextResponse.json({
+        error: 'Location services are temporarily unavailable (Missing API Configuration)',
+        code: 'MISSING_API_KEY'
+      }, { status: 503 });
+    }
+
     const { searchParams } = new URL(req.url);
     const lat = parseFloat(searchParams.get('lat') || '');
     const lng = parseFloat(searchParams.get('lng') || '');

@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, ExternalLink, Clock, User, Building2, CreditCard, ShieldCheck, MapPin, Phone, Mail, AlertTriangle, MessageSquare } from "lucide-react";
+import { Check, X, ExternalLink, Clock, User, Building2, CreditCard, ShieldCheck, MapPin, Phone, Mail, AlertTriangle } from "lucide-react";
+import { formatSafe } from "@/lib/utils/date";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,6 @@ import { toast } from "sonner";
 
 export default function VendorDetailAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
   const [vendor, setVendor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -37,24 +36,27 @@ export default function VendorDetailAdminPage({ params }: { params: Promise<{ id
     fetchVendor();
   }, [id]);
 
-  const handleAction = async (status: "APPROVED" | "REJECTED" | "CHANGES_REQUIRED") => {
-    if (status !== "APPROVED" && !comment) {
+  const handleAction = async (status: "APPROVED" | "REJECTED" | "SUSPENDED" | "REACTIVATE") => {
+    if ((status === "REJECTED" || status === "SUSPENDED") && !comment) {
       toast.error("Please provide a reason/comment for this action");
       return;
     }
 
+    if (!window.confirm(`Are you sure you want to ${status.toLowerCase()} this vendor?`)) return;
+
     setActionLoading(true);
     try {
-      await adminService.verifyVendor(id, {
-        status,
-        comment,
-        rejectionReason: comment,
-        rejectedDocuments: selectedDocs
-      });
+      if (status === "APPROVED") await adminService.approveVendor(id);
+      if (status === "REJECTED") await adminService.rejectVendor(id, comment, selectedDocs);
+      if (status === "SUSPENDED") await adminService.suspendVendor(id, comment);
+      if (status === "REACTIVATE") await adminService.reactivateVendor(id);
+
       toast.success(`Vendor ${status.toLowerCase()} successfully`);
-      router.push("/admin/documents");
-    } catch {
-      toast.error("Failed to update status");
+      // Refresh vendor data
+      const data = await adminService.getVendorDetails(id);
+      setVendor(data);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to update status");
     } finally {
       setActionLoading(false);
     }
@@ -81,7 +83,7 @@ export default function VendorDetailAdminPage({ params }: { params: Promise<{ id
                         {vendor.verificationStatus}
                     </Badge>
                     <span className="text-sm text-gray-400 font-medium flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> Registered on {new Date(vendor.createdAt).toLocaleDateString()}
+                        <Clock className="h-3 w-3" /> Registered on {formatSafe(vendor.createdAt)}
                     </span>
                 </div>
             </div>
@@ -206,29 +208,42 @@ export default function VendorDetailAdminPage({ params }: { params: Promise<{ id
                     </div>
 
                     <div className="space-y-3 pt-2">
-                        <Button
-                            className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-black shadow-lg shadow-green-200"
-                            disabled={actionLoading}
-                            onClick={() => handleAction("APPROVED")}
-                        >
-                            <Check className="h-5 w-5 mr-2" /> Approve Application
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="w-full h-12 rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50 font-black"
-                            disabled={actionLoading}
-                            onClick={() => handleAction("CHANGES_REQUIRED")}
-                        >
-                            <MessageSquare className="h-5 w-5 mr-2" /> Request Changes
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            className="w-full h-12 rounded-xl font-black shadow-lg shadow-red-200"
-                            disabled={actionLoading}
-                            onClick={() => handleAction("REJECTED")}
-                        >
-                            <X className="h-5 w-5 mr-2" /> Reject Application
-                        </Button>
+                        {vendor.verificationStatus === 'PENDING' || vendor.verificationStatus === 'UNDER_REVIEW' ? (
+                            <>
+                                <Button
+                                    className="w-full h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-black shadow-lg shadow-green-200"
+                                    disabled={actionLoading}
+                                    onClick={() => handleAction("APPROVED")}
+                                >
+                                    <Check className="h-5 w-5 mr-2" /> Approve Application
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    className="w-full h-12 rounded-xl font-black shadow-lg shadow-red-200"
+                                    disabled={actionLoading}
+                                    onClick={() => handleAction("REJECTED")}
+                                >
+                                    <X className="h-5 w-5 mr-2" /> Reject Application
+                                </Button>
+                            </>
+                        ) : vendor.verificationStatus === 'APPROVED' ? (
+                            <Button
+                                variant="destructive"
+                                className="w-full h-12 rounded-xl font-black bg-amber-600 hover:bg-amber-700 shadow-lg shadow-amber-200"
+                                disabled={actionLoading}
+                                onClick={() => handleAction("SUSPENDED")}
+                            >
+                                <ShieldCheck className="h-5 w-5 mr-2" /> Suspend Account
+                            </Button>
+                        ) : vendor.verificationStatus === 'SUSPENDED' ? (
+                            <Button
+                                className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-black shadow-lg shadow-primary/20"
+                                disabled={actionLoading}
+                                onClick={() => handleAction("REACTIVATE")}
+                            >
+                                <Check className="h-5 w-5 mr-2" /> Reactivate Account
+                            </Button>
+                        ) : null}
                     </div>
 
                     {selectedDocs.length > 0 && (

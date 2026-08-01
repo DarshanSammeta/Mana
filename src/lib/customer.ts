@@ -8,7 +8,7 @@ export async function getCustomerStats(userId: string) {
     const [activeBookingsCount, wishlistCount, wallet, recentBookings] = await Promise.all([
       prisma.booking.count({
         where: {
-          customerId: userId,
+          customerprofile: { userId },
           status: {
             in: [
               booking_status.PENDING,
@@ -26,14 +26,14 @@ export async function getCustomerStats(userId: string) {
       }),
       prisma.wishlistitem.count({
         where: {
-          wishlist: { userId }
+          wishlist: { customerprofile: { userId } }
         }
       }),
       prisma.wallet.findUnique({
         where: { userId }
       }),
       prisma.booking.findMany({
-        where: { customerId: userId },
+        where: { customerprofile: { userId } },
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {

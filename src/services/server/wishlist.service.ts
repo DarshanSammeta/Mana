@@ -6,18 +6,30 @@ if (typeof window !== "undefined") {
 }
 
 export class WishlistService {
+  private static async getProfileId(userId: string) {
+    const prisma = getPrisma();
+    const profile = await prisma.customerprofile.findUnique({
+      where: { userId },
+      select: { id: true }
+    });
+    if (!profile) throw new Error("Customer profile not found");
+    return profile.id;
+  }
+
   static async getWishlist(userId: string) {
     const prisma = getPrisma();
-    const wishlist = await prisma.wishlist.findUnique({
-      where: { userId },
+    const profileId = await this.getProfileId(userId);
+
+    let wishlist = await prisma.wishlist.findUnique({
+      where: { customerProfileId: profileId },
       include: {
         wishlistitem: true,
       },
     });
 
     if (!wishlist) {
-      return await prisma.wishlist.create({
-        data: { userId, updatedAt: new Date() },
+      wishlist = await prisma.wishlist.create({
+        data: { customerProfileId: profileId, updatedAt: new Date() },
         include: { wishlistitem: true },
       });
     }
@@ -56,6 +68,8 @@ export class WishlistService {
 
   static async moveToCart(userId: string, wishlistId: string, targetId: string, type: string) {
     const prisma = getPrisma();
+    const profileId = await this.getProfileId(userId);
+
     return await prisma.$transaction(async (tx) => {
       // 1. Check item exists
       const item = await tx.wishlistitem.findFirst({
@@ -66,8 +80,8 @@ export class WishlistService {
 
       // 2. Add to Cart
       const cart = await tx.cart.upsert({
-        where: { userId },
-        create: { userId, updatedAt: new Date() },
+        where: { customerProfileId: profileId },
+        create: { customerProfileId: profileId, updatedAt: new Date() },
         update: { updatedAt: new Date() }
       });
 

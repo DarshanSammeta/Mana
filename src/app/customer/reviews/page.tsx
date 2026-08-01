@@ -5,7 +5,7 @@ import { Star, MessageSquare, ThumbsUp, Package, ArrowRight } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -83,7 +83,7 @@ export default function CustomerReviewsPage() {
                               ))}
                            </div>
                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">
-                             Reviewed on {format(new Date(review.createdAt), 'MMM dd, yyyy')}
+                             Reviewed on {formatSafe(review.createdAt, 'MMM dd, yyyy')}
                            </p>
                         </div>
                      </div>
@@ -114,7 +114,7 @@ export default function CustomerReviewsPage() {
                         <div className="mt-6 pl-6 border-l-2 border-primary/20">
                            <div className="flex items-center gap-2 mb-2">
                               <Badge className="bg-primary/10 text-primary text-[9px] font-black border-none px-2 py-0">VENDOR RESPONSE</Badge>
-                              <span className="text-[10px] text-muted-foreground">{format(new Date(review.responseAt || review.createdAt), 'MMM dd')}</span>
+                              <span className="text-[10px] text-muted-foreground">{formatSafe(review.responseAt || review.createdAt, 'MMM dd')}</span>
                            </div>
                            <p className="text-sm text-muted-foreground">{review.vendorResponse}</p>
                         </div>

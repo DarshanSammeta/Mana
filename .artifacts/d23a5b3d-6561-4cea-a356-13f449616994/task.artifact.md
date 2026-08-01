@@ -1,0 +1,4 @@
+- `[x]` Add diagnostic logging to `middleware.ts`
+- `[x]` Add diagnostic logging to `/api/customer/bookings/route.ts`
+- `[x]` Add diagnostic logging to `app/customer/bookings/page.tsx`
+- `[x]` Apply Redis timeout and fail-open logic to `middleware.ts`

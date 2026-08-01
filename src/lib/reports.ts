@@ -1,20 +1,22 @@
-import jsPDF from "jspdf";
-import "jspdf-autotable";
-import * as XLSX from "xlsx";
+import { formatSafe } from "./utils/date";
 
 export async function generateEarningsPDF(vendorName: string, transactions: any[]) {
+  // Dynamic imports for heavy libraries
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+
   const doc = new jsPDF() as any;
 
   doc.text(`Earnings Report: ${vendorName}`, 14, 15);
   doc.setFontSize(10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+  doc.text(`Generated on: ${formatSafe(new Date(), "dd/MM/yyyy")}`, 14, 22);
 
   const tableColumn = ["Date", "Description", "Type", "Amount"];
   const tableRows: any[] = [];
 
   transactions.forEach((tx) => {
     const txData = [
-      new Date(tx.createdAt).toLocaleDateString(),
+      formatSafe(tx.createdAt, "dd/MM/yyyy"),
       tx.description,
       tx.type,
       `INR ${Number(tx.amount).toFixed(2)}`,
@@ -22,14 +24,22 @@ export async function generateEarningsPDF(vendorName: string, transactions: any[
     tableRows.push(txData);
   });
 
-  doc.autoTable(tableColumn, tableRows, { startY: 30 });
+  autoTable(doc, {
+    head: [tableColumn],
+    body: tableRows,
+    startY: 30,
+  });
+
   return doc.output("blob");
 }
 
-export async function generateEarningsExcel(vendorName: string, transactions: any[]) {
+export async function generateEarningsExcel(_vendorName: string, transactions: any[]) {
+  // Dynamic import for XLSX
+  const XLSX = await import("xlsx");
+
   const worksheet = XLSX.utils.json_to_sheet(
     transactions.map((tx) => ({
-      Date: new Date(tx.createdAt).toLocaleDateString(),
+      Date: formatSafe(tx.createdAt, "dd/MM/yyyy"),
       Description: tx.description,
       Type: tx.type,
       Amount: Number(tx.amount).toFixed(2),
@@ -44,9 +54,11 @@ export async function generateEarningsExcel(vendorName: string, transactions: an
 }
 
 export async function generateEarningsCSV(transactions: any[]) {
+  const XLSX = await import("xlsx");
+
   const worksheet = XLSX.utils.json_to_sheet(
     transactions.map((tx) => ({
-      Date: new Date(tx.createdAt).toLocaleDateString(),
+      Date: formatSafe(tx.createdAt, "dd/MM/yyyy"),
       Description: tx.description,
       Type: tx.type,
       Amount: Number(tx.amount).toFixed(2),

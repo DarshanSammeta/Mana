@@ -26,6 +26,7 @@ interface CommerceState {
   setWishlist: (items: WishlistItem[]) => void;
   toggleWishlist: (item: WishlistItem) => void;
   setMerged: (val: boolean) => void;
+  mergeCarts: (guestItems: CartItem[]) => void;
 }
 
 export const useCommerceStore = create<CommerceState>()(
@@ -74,6 +75,16 @@ export const useCommerceStore = create<CommerceState>()(
           return { wishlist: [...state.wishlist, item] };
         }),
       setMerged: (val) => set({ isMerged: val }),
+      mergeCarts: (guestItems) => set((state) => {
+        const newCart = [...state.cart];
+        guestItems.forEach(guestItem => {
+            const exists = newCart.find(i => i.targetId === guestItem.targetId && i.type === guestItem.type);
+            if (!exists) {
+                newCart.push(guestItem);
+            }
+        });
+        return { cart: newCart, isMerged: true };
+      }),
     }),
     {
       name: "mana-commerce-storage",

@@ -8,7 +8,7 @@ export async function GET(req: Request) {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "ADMIN") return NextResponse.json({ status: 403 });
 
     // Fetch coordinates for bookings and vendors

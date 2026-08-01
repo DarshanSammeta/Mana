@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { vendorService } from "@/services/client";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "@/components/vendor/TableSkeleton";
 import toast from "react-hot-toast";
@@ -141,18 +141,18 @@ export default function VendorBookings() {
                                     </td>
                                     <td className="px-6 py-5">
                                         <div className="flex flex-col">
-                                            <span className="font-bold text-foreground">{booking.user.fullName}</span>
+                                            <span className="font-bold text-foreground">{booking.customerprofile?.user?.fullName || "Guest"}</span>
                                             <div className="flex items-center gap-2 mt-1">
                                                 <Phone className="h-3 w-3 text-muted-foreground/60" />
-                                                <span className="text-xs text-muted-foreground font-medium">{booking.user.mobileNumber}</span>
+                                                <span className="text-xs text-muted-foreground font-medium">{booking.customerprofile?.user?.mobileNumber || "N/A"}</span>
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-5">
                                         <div className="max-w-[200px]">
-                                            {booking.bookingitem.map((item: any) => (
+                                            {(booking.bookingitem ?? []).map((item: any) => (
                                                 <div key={item.id} className="text-xs font-bold text-muted-foreground truncate">
-                                                    {item.service.title}
+                                                    {item.service?.title || "Unknown Service"}
                                                 </div>
                                             ))}
                                         </div>
@@ -161,7 +161,7 @@ export default function VendorBookings() {
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-1.5 text-xs text-foreground font-bold">
                                                 <Calendar className="h-3.5 w-3.5 text-primary" />
-                                                {format(new Date(booking.eventDate), "dd MMM, yyyy")}
+                                                {formatSafe(booking.eventDate, "dd MMM, yyyy")}
                                             </div>
                                             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
                                                 <MapPin className="h-3 w-3 text-muted-foreground/60" />
@@ -262,7 +262,7 @@ export default function VendorBookings() {
                         <div className="flex justify-between items-start">
                             <div>
                                 <span className="text-[10px] font-black text-primary uppercase tracking-widest">#{booking.bookingNumber}</span>
-                                <h3 className="font-black text-foreground mt-0.5">{booking.user.fullName}</h3>
+                                <h3 className="font-black text-foreground mt-0.5">{booking.customerprofile?.user?.fullName || "Guest"}</h3>
                             </div>
                             <span className={cn(
                                 "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
@@ -277,7 +277,7 @@ export default function VendorBookings() {
                         <div className="space-y-2">
                              <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
                                 <Calendar className="h-3.5 w-3.5 text-primary" />
-                                {format(new Date(booking.eventDate), "PPP")}
+                                {formatSafe(booking.eventDate, "PPP")}
                              </div>
                              <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
                                 <MapPin className="h-3.5 w-3.5 text-primary" />

@@ -15,7 +15,11 @@ export async function GET(
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        user: true,
+        customerprofile: {
+          include: {
+            user: true
+          }
+        },
         vendorprofile: {
           include: {
             user: true
@@ -31,17 +35,19 @@ export async function GET(
       }
     });
 
-    if (!booking) {
+    if (!booking || !booking.customerprofile) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
+
+    const customerUser = booking.customerprofile.user;
 
     // Prepare data for PDF
     const invoiceData = {
       invoiceNumber: booking.invoice?.invoiceNumber || `INV-${booking.bookingNumber}`,
       createdAt: booking.invoice?.createdAt || booking.createdAt,
-      customerName: booking.user.fullName,
-      customerEmail: booking.user.email,
-      customerPhone: booking.user.mobileNumber,
+      customerName: customerUser.fullName,
+      customerEmail: customerUser.email,
+      customerPhone: customerUser.mobileNumber,
       vendorName: booking.vendorprofile?.businessName || 'N/A',
       vendorCity: booking.vendorprofile?.city || '',
       vendorState: booking.vendorprofile?.state || '',

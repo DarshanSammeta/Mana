@@ -11,7 +11,7 @@ import { IMAGES } from "@/constants";
 
 import { useCommerceStore } from "@/store/commerceStore";
 import { useAuthStore } from "@/store/authStore";
-import { useAddToCart, useToggleWishlist } from "@/hooks/useCommerce";
+import { useAddToCart, useToggleWishlist } from "@/hooks/use-commerce";
 
 import { memo, useMemo } from "react";
 import { useCompareStore } from "@/store/useCompareStore";
@@ -71,16 +71,24 @@ export const VendorCard = memo(function VendorCard({ vendor, index: _index, view
     e.stopPropagation();
 
     if (user) {
-      addToCartApi({ type: "SERVICE", targetId: vendor.id, quantity: 1 });
-    } else {
-      _addToStore({
-          id: Math.random().toString(36).substr(2, 9),
+      addToCartApi({
           type: "SERVICE",
           targetId: vendor.id,
           quantity: 1,
-          details: {
+          metadata: {
               title: vendor.businessName,
-              price: vendor.basePrice,
+              price: basePrice,
+              image: vendor.coverImage
+          }
+      });
+    } else {
+      addToCartApi({
+          type: "SERVICE",
+          targetId: vendor.id,
+          quantity: 1,
+          metadata: {
+              title: vendor.businessName,
+              price: basePrice,
               image: vendor.coverImage
           }
       });
@@ -327,4 +335,3 @@ export const VendorCard = memo(function VendorCard({ vendor, index: _index, view
     </div>
   );
 });
-

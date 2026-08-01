@@ -2,21 +2,24 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
-import { createAuditLog } from "@/lib/audit";
+import { AuditService } from "@/services/server/audit.service";
 import { inngest } from "@/lib/inngest";
 import { emitSocketEvent } from "@/lib/socket-helper";
 import { getIoRedis } from "@/lib/redis";
 import { FraudDetectionService } from "@/services/server/fraud-detection.service";
 
+import { acceptBookingSchema } from "@/validations/booking";
+
 // PATCH /api/bookings/[id]/accept
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
     const { id: bookingId } = await params;
-    const { action, notes, counterQuote } = await req.json(); // action: 'ACCEPT' | 'REJECT' | 'NEGOTIATE'
+    const body = await req.json();
+    const { action, notes, counterQuote } = acceptBookingSchema.parse(body);
     const token = req.headers.get("authorization")?.split(" ")[1];
 
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
@@ -26,7 +29,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { bookingassignment: true }
+      include: {
+          bookingassignment: true,
+          customerprofile: true
+      }
     });
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
@@ -62,33 +68,55 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: { bookingId, vendorId: vendorProfile.id }
           });
         });
-        return NextResponse.json({ message: "Booking rejected" });
+        return NextResponse.json({
+            success: true,
+            message: "Booking rejected",
+            requestId: req.headers.get("x-request-id")
+        });
       }
 
       if (action === "NEGOTIATE" && counterQuote) {
+          const { TimelineService } = await import("@/services/server/timeline.service");
+          const updated = await TimelineService.transitionStatus(
+              bookingId,
+              "NEGOTIATING",
+              { id: payload.userId, name: vendorProfile.businessName, role: "VENDOR" },
+              notes || `Counter-quote: ${counterQuote}`
+          );
+
+          // Note: Updating amount is a separate field not handled by transitionStatus yet
           await prisma.booking.update({
               where: { id: bookingId },
-              data: {
-                  status: "NEGOTIATING",
-                  totalAmount: counterQuote,
-                  bookingstatuslog: {
-                      create: {
-                          id: crypto.randomUUID(),
-                          status: "NEGOTIATING",
-                          notes: notes || `Counter-quote: ${counterQuote}`
-                      }
-                  }
-              }
+              data: { totalAmount: counterQuote }
           });
-          // Notify customer
-          emitSocketEvent(booking.customerId, "BOOKING_UPDATED", { bookingId, status: "NEGOTIATING" });
-          return NextResponse.json({ message: "Counter-quote sent" });
+
+          return NextResponse.json({
+              success: true,
+              message: "Counter-quote sent",
+              data: updated,
+              requestId: req.headers.get("x-request-id")
+          });
       }
 
       if (action === "ACCEPT") {
         // Double check booking status before proceeding
-        if (booking.status !== "SEARCHING" && (booking.status as string) !== "CREATED") {
+        const VALID_INITIAL_STATUSES: string[] = ["PENDING_VENDOR_RESPONSE", "COUNTERED"];
+        if (!VALID_INITIAL_STATUSES.includes(booking.status)) {
            return NextResponse.json({ message: "Booking is no longer available" }, { status: 410 });
+        }
+
+        // Availability Check
+        const existingOverlapping = await prisma.booking.findFirst({
+            where: {
+                vendorId: vendorProfile.id,
+                status: "CONFIRMED",
+                eventDate: booking.eventDate,
+                // Add time window check if needed
+            }
+        });
+
+        if (existingOverlapping) {
+            return NextResponse.json({ message: "You already have a confirmed booking on this date" }, { status: 409 });
         }
 
         const updatedBooking = await prisma.$transaction(async (tx) => {
@@ -98,32 +126,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: { status: "ACCEPTED" }
           });
 
-          // 2. Reject others
+          // 2. Reject others (if multi-vendor batch)
           await tx.bookingassignment.updateMany({
             where: { bookingId, id: { not: assignment.id }, status: "PENDING" },
             data: { status: "REJECTED", notes: "Automatically rejected: another vendor accepted" }
           });
 
-          // 3. Update booking
-          const updated = await tx.booking.update({
-            where: { id: bookingId },
-            data: {
-              vendorId: vendorProfile.id,
-              status: "CONFIRMED",
-              bookingstatuslog: {
-                create: [
-                  { id: crypto.randomUUID(), status: "QUOTE_ACCEPTED", notes: "Vendor accepted the request" },
-                  { id: crypto.randomUUID(), status: "CONFIRMED", notes: "Booking confirmed with vendor" }
-                ]
+          // 3. Update booking via State Machine
+          const { TimelineService } = await import("@/services/server/timeline.service");
+          const result = await TimelineService.transitionStatus(
+              bookingId,
+              "ACCEPTED" as any,
+              { id: payload.userId, name: vendorProfile.businessName, role: "VENDOR" },
+              "Vendor accepted the request",
+              tx
+          );
+
+          // Ensure vendorId is set and status moved to payment pending
+          await tx.booking.update({
+              where: { id: bookingId },
+              data: {
+                  vendorId: vendorProfile.id,
+                  status: "ADVANCE_PAYMENT_PENDING",
+                  paymentDeadline: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h to pay
               }
-            }
           });
 
-          return updated;
+          return result;
         });
 
         // Notify Customer
-        emitSocketEvent(booking.customerId, "BOOKING_ACCEPTED", {
+        emitSocketEvent(booking.customerprofile.userId, "BOOKING_ACCEPTED", {
             bookingId,
             vendorId: vendorProfile.id,
             businessName: vendorProfile.businessName
@@ -134,14 +167,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           data: { bookingId, vendorId: vendorProfile.id }
         });
 
-        await createAuditLog({
-          userId: payload.userId,
-          action: "VENDOR_ACCEPT_BOOKING",
-          details: { bookingId },
-          ipAddress: req.headers.get("x-forwarded-for") || "unknown"
-        });
+        await AuditService.logBooking(
+          bookingId,
+          "VENDOR_ACCEPT_BOOKING",
+          { id: payload.userId, name: vendorProfile.businessName, role: payload.role },
+          undefined,
+          { ipAddress: req.headers.get("x-forwarded-for") || "unknown" }
+        );
 
-        return NextResponse.json(updatedBooking);
+        return NextResponse.json({
+            success: true,
+            message: "Booking accepted successfully",
+            data: updatedBooking,
+            requestId: req.headers.get("x-request-id")
+        });
       }
     } finally {
       // Release lock if we held it

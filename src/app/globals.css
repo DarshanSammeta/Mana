@@ -76,6 +76,14 @@
   * {
     @apply border-border;
   }
+  html,
+     {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100%;
+      overflow-x: hidden;
+    }
   body {
     @apply bg-background text-foreground antialiased selection:bg-blue-100 selection:text-blue-900;
     font-feature-settings: "rlig" 1, "calt" 1;

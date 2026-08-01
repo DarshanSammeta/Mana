@@ -22,14 +22,14 @@ export async function GET(req: Request) {
 
     const { vendors } = await getMarketplaceVendors(filters);
 
-    // Track search intelligence
+    // Track search intelligence in the background (Non-blocking)
     const session = await auth();
-    await SearchIntelligenceService.trackSearch(
+    SearchIntelligenceService.trackSearch(
       filters.query || "",
       session?.user?.id,
       filters,
       vendors.length
-    );
+    ).catch(e => console.error("[Search Analytics Background Error]", e));
 
     return NextResponse.json(vendors);
   } catch (error: any) {

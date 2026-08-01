@@ -68,7 +68,7 @@ export function NotificationBell() {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}

@@ -8,7 +8,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "CUSTOMER") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
@@ -16,11 +16,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const booking = await prisma.booking.findUnique({
       where: { id: resolvedParams.id },
-      include: { payment: true }
+      include: { payment: true, customerprofile: true }
     });
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
-    if (booking.customerId !== payload.userId) return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
+    if (booking.customerprofile.userId !== payload.userId) return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
 
     // Check if a refund already exists
     const existingRefund = await prisma.refund.findUnique({
@@ -29,20 +29,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (existingRefund) return NextResponse.json({ message: "Refund already requested" }, { status: 400 });
 
-    const refund = await prisma.refund.create({
-      data: {
-        id: crypto.randomUUID(),
-        bookingId: resolvedParams.id,
-        amount: amount || booking.totalAmount,
-        reason,
-        status: 'REQUESTED'
-      }
-    });
+    const refund = await prisma.$transaction(async (tx) => {
+        const result = await tx.refund.create({
+            data: {
+                id: crypto.randomUUID(),
+                bookingId: resolvedParams.id,
+                amount: amount || booking.totalAmount,
+                reason,
+                status: 'REQUESTED'
+            }
+        });
 
-    // Update booking status
-    await prisma.booking.update({
-      where: { id: resolvedParams.id },
-      data: { status: 'CANCELLED' } // or a new REFUND_REQUESTED status
+        // Update booking status via State Machine
+        const { TimelineService } = await import("@/services/server/timeline.service");
+        await TimelineService.transitionStatus(
+            resolvedParams.id,
+            "CANCELLED",
+            { id: payload.userId, name: (payload as any).fullName || "Customer", role: payload.role },
+            `Refund Requested: ${reason}`,
+            tx
+        );
+
+        return result;
     });
 
     return NextResponse.json(refund);

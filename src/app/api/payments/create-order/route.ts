@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { amount, currency = "INR" } = await req.json();

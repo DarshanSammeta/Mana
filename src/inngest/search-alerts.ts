@@ -27,7 +27,7 @@ export const checkSavedSearches = inngest.createFunction(
     // Fetch all saved searches
     const savedSearches = (await step.run("fetch-saved-searches", async () => {
       return prisma.saved_search.findMany({
-        include: { user: true }
+        include: { customerprofile: { include: { user: true } } }
       });
     })) as any[];
 
@@ -43,7 +43,7 @@ export const checkSavedSearches = inngest.createFunction(
 
         if (matchesCity && matchesCategory) {
           await NotificationService.send({
-            userId: search.userId,
+            userId: search.customerprofile.userId,
             title: "New Vendor Match!",
             message: `A new vendor "${vendor.businessName}" matching your saved search "${search.name}" is now available.`,
             category: "MARKETING",

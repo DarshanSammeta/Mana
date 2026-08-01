@@ -7,6 +7,36 @@ let logger: any;
 if (isServer) {
   const { combine, timestamp, json, colorize, printf, errors } = winston.format;
 
+  const maskSensitive = winston.format((info) => {
+    const SENSITIVE_KEYS = [
+      'password', 'otp', 'token', 'accessToken', 'refreshToken',
+      'aadhaarNumber', 'panNumber', 'bankDetails', 'gstNumber',
+      'cvv', 'card_number', 'mobileNumber', 'mobile', 'accountNumber'
+    ];
+
+    const seen = new WeakSet();
+
+    const mask = (obj: any): any => {
+      if (!obj || typeof obj !== 'object') return obj;
+      if (seen.has(obj)) return '[Circular]';
+      seen.add(obj);
+
+      const newObj = Array.isArray(obj) ? [...obj] : { ...obj };
+
+      for (const key in newObj) {
+        const lowerKey = key.toLowerCase();
+        if (SENSITIVE_KEYS.some(sk => lowerKey.includes(sk))) {
+          newObj[key] = '********';
+        } else if (typeof newObj[key] === 'object') {
+          newObj[key] = mask(newObj[key]);
+        }
+      }
+      return newObj;
+    };
+
+    return mask(info);
+  });
+
   const consoleLogFormat = printf(({ level, message, timestamp, stack, ...metadata }) => {
     let msg = `${timestamp} [${level}] : ${message}`;
     if (stack) {
@@ -24,6 +54,7 @@ if (isServer) {
   logger = winston.createLogger({
     level: process.env.LOG_LEVEL || "info",
     format: combine(
+      maskSensitive(), // Apply masking first
       timestamp(),
       errors({ stack: true }),
       json()
@@ -35,6 +66,7 @@ if (isServer) {
     transports: [
       new winston.transports.Console({
         format: combine(
+          maskSensitive(), // Mask console output too
           colorize(),
           timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
           consoleLogFormat

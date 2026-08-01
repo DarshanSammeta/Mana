@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
-import { createAuditLog } from "@/lib/audit";
+import { AuditService } from "@/services/server/audit.service";
 import logger from "@/lib/logger";
 import { z } from "zod";
-import { VendorNotifications } from "@/lib/notifications/vendor";
+import { NotificationService } from "@/lib/notifications";
 
 const verifySchema = z.object({
   status: z.enum(["APPROVED", "REJECTED", "CHANGES_REQUIRED"]),
@@ -17,7 +17,7 @@ const verifySchema = z.object({
 async function checkAdmin(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return null;
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "ADMIN") return null;
   return payload;
 }
@@ -53,11 +53,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     // Create Audit Log
-    await createAuditLog({
-      userId: admin.userId,
+    await AuditService.log({
+      entityType: "VENDOR_PROFILE",
+      entityId: vendorProfileId,
+      vendorId: vendorProfileId,
+      module: "VENDOR_MANAGEMENT",
       action: `VENDOR_VERIFICATION_${validated.status}`,
-      details: {
-        vendorProfileId,
+      performedByUserId: admin.userId,
+      performedByRole: "ADMIN",
+      metadata: {
         vendorUserId: vendorProfile.userId,
         ...validated
       },
@@ -66,11 +70,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Create Notification for Vendor
     if (validated.status === "APPROVED") {
-      await VendorNotifications.approved(vendorProfile.userId);
+      await NotificationService.triggers.vendorAccountStatus(vendorProfile.userId, "APPROVED");
     } else if (validated.status === "REJECTED") {
-      await VendorNotifications.rejected(vendorProfile.userId, validated.rejectionReason || "No reason provided");
+      await NotificationService.triggers.vendorAccountStatus(vendorProfile.userId, "REJECTED", validated.rejectionReason);
     } else if (validated.status === "CHANGES_REQUIRED") {
-      await VendorNotifications.changesRequested(vendorProfile.userId, validated.comment || "Please check your profile details");
+      await NotificationService.triggers.vendorAccountStatus(vendorProfile.userId, "CHANGES_REQUIRED", validated.comment);
     }
 
     logger.info("Vendor verification status updated by admin", {

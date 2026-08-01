@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { geocodeAddress } from '@/lib/maps/googleMaps';
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const { address } = await req.json();
+    const { searchParams } = new URL(req.url);
+    const address = searchParams.get('address');
     if (!address) {
       return NextResponse.json({ error: 'Address required' }, { status: 400 });
     }

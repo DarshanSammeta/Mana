@@ -10,17 +10,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const booking = await prisma.booking.findUnique({
-      where: { id: bookingId }
+      where: { id: bookingId },
+      include: { customerprofile: true }
     });
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
 
     // Authorization: Customer, Vendor, or Admin
-    if (payload.role !== "ADMIN" && booking.customerId !== payload.userId) {
+    if (payload.role !== "ADMIN" && booking.customerprofile.userId !== payload.userId) {
         // Check if it's the vendor
         const vendor = await prisma.vendorprofile.findUnique({ where: { userId: payload.userId } });
         if (booking.vendorId !== vendor?.id) {

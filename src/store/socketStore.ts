@@ -25,12 +25,20 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   offlineQueue: [],
 
   connect: async (token: string) => {
-    // If already connecting or connected with SAME token, skip
-    if (!token || get().isConnecting || (get().socket && get().token === token)) {
+    // 1. Validation & Guard Rails
+    if (!token) {
+      console.warn("[Socket] No token provided, skipping connection.");
       return;
     }
 
-    // If connected with DIFFERENT token, disconnect first
+    if (get().isConnecting) return;
+
+    // If already connected with same token, do nothing
+    if (get().socket?.connected && get().token === token) {
+      return;
+    }
+
+    // If connected with different token, disconnect first
     if (get().socket && get().token !== token) {
       get().disconnect();
     }
@@ -38,40 +46,77 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     set({ isConnecting: true, token });
 
     try {
-      // Ensure the socket server is initialized
-      await fetch(`/api/socket/io?t=${Date.now()}`);
+      // 2. Initialize server-side socket if using API route fallback
+      // In production with custom server, this is redundant but safe.
+      // We append EIO=4 to avoid 400 errors from Socket.IO server expecting protocol version
+      await fetch(`/api/socket/io?EIO=4&transport=polling&t=${Date.now()}`).catch(() => {
+        // Ignore fetch errors, let socket attempt connection
+      });
 
       const socket = io(window.location.origin, {
         auth: { token },
         path: "/api/socket/io",
         addTrailingSlash: false,
         reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 2000,
-        reconnectionDelayMax: 10000,
-        transports: ["websocket", "polling"],
+        reconnectionAttempts: Infinity, // Production resilience
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        randomizationFactor: 0.5,
+        transports: ["websocket", "polling"], // Websocket first for stability
         upgrade: true,
         timeout: 20000,
         closeOnBeforeunload: true,
       });
 
       socket.on("connect_error", (err) => {
-        console.error("[Socket] Connection Error:", err.message);
-        set({ isConnecting: false });
-        if (err.message === "Authentication error" || err.message === "Invalid token") {
+        const errorMessage = err.message.toLowerCase();
+
+        if (errorMessage.includes("authentication") || errorMessage.includes("token")) {
+          console.warn("[Socket] Authentication failed. Disconnecting silently.");
           get().disconnect();
+          return;
         }
+
+        if (errorMessage.includes("websocket error") || errorMessage.includes("xhr poll error")) {
+          // Classified as transport error
+          if (!get().isConnected) {
+             // Only log if we haven't successfully connected before to avoid spam
+             // Or use a throttled logger
+          }
+        } else if (errorMessage.includes("timeout")) {
+          console.warn("[Socket] Connection timeout");
+        } else if (
+          errorMessage.includes("websocket error") ||
+          errorMessage.includes("xhr poll error") ||
+          errorMessage.includes("transport")
+        ) {
+          // Temporary network/server unavailable.
+          // Socket.IO will automatically reconnect.
+        } else {
+          console.warn("[Socket]", err.message);
+        }
+
+        set({ isConnecting: false });
       });
 
       socket.on("connect", () => {
-        console.log("[Socket] Connected successfully");
+        console.log("[Socket] Connected successfully via", socket.io.engine.transport.name);
         set({ isConnected: true, isConnecting: false });
         get().sendOfflineMessages();
+
+        socket.io.engine.on("upgrade", (transport) => {
+          console.log("[Socket] Transport upgraded to:", transport.name);
+        });
       });
 
       socket.on("disconnect", (reason) => {
         console.log("[Socket] Disconnected:", reason);
         set({ isConnected: false, isConnecting: false });
+
+        if (reason === "io server disconnect") {
+          // The server has forcefully disconnected the socket, need to manually reconnect
+          socket.connect();
+        }
       });
 
       socket.on("presence:update", ({ userId, status }) => {

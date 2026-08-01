@@ -1,10 +1,9 @@
 "use client"
 
-import { useCart, useRemoveFromCart, useAddToCart } from "@/hooks/useCommerce";
+import { useCart, useRemoveFromCart, useAddToCart } from "@/hooks/use-commerce";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck, Info, Package, Store } from "lucide-react";
-import Link from "next/link";
+import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck, Info, Package, Store, Calendar, Users, MapPin } from "lucide-react";
 
 import { useCheckoutStore } from "@/store/checkoutStore";
 import { motion } from "framer-motion";
@@ -12,20 +11,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/common/EmptyState";
 
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 export default function CartPage() {
+  const router = useRouter();
   const { data: cart, isLoading } = useCart();
   const { mutate: removeFromCart } = useRemoveFromCart();
   const { mutate: addToCart } = useAddToCart();
 
   const items = cart?.items || [];
   const subtotal = items.reduce((acc: number, item: any) => {
-    const price = item.details?.price || item.details?.basePrice || 0;
+    const price = item.priceSnapshot || item.details?.price || item.details?.basePrice || 0;
     return acc + (Number(price) * item.quantity);
   }, 0);
-
-
 
   const updateQuantity = async (itemId: string, type: string, targetId: string, delta: number) => {
       addToCart({ type, targetId, quantity: delta });
@@ -33,28 +32,33 @@ export default function CartPage() {
 
   const handleCheckoutClick = () => {
     if (items.length > 0) {
-      const firstItem = items[0];
-      const vendorId = firstItem.details?.vendorId || firstItem.details?.vendor?.id;
-      const serviceId = firstItem.type === "SERVICE" ? firstItem.targetId : firstItem.details?.serviceId;
-      const packageId = firstItem.type === "PACKAGE" ? firstItem.targetId : undefined;
+      const checkoutItems = items.map((item: any) => ({
+        vendorId: item.vendorId || item.details?.vendorprofile?.id,
+        vendorName: item.details?.vendorprofile?.businessName || "Vendor",
+        serviceId: item.type === "SERVICE" ? item.targetId : item.details?.serviceId,
+        packageId: item.type === "PACKAGE" ? item.targetId : "",
+        packageName: item.details?.name || item.details?.title,
+        basePrice: item.priceSnapshot || item.details?.price || item.details?.basePrice || 0,
+        selectedAddonIds: item.addons || []
+      }));
 
-      useCheckoutStore.getState().setVendorInfo({
-        vendorId,
-        serviceId,
-        packageId,
-        vendorName: firstItem.details?.vendor?.businessName || firstItem.details?.name,
-        packageName: firstItem.type === "PACKAGE" ? firstItem.details?.name : undefined,
-        basePrice: firstItem.details?.price || firstItem.details?.basePrice || 0
-      });
+      useCheckoutStore.getState().setCheckoutItems(checkoutItems);
+      // Set initial event details if first item has them
+      const firstItem = items[0];
+      if (firstItem.eventDate) {
+          useCheckoutStore.getState().setEventDetails({
+              date: firstItem.eventDate.split('T')[0],
+              guestCount: firstItem.guestCount || 100,
+              venue: firstItem.location,
+          });
+      }
+      router.push("/customer/checkout");
     }
   };
 
   const container = {
     hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    }
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
   };
 
   const itemAnim = {
@@ -63,16 +67,11 @@ export default function CartPage() {
   };
 
   return (
-    <motion.div
-      variants={container}
-      initial="hidden"
-      animate="show"
-      className="space-y-10"
-    >
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-10 pt-10 px-4 max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <motion.h2 variants={itemAnim} className="text-4xl font-black tracking-tight">Your Cart</motion.h2>
-          <motion.p variants={itemAnim} className="text-muted-foreground text-lg mt-1">Review and finalize your event services selection.</motion.p>
+          <motion.h2 variants={itemAnim} className="text-4xl font-black tracking-tight">Shopping Cart</motion.h2>
+          <motion.p variants={itemAnim} className="text-muted-foreground text-lg mt-1">Single checkout for all your event services.</motion.p>
         </div>
       </div>
 
@@ -96,8 +95,8 @@ export default function CartPage() {
         <EmptyState
           icon={ShoppingBag}
           title="Your cart is empty"
-          description="Looks like you haven&apos;t added any services to your event plan yet. Start exploring our verified vendors to build your dream event."
-          actionText="Start Exploring"
+          description="Build your dream event by adding services from our verified vendors."
+          actionText="Explore Marketplace"
           actionHref="/marketplace"
         />
       ) : (
@@ -105,10 +104,10 @@ export default function CartPage() {
           <div className="lg:col-span-2 space-y-6">
             {items.map((item: any) => (
               <motion.div key={item.id} variants={itemAnim}>
-                <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden group">
+                <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden group bg-white">
                   <div className="p-6 flex flex-col sm:flex-row gap-6">
-                    <div className="w-full sm:w-48 h-32 bg-secondary/30 rounded-2xl flex items-center justify-center relative flex-shrink-0 overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10" />
+                    <div className="w-full sm:w-48 h-32 bg-slate-50 rounded-2xl flex items-center justify-center relative flex-shrink-0 overflow-hidden border">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
                         {item.type === "PACKAGE" ? <Package className="h-10 w-10 text-primary/20" /> : <Store className="h-10 w-10 text-primary/20" />}
                     </div>
 
@@ -116,17 +115,32 @@ export default function CartPage() {
                       <div className="flex justify-between items-start">
                         <div>
                           <Badge variant="secondary" className="bg-primary/5 text-primary border-none text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 mb-2">
-                             {item.type === "PACKAGE" ? "Service Package" : "Individual Service"}
+                             {item.details?.vendorprofile?.businessName || 'Verified Vendor'}
                           </Badge>
-                          <h3 className="text-xl font-black tracking-tight">{item.details?.title || item.details?.name}</h3>
-                          <p className="text-sm text-muted-foreground font-medium mt-1 line-clamp-1">
-                            {item.type === "PACKAGE" ? `By ${item.details?.vendor?.businessName || 'Verified Vendor'}` : item.details?.description}
-                          </p>
+                          <h3 className="text-xl font-black tracking-tight">{item.details?.name || item.details?.title}</h3>
+
+                          <div className="flex flex-wrap gap-4 mt-3">
+                              {item.eventDate && (
+                                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                      <Calendar className="h-3 w-3" /> {new Date(item.eventDate).toLocaleDateString()}
+                                  </div>
+                              )}
+                              {item.guestCount && (
+                                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                      <Users className="h-3 w-3" /> {item.guestCount} Guests
+                                  </div>
+                              )}
+                              {item.location && (
+                                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                      <MapPin className="h-3 w-3" /> {item.location}
+                                  </div>
+                              )}
+                          </div>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-10 w-10 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          className="h-10 w-10 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           onClick={() => removeFromCart(item.id)}
                         >
                           <Trash2 className="h-5 w-5" />
@@ -134,11 +148,11 @@ export default function CartPage() {
                       </div>
 
                       <div className="flex items-center justify-between mt-6">
-                        <div className="flex items-center gap-4 bg-secondary/50 p-1 rounded-2xl border border-border/50">
+                        <div className="flex items-center gap-4 bg-slate-50 p-1 rounded-2xl border border-slate-100">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-white dark:hover:bg-black/20 shadow-none hover:shadow-sm"
+                            className="h-8 w-8 rounded-xl hover:bg-white shadow-none hover:shadow-sm"
                             onClick={() => updateQuantity(item.id, item.type, item.targetId, -1)}
                             disabled={item.quantity <= 1}
                           >
@@ -148,7 +162,7 @@ export default function CartPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-white dark:hover:bg-black/20 shadow-none hover:shadow-sm"
+                            className="h-8 w-8 rounded-xl hover:bg-white shadow-none hover:shadow-sm"
                             onClick={() => updateQuantity(item.id, item.type, item.targetId, 1)}
                           >
                             <Plus className="h-3 w-3" />
@@ -156,8 +170,8 @@ export default function CartPage() {
                         </div>
 
                         <div className="text-right">
-                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-tighter">Price</p>
-                            <p className="text-xl font-black">{formatCurrency(item.details?.price || item.details?.basePrice || 0)}</p>
+                            <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Snapshot Price</p>
+                            <p className="text-xl font-black text-primary">{formatCurrency(item.priceSnapshot || item.details?.price || item.details?.basePrice || 0)}</p>
                         </div>
                       </div>
                     </div>
@@ -166,69 +180,54 @@ export default function CartPage() {
               </motion.div>
             ))}
 
-            <motion.div variants={itemAnim} className="p-6 bg-amber-50 rounded-[2rem] border border-amber-100 flex gap-4">
-                <Info className="h-6 w-6 text-amber-600 flex-shrink-0" />
-                <p className="text-sm text-amber-800 font-medium">
-                    Please note that final availability depends on the vendor&apos;s schedule for your specific event dates. Proceeding to checkout will notify the vendors.
+            <motion.div variants={itemAnim} className="p-6 bg-blue-50 rounded-[2rem] border border-blue-100 flex gap-4">
+                <Info className="h-6 w-6 text-blue-600 flex-shrink-0" />
+                <p className="text-sm text-blue-800 font-medium leading-relaxed">
+                    Prices are locked for your selected dates. Final confirmation depends on vendor availability after payment.
                 </p>
             </motion.div>
           </div>
 
           <div className="lg:col-span-1">
             <motion.div variants={itemAnim} className="sticky top-28">
-                <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white dark:bg-black/40">
+                <Card className="border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
                     <div className="p-8 space-y-8">
-                        <h3 className="text-2xl font-black tracking-tight">Summary</h3>
+                        <h3 className="text-2xl font-black tracking-tight">Order Summary</h3>
 
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground font-medium">Subtotal</span>
-                                <span className="font-bold">{formatCurrency(subtotal)}</span>
+                            <div className="flex justify-between items-center text-sm font-bold">
+                                <span className="text-slate-400 uppercase tracking-widest text-[10px]">Subtotal</span>
+                                <span>{formatCurrency(subtotal)}</span>
                             </div>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground font-medium">Platform Fee</span>
-                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 border-none font-bold">FREE</Badge>
+                            <div className="flex justify-between items-center text-sm font-bold">
+                                <span className="text-slate-400 uppercase tracking-widest text-[10px]">Convenience Fee</span>
+                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 border-none">FREE</Badge>
                             </div>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground font-medium">Taxes (GST)</span>
-                                <span className="font-bold">Included</span>
+                            <div className="flex justify-between items-center text-sm font-bold">
+                                <span className="text-slate-400 uppercase tracking-widest text-[10px]">Est. GST (18%)</span>
+                                <span>{formatCurrency(subtotal * 0.18)}</span>
                             </div>
 
                             <div className="pt-6 border-t border-dashed space-y-1">
                                 <div className="flex justify-between items-end">
-                                    <span className="text-lg font-black uppercase tracking-widest text-primary">Total Amount</span>
-                                    <span className="text-3xl font-black">{formatCurrency(subtotal)}</span>
+                                    <span className="text-lg font-black uppercase tracking-widest text-primary">Total Est.</span>
+                                    <span className="text-3xl font-black">{formatCurrency(subtotal * 1.18)}</span>
                                 </div>
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase text-right tracking-widest">Inclusive of all taxes</p>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase text-right tracking-widest">Pay 30% Advance at checkout</p>
                             </div>
                         </div>
 
-                        <Button className="w-full h-16 rounded-2xl text-lg font-black group/btn" size="lg" asChild variant="premium" onClick={handleCheckoutClick}>
-                            <Link href="/customer/checkout" className="flex items-center justify-center">
-                                Secure Checkout
-                                <ArrowRight className="ml-2 h-5 w-5 group-hover/btn:translate-x-1 transition-transform" />
-                            </Link>
+                        <Button className="w-full h-16 rounded-2xl text-lg font-black group/btn bg-primary hover:bg-primary/90" size="lg" onClick={handleCheckoutClick}>
+                            Proceed to Checkout
+                            <ArrowRight className="ml-2 h-5 w-5 group-hover/btn:translate-x-1 transition-transform" />
                         </Button>
 
                         <div className="flex items-center justify-center gap-2 text-muted-foreground">
                             <ShieldCheck className="h-4 w-4" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest">Secured by Razorpay</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest">PCI-DSS Compliant Payment</span>
                         </div>
                     </div>
                 </Card>
-
-                <div className="mt-6 p-6 flex flex-col items-center gap-4">
-                    <div className="flex -space-x-3">
-                        {[1, 2, 3, 4].map(i => (
-                            <div key={i} className="h-10 w-10 rounded-full border-4 border-background bg-secondary flex items-center justify-center text-[10px] font-bold">
-                                {String.fromCharCode(64 + i)}
-                            </div>
-                        ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground font-medium text-center">
-                        Joined 10,000+ customers planning their dream events.
-                    </p>
-                </div>
             </motion.div>
           </div>
         </div>

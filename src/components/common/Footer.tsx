@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { Globe } from "lucide-react";
+import Image from "next/image";
+import ManaEventsLogo from "@/assets/logos/ManaEvents.png"
 import { footerSections, legalLinks } from "@/data/common/footer";
 
 export default function Footer() {
@@ -41,7 +43,12 @@ export default function Footer() {
       <div className="border-t border-gray-800 py-12 bg-[#111827]">
         <div className="max-w-[1200px] mx-auto px-6 flex flex-col md:flex-row items-center justify-center gap-12">
           <Link href="/" className="transition-opacity hover:opacity-80">
-             <span className="text-2xl font-black tracking-tight text-white">mana<span className="text-[#6D28D9]">Events</span></span>
+            <Image
+                src={ManaEventsLogo}
+                alt="Mana Events"
+                priority
+                className="h-9 w-auto md:h-10"
+              />
           </Link>
           <div className="flex items-center gap-4">
              <div className="border border-gray-700 rounded-sm px-5 py-2 flex items-center gap-3 cursor-pointer hover:bg-gray-800 transition-colors">

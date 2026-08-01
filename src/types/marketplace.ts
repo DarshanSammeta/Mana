@@ -33,4 +33,6 @@ export interface MarketplaceVendor {
   distance?: number;
   minPrice?: number;
   service: any[];
+  rankingScore?: number;
+  rankingReasons?: string[];
 }

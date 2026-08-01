@@ -9,9 +9,12 @@ import { inngest } from "@/lib/inngest";
 export class SavedSearchService {
   static async saveSearch(userId: string, data: { name?: string; filters: any; query?: string }) {
     const prisma = getPrisma();
+    const profile = await prisma.customerprofile.findUnique({ where: { userId } });
+    if (!profile) throw new Error("Customer profile not found");
+
     const savedSearch = await prisma.saved_search.create({
       data: {
-        userId,
+        customerProfileId: profile.id,
         name: data.name || data.query || "Saved Search",
         filters: data.filters,
         query: data.query,
@@ -33,15 +36,18 @@ export class SavedSearchService {
   static async getSavedSearches(userId: string) {
     const prisma = getPrisma();
     return await prisma.saved_search.findMany({
-      where: { userId },
+      where: { customerprofile: { userId } },
       orderBy: { createdAt: "desc" },
     });
   }
 
   static async deleteSavedSearch(userId: string, id: string) {
     const prisma = getPrisma();
+    const profile = await prisma.customerprofile.findUnique({ where: { userId } });
+    if (!profile) throw new Error("Customer profile not found");
+
     return await prisma.saved_search.delete({
-      where: { id, userId },
+      where: { id, customerProfileId: profile.id },
     });
   }
 }

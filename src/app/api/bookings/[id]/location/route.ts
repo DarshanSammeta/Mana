@@ -6,6 +6,8 @@ import { emitSocketEvent } from "@/lib/socket-helper";
 import { FraudDetectionService } from "@/services/server/fraud-detection.service";
 import logger from "@/lib/logger";
 
+import { BookingAuthService } from "@/lib/services/booking-auth.service";
+
 // POST /api/bookings/[id]/location
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
@@ -14,16 +16,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const token = req.headers.get("authorization")?.split(" ")[1];
 
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
+    // 1. Authorization Check (Only Assigned Vendor)
+    const isVendor = await BookingAuthService.isAssignedVendor(bookingId, payload.userId);
+    if (!isVendor) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      select: { customerId: true, status: true, vendorprofile: { select: { userId: true } } }
+      select: {
+        customerprofile: { select: { userId: true } },
+        status: true
+      }
     });
 
-    if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
-    if (booking.vendorprofile?.userId !== payload.userId) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    if (!booking || !booking.customerprofile) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
 
     // Only allow location updates if vendor is traveling
     if (booking.status !== "VENDOR_TRAVELING") {
@@ -38,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     // Emit live location update to customer
-    emitSocketEvent(booking.customerId, "vendor:location:update", {
+    emitSocketEvent(booking.customerprofile.userId, "vendor:location:update", {
         bookingId,
         lat,
         lng,

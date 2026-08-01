@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { verifyRefreshToken, generateAccessToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { withErrorHandler } from "@/lib/error-handler";
-import logger from "@/lib/logger";
+import { SessionService } from "@/services/server/session.service";
 
 export async function POST(_req: Request) {
   return withErrorHandler(async () => {
@@ -14,41 +12,19 @@ export async function POST(_req: Request) {
       return NextResponse.json({ message: "Refresh token missing" }, { status: 401 });
     }
 
-    const dbToken = await prisma.refreshtoken.findUnique({
-      where: { token: refreshToken },
-      include: { user: true },
-    });
+    const result = await SessionService.refreshSession(refreshToken);
 
-    if (!dbToken || dbToken.expiryDate < new Date()) {
-      if (dbToken) {
-        await prisma.refreshtoken.delete({ where: { id: dbToken.id } });
-        logger.info("Deleted expired refresh token", { userId: dbToken.userId });
-      }
+    if (!result) {
       return NextResponse.json({ message: "Invalid or expired refresh token" }, { status: 401 });
     }
 
-    const payload = verifyRefreshToken(refreshToken);
-    if (!payload || payload.userId !== dbToken.userId) {
-      logger.warn("Refresh token payload mismatch", { userId: dbToken.userId });
-      return NextResponse.json({ message: "Invalid refresh token" }, { status: 401 });
-    }
-
-    const newAccessToken = generateAccessToken(dbToken.userId, dbToken.user.role);
-
-    logger.info("Access token refreshed", { userId: dbToken.userId });
+    const { accessToken } = result;
 
     const response = NextResponse.json({
-      accessToken: newAccessToken,
+      accessToken: accessToken,
     });
 
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict" as const,
-      path: "/",
-    };
-
-    response.cookies.set("accessToken", newAccessToken, { ...cookieOptions, maxAge: 15 * 60 });
+    return SessionService.setSessionCookies(response, accessToken);
 
     return response;
   }, _req);

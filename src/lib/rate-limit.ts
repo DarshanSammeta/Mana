@@ -27,10 +27,14 @@ export async function rateLimit(
   // Generate a unique key for this identifier
   const key = `ratelimit:${identifier}`;
 
-  // Check if we should ignore rate limits (e.g. for CI/CD or specific bypass)
-  if (process.env.DISABLE_RATE_LIMITING === "true") {
-    return { success: true, limit: config.limit, remaining: config.limit, reset: config.window };
-  }
+  const isDev = process.env.NODE_ENV === 'development';
+  const isStrict = process.env.STRICT_RATE_LIMITING === "true";
+
+  // ALLOWLIST: Only raise threshold in exactly 'development'.
+  // Multiplier provides headroom for HMR but still catches runaway infinite loops.
+  const effectiveLimit = (isDev && !isStrict)
+    ? Math.max(config.limit * 20, 1000)
+    : config.limit;
 
   try {
     // Use safeRedis wrapper to avoid throwing errors if Redis is down
@@ -42,8 +46,8 @@ export async function rateLimit(
       logger.warn(`Rate limit check failed for ${identifier} due to Redis unavailability. Failing open.`);
       return {
         success: true,
-        limit: config.limit,
-        remaining: config.limit,
+        limit: effectiveLimit,
+        remaining: effectiveLimit,
         reset: config.window,
         redisOffline: true
       };
@@ -57,12 +61,12 @@ export async function rateLimit(
     const ttl = await safeRedis.ttl(key);
     const reset = ttl && ttl > 0 ? ttl : config.window;
 
-    const success = current <= config.limit;
-    const remaining = Math.max(0, config.limit - current);
+    const success = current <= effectiveLimit;
+    const remaining = Math.max(0, effectiveLimit - current);
 
     return {
       success,
-      limit: config.limit,
+      limit: effectiveLimit,
       remaining,
       reset,
       retryAfter: success ? undefined : reset,

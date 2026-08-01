@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '@/comp
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Calendar, Users, CheckSquare } from 'lucide-react';
+import { formatSafe } from '@/lib/utils/date';
 import Link from 'next/link';
 
 export default function PlanningOverviewPage() {
@@ -33,7 +34,7 @@ export default function PlanningOverviewPage() {
                   {workspace.status}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  Updated {new Date(workspace.updatedAt).toLocaleDateString()}
+                  Updated {formatSafe(workspace.updatedAt)}
                 </span>
               </div>
               <CardTitle className="mt-2">{workspace.title}</CardTitle>
@@ -51,7 +52,7 @@ export default function PlanningOverviewPage() {
                 </div>
                 <div>
                   <Calendar className="w-4 h-4 mx-auto mb-1 text-primary" />
-                  <span>{workspace.eventDate ? new Date(workspace.eventDate).toLocaleDateString() : 'TBD'}</span>
+                  <span>{formatSafe(workspace.eventDate)}</span>
                 </div>
               </div>
               <Link href={`/planning/${workspace.id}`} className="w-full">

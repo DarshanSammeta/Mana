@@ -7,12 +7,19 @@ export type BookingStatus =
   | "NEGOTIATING"
   | "QUOTE_ACCEPTED"
   | "PAYMENT_PENDING"
+  | "PENDING_ADVANCE"
+  | "ADVANCE_PAID"
+  | "VENDOR_REVIEW"
+  | "BALANCE_PENDING"
+  | "FULLY_PAID"
   | "REJECTED"
   | "CONFIRMED"
   | "CANCELLED"
   | "PREPARATION"
+  | "PREPARATION_STARTED"
   | "VENDOR_ASSIGNED"
   | "VENDOR_TRAVELING"
+  | "VENDOR_EN_ROUTE"
   | "VENDOR_ARRIVED"
   | "OTP_VERIFICATION_PENDING"
   | "EVENT_STARTED"
@@ -23,7 +30,17 @@ export type BookingStatus =
   | "CLOSED"
   | "DISPUTED"
   | "IN_PROGRESS"
-  | "EMERGENCY";
+  | "EMERGENCY"
+  | "ARCHIVED"
+  | "REFUND_PENDING"
+  | "REFUND_COMPLETED"
+  | "EXPIRED"
+  | "PENDING_VENDOR_RESPONSE"
+  | "COUNTERED"
+  | "ACCEPTED"
+  | "ADVANCE_PAYMENT_PENDING"
+  | "COUNTER_REJECTED"
+  | "PAYMENT_EXPIRED";
 
 export interface BookingChecklistItem {
   id: number;
@@ -41,7 +58,7 @@ export interface BookingTeamMember {
 export interface Booking {
   id: string;
   bookingNumber: string;
-  customerId: string;
+  customerProfileId: string;
   vendorId: string;
   status: BookingStatus;
   eventName?: string;
@@ -58,12 +75,35 @@ export interface Booking {
   totalAmount: number;
   subTotal?: number;
   taxAmount?: number;
+  discountAmount?: number;
+  advanceAmount?: number;
+  balanceAmount?: number;
+  commissionAmount?: number;
   createdAt: string | Date;
   updatedAt: string | Date;
-  user: {
+  customerprofile?: {
+    userId: string;
+    user: {
+      id: string;
+      fullName: string;
+      email: string;
+      mobileNumber: string;
+    };
+  };
+  // Maintain 'user' property for backward compatibility where flattening is used
+  user?: {
     fullName: string;
     email: string;
     mobileNumber?: string;
+  };
+  vendorprofile?: {
+    id: string;
+    businessName: string;
+    logo?: string;
+    description?: string;
+    userId: string;
+    city?: string;
+    state?: string;
   };
   bookingitem: {
     id: string;
@@ -86,4 +126,13 @@ export interface Booking {
   vendorPhoneVerified: boolean;
   vendorConfirmedAt5d: boolean | null;
   invoiceUrl?: string;
+  viewedByVendor?: boolean;
+  counterquote?: {
+    id: string;
+    version: number;
+    totalAmount: number;
+    notes?: string;
+    status: string;
+    createdAt: string;
+  }[];
 }

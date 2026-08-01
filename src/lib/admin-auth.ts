@@ -9,7 +9,7 @@ export async function checkAdmin(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return null;
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "ADMIN") return null;
 
   return payload;

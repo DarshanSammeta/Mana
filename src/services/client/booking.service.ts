@@ -38,8 +38,18 @@ export const bookingService = {
     return res.data;
   },
 
+  async getPackageAddons(packageId: string) {
+    const res = await apiClient.get(`/packages/${packageId}/addons`);
+    return res.data;
+  },
+
   async checkAvailability(vendorId: string, date: string) {
     const res = await apiClient.post("/vendor/availability/check", { vendorId, date });
+    return res.data;
+  },
+
+  async cancelBooking(id: string, reason: string) {
+    const res = await apiClient.patch(`/bookings/${id}/cancel`, { reason });
     return res.data;
   }
 };

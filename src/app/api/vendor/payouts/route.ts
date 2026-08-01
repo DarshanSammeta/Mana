@@ -1,121 +1,38 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Decimal } from "@prisma/client/runtime/library";
 import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
-import { createAuditLog } from "@/lib/audit";
+import logger from "@/lib/logger";
+import { z } from "zod";
 
-export async function GET(req: Request) {
+const bankDetailsSchema = z.object({
+  bankName: z.string().min(2),
+  accountNumber: z.string().min(9),
+  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/),
+  upiId: z.string().optional().or(z.literal("")),
+});
+
+export async function PUT(req: Request) {
   return withErrorHandler(async () => {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    const vendorProfile = await prisma.vendorprofile.findUnique({
+    const body = await req.json();
+    const validatedData = bankDetailsSchema.parse(body);
+
+    const profile = await prisma.vendorprofile.update({
       where: { userId: payload.userId },
+      data: { bankDetails: validatedData as any },
+      select: { id: true, bankDetails: true }
     });
 
-    if (!vendorProfile) {
-      return NextResponse.json({ message: "Vendor profile not found" }, { status: 404 });
-    }
+    logger.info("Vendor payout details updated", { userId: payload.userId, vendorId: profile.id });
 
-    const payouts = await prisma.payout.findMany({
-      where: { vendorId: vendorProfile.id },
-      orderBy: { createdAt: "desc" }
-    });
-
-    return NextResponse.json(payouts);
-  });
-}
-
-export async function POST(req: Request) {
-  return withErrorHandler(async () => {
-    const token = req.headers.get("authorization")?.split(" ")[1];
-    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-    const payload = verifyAccessToken(token);
-    if (!payload || payload.role !== "VENDOR") {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    }
-
-    const { amount, bankDetails } = await req.json();
-
-    if (!amount) {
-      return NextResponse.json({ message: "Amount is required" }, { status: 400 });
-    }
-
-    const vendorProfile = await prisma.vendorprofile.findUnique({
-      where: { userId: payload.userId },
-      include: {
-        user: {
-          include: {
-            wallet: true
-          }
-        }
-      }
-    });
-
-    const wallet = vendorProfile?.user?.wallet;
-
-    if (!vendorProfile || !wallet) {
-      return NextResponse.json({ message: "Vendor wallet not found" }, { status: 404 });
-    }
-
-    const withdrawalAmount = new Decimal(amount);
-
-    // Check if vendor has enough balance (using 'balance' or 'withdrawable')
-    if (wallet.balance.lt(withdrawalAmount)) {
-      return NextResponse.json({ message: "Insufficient balance" }, { status: 400 });
-    }
-
-    const payout = await prisma.$transaction(async (tx) => {
-      // 1. Create Payout Request
-      const p = await tx.payout.create({
-        data: {
-          id: crypto.randomUUID(),
-          vendorId: vendorProfile.id,
-          amount: withdrawalAmount,
-          status: "PENDING",
-          bankDetails: bankDetails || vendorProfile.bankDetails,
-          updatedAt: new Date(),
-        }
-      });
-
-      // 2. Deduct from Wallet Balance and move to Pending Payout
-      // Note: We use balance for withdrawable funds in this logic
-      await tx.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: { decrement: withdrawalAmount },
-          pendingBalance: { increment: withdrawalAmount }
-        }
-      });
-
-      // 3. Create Transaction Record
-      await tx.transaction.create({
-        data: {
-          id: crypto.randomUUID(),
-          walletId: wallet.id,
-          amount: withdrawalAmount,
-          type: "PAYOUT",
-          status: "PENDING",
-          description: `Withdrawal request created: ${p.id}`,
-        }
-      });
-
-      return p;
-    });
-
-    await createAuditLog({
-      userId: payload.userId,
-      action: "PAYOUT_REQUEST_CREATED",
-      details: { payoutId: payout.id, amount: withdrawalAmount },
-    });
-
-    return NextResponse.json(payout);
-  });
+    return NextResponse.json(profile);
+  }, req);
 }

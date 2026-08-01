@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
-import { createAuditLog } from "@/lib/audit";
+import { AuditService } from "@/services/server/audit.service";
 import { z } from "zod";
 
 import { booking_status, dispute_status } from "@prisma/client";
@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "ADMIN") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
@@ -43,13 +43,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       });
 
-      // Update booking status back to something appropriate
-      await tx.booking.update({
-        where: { id: dispute.bookingId },
-        data: {
-          status: validated.status === "RESOLVED" ? booking_status.EVENT_COMPLETED : booking_status.CONFIRMED // Logic depends on resolution
-        }
-      });
+      // Update booking status back to something appropriate via State Machine
+      const { TimelineService } = await import("@/services/server/timeline.service");
+      const nextBookingStatus = validated.status === "RESOLVED" ? booking_status.EVENT_COMPLETED : booking_status.CONFIRMED;
+
+      await TimelineService.transitionStatus(
+          dispute.bookingId,
+          nextBookingStatus,
+          { id: payload.userId, name: "Admin Resolution", role: "ADMIN" },
+          `Dispute Resolved: ${validated.resolution}`,
+          tx
+      );
 
       // Handle refunds if any
       if (validated.refundAmount && validated.refundAmount > 0) {
@@ -59,10 +63,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return updated;
     });
 
-    await createAuditLog({
-      userId: payload.userId,
+    await AuditService.log({
+      entityType: "DISPUTE",
+      entityId: disputeId,
+      module: "OPS",
       action: "DISPUTE_RESOLVED",
-      details: { disputeId, resolution: validated.status },
+      performedByUserId: payload.userId,
+      performedByRole: payload.role,
+      metadata: { resolution: validated.status },
       ipAddress: req.headers.get("x-forwarded-for") || "unknown"
     });
 

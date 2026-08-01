@@ -6,7 +6,11 @@ import {
   sendEventReminders,
   handleBookingStatusChange,
   bookingTimelineAutomation,
-  handleVendorRejection
+  handleVendorRejectionJob,
+  generateBookingDocument,
+  initiateAutomatedRefund,
+  handleOrderConfirmation,
+  reservationCleanupWorker
 } from "@/inngest/booking-functions";
 import { reconcilePayments, releaseEscrowAfterEvent } from "@/inngest/payment-functions";
 import { dispatchExternalNotification } from "@/inngest/notification-functions";
@@ -32,7 +36,11 @@ export const { GET, POST, PUT } = serve({
     sendEventReminders,
     handleBookingStatusChange,
     bookingTimelineAutomation,
-    handleVendorRejection,
+    handleVendorRejectionJob,
+    generateBookingDocument,
+    initiateAutomatedRefund,
+    handleOrderConfirmation,
+    reservationCleanupWorker,
     reconcilePayments,
     releaseEscrowAfterEvent,
     dispatchExternalNotification,

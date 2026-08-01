@@ -80,7 +80,7 @@ export default function VerificationStatusPage({
 
             <div className="grid grid-cols-5 gap-2 mt-4">
               {steps.map((step, index) => (
-                <div key={index} className="flex flex-col items-center gap-2">
+                <div key={step.name} className="flex flex-col items-center gap-2">
                   <div
                     className={cn(
                       "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors",

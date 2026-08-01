@@ -124,9 +124,23 @@ export async function deleteCache(key: string): Promise<boolean> {
 export async function deleteCachePattern(pattern: string): Promise<void> {
   const client = getRedis();
   if (!client) return;
-  const keys = await executeRedis("keys", (client) => client.keys(pattern));
-  if (keys && Array.isArray(keys) && keys.length > 0) {
-    await executeRedis("del", (client) => client.del(...keys));
+
+  try {
+    let cursor = "0";
+    do {
+      // @ts-expect-error - Upstash REST and ioredis have slightly different scan signatures
+      const [nextCursor, keys] = await executeRedis("scan", (c) =>
+        c.scan(cursor, { match: pattern, count: 100 })
+      );
+
+      cursor = nextCursor;
+
+      if (keys && Array.isArray(keys) && keys.length > 0) {
+        await executeRedis("del", (c) => c.del(...keys));
+      }
+    } while (cursor !== "0");
+  } catch (error) {
+    console.error(`[Redis] deleteCachePattern failed for ${pattern}:`, error);
   }
 }
 

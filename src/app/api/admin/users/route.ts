@@ -1,44 +1,55 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
-import { createAuditLog } from "@/lib/audit";
+import { AuditService } from "@/services/server/audit.service";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
 
-async function checkAdmin(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return null;
-  const payload = verifyAccessToken(token);
-  if (!payload || payload.role !== "ADMIN") return null;
-  return payload;
-}
+import { verifyAdminRequest } from "@/lib/auth";
 
 export async function GET(req: Request) {
   return withErrorHandler(async () => {
-    const admin = await checkAdmin(req);
+    const admin = await verifyAdminRequest(req);
     if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        mobileNumber: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-        loginAttempts: true,
-        lockUntil: true
-      }
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
+    const skip = (page - 1) * limit;
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          mobileNumber: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+          loginAttempts: true,
+          lockUntil: true
+        }
+      }),
+      prisma.user.count()
+    ]);
+
+    return NextResponse.json({
+      rows: users,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
     });
-    return NextResponse.json(users);
   }, req);
 }
 
 export async function PATCH(req: Request) {
   return withErrorHandler(async () => {
-    const admin = await checkAdmin(req);
+    const admin = await verifyAdminRequest(req);
     if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
@@ -53,10 +64,14 @@ export async function PATCH(req: Request) {
       data,
     });
 
-    await createAuditLog({
-      userId: admin.userId,
+    await AuditService.log({
+      entityType: "USER",
+      entityId: id,
+      module: "ADMIN",
       action: "USER_UPDATED_BY_ADMIN",
-      details: { targetUserId: id, updates: data },
+      performedByUserId: admin.userId,
+      performedByRole: admin.role,
+      metadata: { updates: data },
       ipAddress: req.headers.get("x-forwarded-for") || "unknown"
     });
 

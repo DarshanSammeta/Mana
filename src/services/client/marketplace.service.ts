@@ -1,9 +1,8 @@
 import apiClient from "@/lib/apiClient";
-import { MarketplaceFilters, MarketplaceVendor } from "@/types/marketplace";
 
 export const marketplaceService = {
-  async getEventTypes(): Promise<any[]> {
-    const res = await apiClient.get("/event-types");
+  async getEventTypes(vendorId?: string): Promise<any[]> {
+    const res = await apiClient.get("/event-types", { params: { vendorId } });
     return Array.isArray(res.data) ? res.data : [];
   },
 
@@ -29,17 +28,20 @@ export const marketplaceService = {
   },
 
   async getSearchSuggestions(query: string): Promise<any[]> {
-    const res = await apiClient.get(`/search/suggestions?q=${encodeURIComponent(query)}`);
+    const res = await apiClient.get(`/marketplace/services?query=${encodeURIComponent(query)}&limit=5`);
+    return res.data.services.map((s: any) => ({
+      text: s.title,
+      category: s.category
+    }));
+  },
+
+  async searchServices(filters: any): Promise<any> {
+    const res = await apiClient.get("/marketplace/services", { params: filters });
     return res.data;
   },
 
-  async searchVendors(filters: MarketplaceFilters): Promise<{ vendors: MarketplaceVendor[], total: number }> {
-    const res = await apiClient.get("/marketplace", { params: filters });
-    return res.data;
-  },
-
-  async getVendorById(id: string): Promise<any> {
-    const res = await apiClient.get(`/marketplace/${id}`);
+  async getServiceById(id: string): Promise<any> {
+    const res = await apiClient.get(`/services/${id}`);
     return res.data;
   },
 

@@ -1,8 +1,6 @@
 import { inngest } from '@/lib/inngest';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { getResend } from '@/lib/resend';
-
-const prisma = new PrismaClient();
 
 /**
  * Daily Event Planning Summary
@@ -14,7 +12,7 @@ export const sendDailyPlanningSummary = inngest.createFunction(
       const data = await prisma.event_workspace.findMany({
         where: { status: 'PLANNING' },
         include: {
-          user: { select: { email: true, fullName: true } },
+          customerprofile: { include: { user: { select: { email: true, fullName: true } } } },
           checklist_items: { where: { status: 'PENDING', dueDate: { lte: new Date(Date.now() + 86400000) } } },
           budget_items: true,
         }
@@ -28,7 +26,7 @@ export const sendDailyPlanningSummary = inngest.createFunction(
           const resend = getResend();
           if (resend) {
             // Send email logic
-            console.log(`Sending daily summary to ${workspace.user.email} for event ${workspace.title}`);
+            console.log(`Sending daily summary to ${workspace.customerprofile.user.email} for event ${workspace.title}`);
           }
         }
       });
@@ -71,13 +69,13 @@ export const budgetThresholdAlert = inngest.createFunction(
     const workspaceData = await step.run('check-budget', async () => {
       const ws = await prisma.event_workspace.findUnique({
         where: { id: workspaceId },
-        include: { budget_items: true, user: true }
+        include: { budget_items: true, customerprofile: { include: { user: true } } }
       });
 
       const totalActual = ws?.budget_items.reduce((acc, i) => acc + Number(i.actualAmount), 0) || 0;
       return {
         overBudget: totalActual > Number(ws?.budget || 0),
-        userEmail: ws?.user.email,
+        userEmail: (ws as any)?.customerprofile.user.email,
         total: totalActual,
         planned: ws?.budget
       };

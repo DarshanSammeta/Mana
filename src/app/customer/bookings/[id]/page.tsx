@@ -22,18 +22,20 @@ import {
   Sparkles,
   Lock,
   Share2,
-  Printer
+  Printer,
+  DollarSign
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { customerService } from "@/services/client";
 import { vendorService } from "@/services/client";
 import { toast } from "react-hot-toast";
 import { useCallback } from "react";
+import { PaymentTimeline } from "@/components/booking/PaymentTimeline";
 
 export default function BookingDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -124,8 +126,68 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
     }
   };
 
-  if (loading) return <div className="p-8"><Skeleton className="h-96 w-full rounded-2xl" /></div>;
-  if (!booking) return <div className="p-8 text-center">Booking not found</div>;
+  const loadRazorpay = () => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) return resolve(true);
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handlePayBalance = async () => {
+    try {
+      const razorpayLoaded = await loadRazorpay();
+      if (!razorpayLoaded) {
+        toast.error("Razorpay SDK failed to load");
+        return;
+      }
+
+      const orderRes = await customerService.createRazorpayOrder({
+        amount: Number(booking.balanceAmount),
+        bookingId: booking.id,
+        paymentType: "BALANCE"
+      });
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: orderRes.amount,
+        currency: orderRes.currency,
+        name: "Mana Events",
+        description: `Balance Payment for #${booking.bookingNumber}`,
+        order_id: orderRes.id,
+        handler: async (response: any) => {
+          try {
+            await customerService.verifyRazorpayPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              bookingId: booking.id,
+            });
+            toast.success("Balance paid successfully!");
+            fetchBookingDetails();
+          } catch {
+            toast.error("Verification failed");
+          }
+        },
+        prefill: {
+          name: booking.customerprofile?.user?.fullName,
+          email: booking.customerprofile?.user?.email,
+          contact: booking.customerprofile?.user?.mobileNumber,
+        },
+        theme: { color: "#6C3CF0" },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch {
+      toast.error("Failed to initiate balance payment");
+    }
+  };
+  if (loading) return <div className="p-8"><Skeleton className="h-[600px] w-full rounded-[2.5rem]" /></div>;
+  if (!booking) return <div className="p-8 text-center text-slate-500 font-bold uppercase tracking-widest">Booking not found</div>;
 
   const steps = [
     { label: "Booked", status: "COMPLETED", date: booking.createdAt, icon: Package },
@@ -147,7 +209,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Booking Details</h1>
             <p className="text-sm font-bold text-slate-500 mt-1 uppercase tracking-widest flex items-center gap-2">
-              Order #{booking.bookingNumber} <span className="h-1 w-1 rounded-full bg-slate-300"></span> Placed {format(new Date(booking.createdAt), 'MMM dd, yyyy')}
+              Order #{booking.bookingNumber} <span className="h-1 w-1 rounded-full bg-slate-300"></span> Placed {formatSafe(booking.createdAt, 'MMM dd, yyyy')}
             </p>
           </div>
         </div>
@@ -217,7 +279,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
                    </div>
                    <div className="space-y-1">
                       <p className={cn("text-[10px] font-black uppercase tracking-widest", isCompleted ? "text-slate-900" : "text-slate-400")}>{step.label}</p>
-                      {step.date && <p className="text-[11px] font-bold text-slate-400">{format(new Date(step.date), 'hh:mm a')}</p>}
+                      {step.date && <p className="text-[11px] font-bold text-slate-400">{formatSafe(step.date, 'hh:mm a')}</p>}
                    </div>
                 </div>
               );
@@ -292,14 +354,53 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
                </div>
             </section>
 
+            {/* Negotiation History */}
+            {booking.counterquote?.length > 0 && (
+               <section className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                  <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                     <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Negotiation Timeline</h3>
+                     <Badge variant="outline" className="font-black text-[9px] uppercase tracking-tighter">{booking.counterquote.length} Updates</Badge>
+                  </div>
+                  <div className="p-8">
+                     <div className="space-y-8">
+                        {booking.counterquote.map((quote: any, i: number) => (
+                           <div key={quote.id} className="flex gap-6 relative">
+                              {i < booking.counterquote.length - 1 && <div className="absolute left-3 top-6 bottom-[-32px] w-[2px] bg-slate-100" />}
+                              <div className={cn(
+                                 "h-6 w-6 rounded-full flex items-center justify-center shrink-0 z-10",
+                                 quote.status === "ACCEPTED" ? "bg-emerald-500" : "bg-slate-200"
+                              )}>
+                                 <div className="h-2 w-2 rounded-full bg-white" />
+                              </div>
+                              <div className="flex-1 pb-2">
+                                 <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                       <p className="text-xs font-black text-slate-900 uppercase tracking-wide">Version {quote.version}</p>
+                                       <p className="text-[10px] font-bold text-slate-400">{formatSafe(quote.createdAt, 'MMM dd, hh:mm a')}</p>
+                                    </div>
+                                    <p className="text-xl font-black text-slate-900">₹{Number(quote.totalAmount).toLocaleString()}</p>
+                                 </div>
+                                 {quote.notes && (
+                                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 italic text-sm text-slate-600">
+                                       &quot;{quote.notes}&quot;
+                                    </div>
+                                 )}
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+               </section>
+            )}
+
             <section className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Included Services</h3>
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-2 py-1 rounded border border-slate-100 shadow-sm">Quantity: {booking.bookingitem.length}</span>
                </div>
                <div className="divide-y divide-slate-100">
-                  {booking.bookingitem.map((item: any, i: number) => (
-                     <div key={i} className="p-8 flex justify-between items-center group hover:bg-slate-50/30 transition-colors">
+                  {booking.bookingitem.map((item: any) => (
+                     <div key={item.id} className="p-8 flex justify-between items-center group hover:bg-slate-50/30 transition-colors">
                         <div className="flex gap-6">
                            <div className="h-16 w-16 rounded-2xl bg-primary/5 flex items-center justify-center text-primary shrink-0 border border-primary/10 group-hover:scale-105 transition-transform">
                               <Package className="h-8 w-8" />
@@ -336,8 +437,8 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
                      </div>
                      <div>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Schedule Date</p>
-                        <p className="text-lg font-black tracking-tight">{format(new Date(booking.eventDate), 'MMMM dd, yyyy')}</p>
-                        <p className="text-xs font-medium text-slate-500 mt-1">{format(new Date(booking.eventDate), 'EEEE')}</p>
+                        <p className="text-lg font-black tracking-tight">{formatSafe(booking.eventDate, 'MMMM dd, yyyy')}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">{formatSafe(booking.eventDate, 'EEEE')}</p>
                      </div>
                   </div>
                   <div className="flex gap-5 items-start">
@@ -366,6 +467,72 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
             <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-xl relative overflow-hidden">
                <div className="absolute top-0 left-0 w-full h-2 bg-primary opacity-10"></div>
                <h3 className="font-black text-slate-900 mb-8 uppercase tracking-widest text-xs">Financial Summary</h3>
+
+               <div className="mb-8">
+                  <PaymentTimeline />
+               </div>
+
+                     {booking.status === "COUNTERED" && (
+                        <div className="mb-8 p-6 bg-amber-50 rounded-[2rem] border border-amber-100 space-y-6">
+                           <div className="flex items-center justify-between">
+                              <div>
+                                 <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1">Counter Quote Received</p>
+                                 <h4 className="text-3xl font-black text-slate-900 italic tracking-tighter">₹{Number(booking.totalAmount).toLocaleString()}</h4>
+                              </div>
+                              <Badge className="bg-amber-100 text-amber-700 border-none font-black text-[10px] uppercase px-4 py-1.5 rounded-full shadow-sm">NEEDS REVIEW</Badge>
+                           </div>
+                           <p className="text-sm font-medium text-slate-600 italic">&quot;{booking.counterquote?.[0]?.notes || 'Vendor has proposed a new price for this service.'}&quot;</p>
+                           <div className="flex gap-4">
+                              <Button
+                                 className="flex-1 bg-primary hover:bg-blue-700 text-white font-black h-14 rounded-2xl shadow-xl shadow-primary/20 transition-all hover:-translate-y-1"
+                                 onClick={async () => {
+                                    try {
+                                       await customerService.acceptCounter(booking.id);
+                                       toast.success("Counter-quote accepted!");
+                                       fetchBookingDetails();
+                                    } catch {
+                                       toast.error("Failed to accept counter-quote");
+                                    }
+                                 }}
+                              >
+                                 ACCEPT & PROCEED
+                              </Button>
+                              <Button
+                                 variant="outline"
+                                 className="flex-1 border-slate-200 font-black h-14 rounded-2xl hover:bg-slate-50 transition-all"
+                                 onClick={async () => {
+                                    try {
+                                       await customerService.rejectCounter(booking.id);
+                                       toast.success("Counter-quote rejected");
+                                       fetchBookingDetails();
+                                    } catch {
+                                       toast.error("Failed to reject counter-quote");
+                                    }
+                                 }}
+                              >
+                                 REJECT QUOTE
+                              </Button>
+                           </div>
+                        </div>
+                     )}
+
+                     {booking.status === "ADVANCE_PAYMENT_PENDING" && (
+                        <div className="mb-8 p-8 bg-slate-900 rounded-[2.5rem] text-white space-y-8 shadow-2xl relative overflow-hidden">
+                           <div className="absolute top-0 right-0 p-8 opacity-10"><DollarSign className="h-32 w-32" /></div>
+                           <div className="relative z-10">
+                              <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-2">Advance Milestone (30%)</p>
+                              <h4 className="text-5xl font-black italic tracking-tighter">₹{Number(booking.advanceAmount).toLocaleString()}</h4>
+                              <p className="text-xs text-slate-400 mt-4 font-bold uppercase tracking-widest leading-relaxed">Please settle the advance payment to secure the vendor for your event date. This amount is refundable as per policy.</p>
+                              <Button
+                                 className="w-full bg-white text-slate-900 hover:bg-gray-100 font-black h-16 rounded-2xl mt-8 shadow-xl transition-all hover:-translate-y-1 text-lg"
+                                 onClick={handlePayBalance} // We can reuse the payment logic for advance too
+                              >
+                                 PAY ADVANCE NOW
+                              </Button>
+                           </div>
+                        </div>
+                     )}
+
                <div className="space-y-5">
                   <div className="flex justify-between text-sm font-medium">
                      <span className="text-slate-500">Service Subtotal</span>

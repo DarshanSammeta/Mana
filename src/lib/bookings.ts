@@ -4,7 +4,12 @@ export async function getBookingDetails(bookingId: string, userId: string, role:
   const where: any = { id: bookingId };
 
   if (role === "CUSTOMER") {
-    where.customerId = userId;
+    // Resolve customerProfileId first
+    const profile = await prisma.customerprofile.findUnique({
+      where: { userId }
+    });
+    if (!profile) return null;
+    where.customerProfileId = profile.id;
   } else if (role === "VENDOR") {
     const vendorProfile = await prisma.vendorprofile.findUnique({ where: { userId } });
     if (!vendorProfile) return null;
@@ -14,11 +19,15 @@ export async function getBookingDetails(bookingId: string, userId: string, role:
   const booking = await prisma.booking.findFirst({
     where,
     include: {
-      user: {
-        select: {
-          fullName: true,
-          email: true,
-          mobileNumber: true
+      customerprofile: {
+        include: {
+          user: {
+            select: {
+              fullName: true,
+              email: true,
+              mobileNumber: true
+            }
+          }
         }
       },
       vendorprofile: {
@@ -42,9 +51,10 @@ export async function getBookingDetails(bookingId: string, userId: string, role:
 
   if (!booking) return null;
 
-  // Manual transform because schema is different from what UI expects
+  // Flatten the user data for UI compatibility
   const transformedBooking = {
     ...booking,
+    user: booking.customerprofile.user, // Add flattened user object
     vendorPhoneVerified: true, // Placeholder until schema matches
     vendorConfirmedAt5d: booking.vendorConfirmedAt5d,
     checklist: [], // Placeholder until schema matches

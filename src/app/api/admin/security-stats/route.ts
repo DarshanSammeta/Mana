@@ -6,25 +6,25 @@ export async function GET(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "ADMIN") {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
   try {
-    const failedLogins = await prisma.auditlog.count({
+    const failedLogins = await prisma.audit_log.count({
       where: { action: "LOGIN_FAILED" }
     });
 
-    const paymentSuccess = await prisma.auditlog.count({
+    const paymentSuccess = await prisma.audit_log.count({
       where: { action: "PAYMENT_SUCCESS" }
     });
 
-    const paymentFailures = await prisma.auditlog.count({
+    const paymentFailures = await prisma.audit_log.count({
       where: { action: "PAYMENT_VERIFICATION_FAILED" }
     });
 
-    const recentSuspicious = await prisma.auditlog.findMany({
+    const recentSuspicious = await prisma.audit_log.findMany({
         where: {
             OR: [
                 { action: "LOGIN_FAILED" },

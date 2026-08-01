@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useQueryClient } from "@tanstack/react-query";
 import apiClient from "@/lib/apiClient";
 import { useRouter, usePathname } from "next/navigation";
+import { decodeJwt } from "jose";
 
 interface AuthContextType {
   user: any;
@@ -30,6 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleLogout = () => {
+      console.log("[AuthProvider] [DIAGNOSTIC] handleLogout triggered");
+      console.trace("[AuthProvider] [DIAGNOSTIC] handleLogout stack trace");
       // 1. Clear Zustand Store
       storeLogout();
       // 2. Clear React Query Cache
@@ -67,6 +70,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [accessToken, isInitialized, queryClient, setInitialized, setUser, storeLogout]);
 
+  // Proactive Silent Refresh Heartbeat (Runs every 60s)
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const checkAndRefresh = async () => {
+      try {
+        const decoded = decodeJwt(accessToken);
+        if (!decoded.exp) return;
+
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = decoded.exp - now;
+
+        // Threshold: Refresh if less than 2 minutes (120s) remain
+        if (remaining > 0 && remaining < 120) {
+          console.log("[AuthProvider] Proactive refresh triggered", { remaining });
+          await apiClient.post("/auth/refresh");
+        }
+      } catch (error) {
+        console.error("[AuthProvider] Heartbeat check failed", error);
+      }
+    };
+
+    const interval = setInterval(checkAndRefresh, 60000);
+    return () => clearInterval(interval);
+  }, [accessToken]);
+
   const handleLogout = () => {
     // 1. Clear Zustand Store
     storeLogout();
@@ -78,7 +107,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Protected Routes Check
   useEffect(() => {
     const isProtectedRoute = pathname?.startsWith('/customer') || pathname?.startsWith('/vendor');
+    console.log("[AuthProvider] [DIAGNOSTIC] Protected Route Check", {
+        pathname,
+        isProtectedRoute,
+        isInitialized,
+        hasUser: !!user,
+        timestamp: new Date().toISOString()
+    });
     if (isInitialized && !user && isProtectedRoute) {
+        console.log("[AuthProvider] [DIAGNOSTIC] Redirecting to Login", { pathname });
         router.push(`/login?redirect=${pathname || ''}`);
     }
   }, [user, pathname, isInitialized, router]);

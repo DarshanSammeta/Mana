@@ -13,7 +13,7 @@ export interface ApiErrorResponse {
   requestId?: string;
 }
 
-export function handleApiError(error: any, requestId?: string) {
+export function handleApiError(error: any, requestId?: string, ipAddress?: string) {
   const status = error.status || 500;
   const severity = status >= 500 ? "error" : "warn";
 
@@ -23,6 +23,7 @@ export function handleApiError(error: any, requestId?: string) {
     code: error.code,
     stack: error.stack,
     status,
+    ipAddress
   });
 
   // Track metric
@@ -129,22 +130,26 @@ export async function withErrorHandler(
 
   let pathname = "unknown";
   let method = "UNKNOWN";
+  let ipAddress = "unknown";
 
   if (req) {
     try {
       const url = new URL(req.url);
       pathname = url.pathname;
       method = req.method;
+      ipAddress = req.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
     } catch {
       // Ignore URL parsing errors
     }
   }
 
   const apiName = `${method} ${pathname}`;
+  console.log(`[withErrorHandler] Executing ${apiName} (ID: ${requestId})`);
 
   try {
     const response = await handler(req as any);
     const duration = Date.now() - start;
+    console.log(`[withErrorHandler] Completed ${apiName} in ${duration}ms (Status: ${response.status})`);
 
     // Track API Latency
     if (pathname !== "unknown") {
@@ -159,21 +164,23 @@ export async function withErrorHandler(
       executionTime: duration,
       status: response.status,
       route: pathname,
+      ipAddress
     });
 
     // Slow API Alert
     if (duration > 2000) {
-      await AlertEngine.trigger("slow_api", {
+      // Backgrounding alert to prevent further blocking
+      AlertEngine.trigger("slow_api", {
         apiName,
         duration,
         requestId,
-      });
+      }).catch(err => console.error("[CRITICAL] AlertEngine failed in background", err));
     }
 
     return response;
   } catch (error: any) {
     const duration = Date.now() - start;
-    const response = handleApiError(error, requestId);
+    const response = handleApiError(error, requestId, ipAddress);
 
     logProduction("error", `[API Failure] ${apiName}`, {
       requestId,
@@ -183,6 +190,7 @@ export async function withErrorHandler(
       status: response.status,
       errorCode: error.code,
       error: error.message,
+      ipAddress
     });
 
     return response;

@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useSupportTickets } from '@/hooks/use-operations';
-import { format } from 'date-fns';
+import { formatSafe } from '@/lib/utils/date';
 import { MessageSquare, Clock, AlertCircle } from 'lucide-react';
 
 export const SupportTicketList: React.FC = () => {
@@ -53,7 +53,7 @@ export const SupportTicketList: React.FC = () => {
             <div className="flex items-center text-xs text-muted-foreground space-x-4">
               <div className="flex items-center">
                 <Clock className="w-3 h-3 mr-1" />
-                {format(new Date(ticket.createdAt), 'MMM d, p')}
+                {formatSafe(ticket.createdAt, 'MMM d, p')}
               </div>
               <div className="flex items-center">
                 <MessageSquare className="w-3 h-3 mr-1" />
@@ -62,7 +62,7 @@ export const SupportTicketList: React.FC = () => {
               {ticket.slaDeadline && (
                 <div className={`flex items-center ${new Date(ticket.slaDeadline) < new Date() ? 'text-red-500' : ''}`}>
                   <AlertCircle className="w-3 h-3 mr-1" />
-                  SLA: {format(new Date(ticket.slaDeadline), 'MMM d, p')}
+                  SLA: {formatSafe(ticket.slaDeadline, 'MMM d, p')}
                 </div>
               )}
             </div>

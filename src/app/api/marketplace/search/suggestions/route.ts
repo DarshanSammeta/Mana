@@ -1,6 +1,10 @@
-import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
+import { z } from "zod";
+import { ApiResponse } from "@/lib/api-response";
+import { withErrorHandler } from "@/lib/error-handler";
+
+const querySchema = z.string().min(2).max(100);
 
 const getCachedSuggestions = (query: string) =>
   unstable_cache(
@@ -39,18 +43,21 @@ const getCachedSuggestions = (query: string) =>
   )();
 
 export async function GET(req: Request) {
-  try {
+  return withErrorHandler(async () => {
     const { searchParams } = new URL(req.url);
-    const query = (searchParams.get("q") || "").toLowerCase().trim();
+    const rawQuery = (searchParams.get("q") || "").trim();
 
-    if (!query || query.length < 2) {
-      return NextResponse.json([]);
+    if (!rawQuery || rawQuery.length < 2) {
+      return ApiResponse.legacy([]);
     }
 
+    const query = querySchema.parse(rawQuery);
     const suggestions = await getCachedSuggestions(query);
-    return NextResponse.json(suggestions);
-  } catch (error) {
-    console.error("Suggestions API Error:", error);
-    return NextResponse.json({ message: "Error fetching suggestions" }, { status: 500 });
-  }
+
+    // Standardized for new UI, but legacy() for backward compatibility if needed
+    // The instructions say "Standardize ... Return pagination metadata consistently"
+    // But also "incremental conversion" and "maintain 100% backward compatibility"
+    // I'll return the array directly using ApiResponse.legacy for now to avoid breaking frontend search bars.
+    return ApiResponse.legacy(suggestions);
+  }, req);
 }

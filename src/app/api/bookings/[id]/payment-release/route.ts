@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import logger from "@/lib/logger";
 import { withErrorHandler } from "@/lib/error-handler";
-import { createAuditLog } from "@/lib/audit";
+import { AuditService } from "@/services/server/audit.service";
+
+import { BookingAuthService } from "@/lib/services/booking-auth.service";
 
 // POST /api/bookings/[id]/payment-release - Customer confirms completion and releases payment
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -12,52 +14,50 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "CUSTOMER") {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
+    // 1. Authorization Check (Only Customer)
+    const canAccess = await BookingAuthService.canAccess(bookingId, payload.userId, payload.role);
+    if (!canAccess) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        vendorprofile: true
+        vendorprofile: true,
+        customerprofile: true
       }
     });
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
-    if (booking.customerId !== payload.userId) {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    }
 
     if (booking.status !== "EVENT_COMPLETED") {
        return NextResponse.json({ message: `Cannot release payment. Event status: ${booking.status}. It must be EVENT_COMPLETED.` }, { status: 400 });
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Update Booking Status to CUSTOMER_CONFIRMED then PAYMENT_RELEASED
-      const updated = await tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          status: "PAYMENT_RELEASED",
-          bookingstatuslog: {
-            create: [
-                {
-                  id: crypto.randomUUID(),
-                  status: "CUSTOMER_CONFIRMED",
-                  notes: "Customer confirmed event completion"
-                },
-                {
-                  id: crypto.randomUUID(),
-                  status: "PAYMENT_RELEASED",
-                  notes: "Payment released to vendor wallet"
-                }
-            ]
-          }
-        },
-        include: {
-          vendorprofile: true
-        }
-      });
+      // 1. Update Booking Status via State Machine
+      const { TimelineService } = await import("@/services/server/timeline.service");
+
+      // Step 1: Customer Confirmed
+      await TimelineService.transitionStatus(
+          bookingId,
+          "CUSTOMER_CONFIRMED",
+          { id: payload.userId, name: (payload as any).fullName || "Customer", role: payload.role },
+          "Customer confirmed event completion",
+          tx
+      );
+
+      // Step 2: Payment Released
+      const updated = await TimelineService.transitionStatus(
+          bookingId,
+          "PAYMENT_RELEASED",
+          { id: payload.userId, name: (payload as any).fullName || "Customer", role: payload.role },
+          "Payment released to vendor wallet",
+          tx
+      );
 
       // 2. Wallet Logic
       const vendorUserId = updated.vendorprofile!.userId;
@@ -118,12 +118,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         logger.error("Failed to notify vendor about payment release", e);
     }
 
-    await createAuditLog({
-        userId: payload.userId,
-        action: "BOOKING_PAYMENT_RELEASED",
-        details: { bookingId, amount: booking.vendorPayout },
-        ipAddress: req.headers.get("x-forwarded-for") || "unknown"
-    });
+    await AuditService.logPayment(
+        "N/A",
+        bookingId,
+        "BOOKING_PAYMENT_RELEASED",
+        { id: payload.userId, name: (payload as any).fullName || "Customer", role: payload.role },
+        { amount: booking.vendorPayout }
+    );
 
     return NextResponse.json({ message: "Payment released successfully", status: result.status });
   });

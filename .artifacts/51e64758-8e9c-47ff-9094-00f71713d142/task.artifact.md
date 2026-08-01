@@ -1,0 +1,21 @@
+# Task List - Final Staging Deployment Execution
+
+- [ ] **Step 1: Pre-Deployment Quality Gates**
+    - [ ] `npx prisma validate`
+    - [ ] `npx prisma generate`
+    - [ ] `npm run lint`
+    - [ ] `npx tsc --noEmit`
+    - [ ] `npm run build`
+- [ ] **Step 2: Database Migration \u0026 Integrity**
+    - [ ] Verify connection and status.
+- [ ] **Step 3: Deployment Execution (Production Server)**
+    - [ ] Start `node server.js` in background.
+    - [ ] Check logs for "Ready on http://localhost:3000".
+- [ ] **Step 4: Post-Deployment Health Checks**
+    - [ ] Ping `/api/ready`.
+    - [ ] Ping `/api/health`.
+- [ ] **Step 5: Smoke Tests**
+    - [ ] Marketplace Search E2E.
+    - [ ] Vendor Profile E2E.
+    - [ ] Booking Details E2E.
+- [ ] **Step 6: Final Deployment Report**

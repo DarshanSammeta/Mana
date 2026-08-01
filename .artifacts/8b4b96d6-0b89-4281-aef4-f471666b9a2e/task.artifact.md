@@ -1,0 +1,8 @@
+- [x] Remove legacy slug-based route
+- [x] Implement new pure ID-based route
+- [x] Update `ServiceCard` link generation
+- [x] Audit project for other legacy service URL references
+- [x] Verify: Run `grep` for `.split('-')` in relevant paths
+- [x] Verify: `npm run lint` & `npx tsc --noEmit` (Fixed pre-existing `RecentlyViewed` bug)
+- [x] Verify: Manual click-through and 404 testing (Fetched real IDs for report)
+- [x] Create Walkthrough report

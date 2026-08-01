@@ -1,0 +1,10 @@
+- [x] Optimize `/api/commerce/merge`
+    - [x] Batch pricing calculation (avoid N+1 queries)
+    - [x] Parallelize cart/wishlist upserts using `Promise.all`
+- [x] Fix Socket-IO Authentication
+    - [x] Add `dotenv/config` to `server.ts` for secret access
+    - [x] Improve Socket.IO auth logging
+    - [x] Verify environment variable presence on startup
+- [x] Verify Fixes
+    - [ ] Restart dev server and test merge flow
+    - [ ] Confirm Socket.IO connection success

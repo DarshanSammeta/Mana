@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     // Rate limit booking OTP requests
@@ -31,12 +31,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const booking = await prisma.booking.findUnique({
       where: { id },
-      include: { user: true, vendorprofile: { include: { user: true } } }
+      include: {
+        customerprofile: { include: { user: true } },
+        vendorprofile: { include: { user: true } }
+      }
     });
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
 
-    const isCustomer = payload.userId === booking.customerId;
+    const isCustomer = payload.userId === booking.customerprofile?.userId;
     const isVendor = payload.userId === booking.vendorprofile?.userId;
 
     if (!isCustomer && !isVendor) {
@@ -45,7 +48,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const targetUser = isCustomer ? booking.user : booking.vendorprofile?.user;
+    const targetUser = isCustomer ? booking.customerprofile?.user : booking.vendorprofile?.user;
 
     if (!targetUser) {
         return NextResponse.json({ message: "Target user not found" }, { status: 404 });
@@ -83,7 +86,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     // Rate limit booking OTP verification
@@ -98,12 +101,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const booking = await prisma.booking.findUnique({
       where: { id },
-      include: { vendorprofile: true }
+      include: {
+        customerprofile: true,
+        vendorprofile: true
+      }
     });
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
 
-    const isCustomer = payload.userId === booking.customerId;
+    const isCustomer = payload.userId === booking.customerprofile?.userId;
     const isVendor = payload.userId === booking.vendorprofile?.userId;
 
     const verificationData = (booking.checklist as Record<string, any>) || {};

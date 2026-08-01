@@ -55,7 +55,25 @@ services:
     restart: always
     ports:
       - "8288:8288"
-    command: ["dev", "-u", "http://host.docker.internal:3000/api/inngest"]
+    command:
+      - inngest
+      - dev
+      - -u
+      - http://host.docker.internal:3000/api/inngest
+
+  # --- Latency Injection (Network Simulation) ---
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.5.0
+    container_name: mana-toxiproxy
+    ports:
+      - "8474:8474" # API
+      - "5433:5433" # Proxied Postgres
+      - "6380:6380" # Proxied Redis
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - default
 
 volumes:
   postgres_data:

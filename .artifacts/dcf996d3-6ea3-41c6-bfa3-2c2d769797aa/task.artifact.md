@@ -1,0 +1,23 @@
+# Performance Optimization Tasks
+
+- [x] **Phase 1: Notifications API Optimization**
+    - [x] Add composite index to `notification` in `schema.prisma`
+    - [x] Parallelize queries in `/api/notifications` route
+    - [x] Use `select` to reduce payload size
+- [x] **Phase 2: Auth Refresh Optimization**
+    - [x] Consolidate queries in `/api/auth/refresh` route
+    - [x] Benchmark latency reduction
+- [x] **Phase 3: Database Index Hardening**
+    - [x] Add indexes for `bookingassignment`, `service`, `booking`, `payment`
+    - [x] Run `npx prisma db push`
+- [x] **Phase 4: Prisma Over-fetching Audit**
+    - [x] Optimize `/api/auth/me`
+    - [x] Optimize `/api/auth/login`
+    - [x] Optimize `/api/bookings` (GET)
+- [x] **Phase 5: Image & Asset Cleanup**
+    - [x] Replace Unsplash URLs in `assets.ts`
+    - [x] Replace Unsplash URLs in `cloudinary.ts` fallbacks
+    - [x] Fix hardcoded image in `HomeClient.tsx`
+- [x] **Phase 6: Caching Strategy**
+    - [x] Add `unstable_cache` to `getCategoryAveragePrice`
+- [x] **Final Performance Report**

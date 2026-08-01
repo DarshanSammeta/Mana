@@ -9,7 +9,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "CUSTOMER") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
@@ -17,6 +17,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       where: { id: resolvedParams.id },
       include: {
         vendorprofile: true,
+        customerprofile: {
+          select: { userId: true }
+        },
         bookingitem: {
           include: {
             service: {
@@ -34,7 +37,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
-    if (booking.customerId !== payload.userId) return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
+
+    // Check if user is the customer who made the booking
+    if (booking.customerprofile?.userId !== payload.userId) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
+    }
+
     if (booking.status !== "EVENT_COMPLETED") return NextResponse.json({ message: "Event not completed" }, { status: 400 });
 
     // Calculate commission and payout

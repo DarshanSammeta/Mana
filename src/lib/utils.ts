@@ -1,30 +1,30 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 
+export * from "./utils/date";
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
 /**
- * Safely formats a numeric value to a fixed number of decimal places.
- * Handles null, undefined, NaN, and Infinity by returning a fallback.
+ * Safely formats a rating value to one decimal place.
  */
-export function formatNumber(value: any, decimals: number = 0, fallback: string = "0"): string {
-  const num = Number(value);
-  if (value === null || value === undefined || isNaN(num) || !isFinite(num)) {
-    return fallback;
-  }
-  return num.toFixed(decimals);
-}
-
 export function formatRating(rating: any): string {
-  return formatNumber(rating, 1, "0.0");
+  const num = Number(rating);
+  if (rating === null || rating === undefined || isNaN(num) || !isFinite(num)) {
+    return "0.0";
+  }
+  return num.toFixed(1);
 }
 
+/**
+ * Formats a distance into a human-readable string.
+ */
 export function formatDistance(distance: any): string {
   const num = Number(distance);
   if (distance === null || distance === undefined || isNaN(num) || !isFinite(num)) {
-    return "0.0";
+    return "0.0km";
   }
   if (num < 1) {
     return `${(num * 1000).toFixed(0)}m`;
@@ -44,6 +44,10 @@ export function formatCurrency(amount: any): string {
   }).format(num);
 }
 
-export function formatPercentage(value: any): string {
-  return `${formatNumber(value, 0, "0")}%`;
+/**
+ * Capitalizes the first letter of a string
+ */
+export function capitalize(str: string): string {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }

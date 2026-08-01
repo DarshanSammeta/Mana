@@ -42,21 +42,21 @@ export class RecommendationService {
       if (context.userId) {
         const user = await prisma.user.findUnique({
           where: { id: context.userId },
-          select: { interests: true }
+          include: { customerprofile: true }
         });
-        if (user?.interests) {
-          userInterests = [...userInterests, ...(user.interests as string[])];
+        if (user?.customerprofile?.interests) {
+          userInterests = [...userInterests, ...(user.customerprofile.interests as string[])];
         }
 
         userHistory = await prisma.recently_viewed.findMany({
-          where: { userId: context.userId },
+          where: { customerprofile: { userId: context.userId } },
           take: 20,
           orderBy: { timestamp: 'desc' },
           select: { vendorId: true }
         });
 
         const wishlist = await prisma.wishlistitem.findMany({
-          where: { wishlist: { userId: context.userId }, type: 'VENDOR' },
+          where: { wishlist: { customerprofile: { userId: context.userId } }, type: 'VENDOR' },
           select: { targetId: true }
         });
         userWishlist = wishlist.map(w => w.targetId);
@@ -127,9 +127,12 @@ export class RecommendationService {
   static async trackView(userId: string, vendorId: string, serviceId?: string) {
     try {
       const prisma = getPrisma();
+      const profile = await prisma.customerprofile.findUnique({ where: { userId } });
+      if (!profile) return;
+
       await prisma.recently_viewed.create({
         data: {
-          userId,
+          customerProfileId: profile.id,
           vendorId,
           serviceId,
           timestamp: new Date()
@@ -137,10 +140,12 @@ export class RecommendationService {
       });
 
       // Maintain limit (e.g., 50 per user)
-      const count = await prisma.recently_viewed.count({ where: { userId } });
+      const count = await prisma.recently_viewed.count({
+        where: { customerProfileId: profile.id }
+      });
       if (count > 50) {
         const oldest = await prisma.recently_viewed.findMany({
-          where: { userId },
+          where: { customerProfileId: profile.id },
           orderBy: { timestamp: 'asc' },
           take: count - 50
         });

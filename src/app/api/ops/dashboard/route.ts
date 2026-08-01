@@ -29,7 +29,7 @@ export async function GET() {
           }
         }
       }),
-      prisma.auditlog.count({
+      prisma.audit_log.count({
         where: {
           action: { contains: "ERROR" },
           createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }

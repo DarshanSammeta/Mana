@@ -9,7 +9,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }

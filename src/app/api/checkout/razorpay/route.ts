@@ -1,18 +1,34 @@
 import { NextResponse } from "next/server";
 import { getRazorpay } from "@/lib/razorpay";
-import { verifyAccessToken } from "@/lib/auth";
+import { getServerSession } from "@/lib/auth-server";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
 
+import { razorpayOrderSchema } from "@/validations";
+
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
-    const token = req.headers.get("authorization")?.split(" ")[1];
-    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    const payload = await getServerSession(req);
+    if (!payload) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
-    if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const body = await req.json();
+    const { amount, bookingId, currency, paymentType } = razorpayOrderSchema.parse(body);
 
-    const { amount, bookingId, currency = "INR" } = await req.json();
+    // Security: Validate Payment Milestone
+    if (bookingId && paymentType === "BALANCE") {
+        const { prisma } = await import("@/lib/prisma");
+        const booking = await prisma.booking.findUnique({
+            where: { id: bookingId },
+            select: { status: true }
+        });
+
+        if (!booking || booking.status !== "EVENT_COMPLETED") {
+            return NextResponse.json({
+                message: "Balance payment is only available after event completion."
+            }, { status: 400 });
+        }
+    }
+
     const razorpay = getRazorpay();
     if (!razorpay) {
         logger.error("Razorpay instance not available in API route");
@@ -25,12 +41,13 @@ export async function POST(req: Request) {
       receipt: `receipt_${bookingId || Date.now()}`,
       notes: {
         bookingId: bookingId,
-        userId: payload.userId
+        userId: payload.userId,
+        paymentType: paymentType
       }
     };
 
-    const order = await razorpay.orders.create(options);
-    logger.info("Razorpay order created", { orderId: order.id, userId: payload.userId, bookingId });
+    const order = await razorpay.orders.create(options as any);
+    logger.info("Razorpay order created", { orderId: (order as any).id, userId: payload.userId, bookingId });
     return NextResponse.json(order);
   }, req);
 }

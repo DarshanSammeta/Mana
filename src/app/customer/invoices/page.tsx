@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { Badge } from "@/components/ui/badge";
 import { customerService } from "@/services/client";
 
@@ -96,7 +96,7 @@ export default function InvoicesPage() {
                              <p className="text-[10px] text-slate-500 font-medium">#{invoice.booking.bookingNumber}</p>
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-600">
-                             {format(new Date(invoice.createdAt), 'MMM dd, yyyy')}
+                             {formatSafe(invoice.createdAt, 'MMM dd, yyyy')}
                           </td>
                           <td className="px-6 py-4">
                              <p className="text-sm font-black text-slate-900">₹{Number(invoice.booking.totalAmount).toLocaleString()}</p>

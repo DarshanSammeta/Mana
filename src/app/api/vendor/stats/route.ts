@@ -10,7 +10,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
@@ -63,25 +63,18 @@ export async function GET(req: Request) {
           amount: true
         }
       }),
-      prisma.transaction.findMany({
-        where: {
-          walletId: wallet?.id,
-          type: 'CREDIT',
-          createdAt: { gte: thirtyDaysAgo }
-        },
-        select: {
-          createdAt: true,
-          amount: true
-        }
-      })
+      prisma.$queryRaw`
+        SELECT
+          DATE("createdAt") as date,
+          SUM(amount) as amount
+        FROM "transaction"
+        WHERE "walletId" = ${wallet?.id}
+          AND type = 'CREDIT'
+          AND "createdAt" >= ${thirtyDaysAgo}
+        GROUP BY DATE("createdAt")
+        ORDER BY DATE("createdAt") ASC
+      `
     ]);
-
-    // Format daily revenue to be grouped by date
-    const dailyRevenueFormatted = dailyRevenue.reduce((acc: Record<string, number>, curr) => {
-      const date = curr.createdAt.toISOString().split('T')[0];
-      acc[date] = (acc[date] || 0) + Number(curr.amount || 0);
-      return acc;
-    }, {});
 
     const stats = {
       totalRevenue: Number(wallet?.lifetimeEarnings || 0),
@@ -89,7 +82,10 @@ export async function GET(req: Request) {
       withdrawableRevenue: Number(wallet?.withdrawable || 0),
       totalBookings: vendor._count.booking,
       monthlyRevenue: Number(monthlyRevenue._sum.amount || 0),
-      dailyRevenue: Object.entries(dailyRevenueFormatted).map(([date, amount]) => ({ date, amount }))
+      dailyRevenue: (dailyRevenue as any[]).map(d => ({
+        date: d.date.toISOString().split('T')[0],
+        amount: Number(d.amount)
+      }))
     };
 
     return NextResponse.json(stats);

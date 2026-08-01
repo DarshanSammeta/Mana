@@ -16,6 +16,7 @@ import {
   Package,
   ArrowRight
 } from "lucide-react";
+import { formatSafe } from "@/lib/utils/date";
 import { customerService } from "@/services/client";
 import Link from "next/link";
 
@@ -75,7 +76,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Date & Time</p>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-primary" />
-                      <span className="font-medium">{new Date(booking.eventDate).toLocaleDateString()}</span>
+                      <span className="font-medium">{formatSafe(booking.eventDate)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-primary" />
@@ -141,7 +142,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                             </div>
                             <div className="pb-6">
                                 <p className="font-bold text-sm">Booking Confirmed</p>
-                                <p className="text-xs text-muted-foreground">{new Date(booking.createdAt).toLocaleString('en-IN')}</p>
+                                <p className="text-xs text-muted-foreground">{formatSafe(booking.createdAt, 'PPp')}</p>
                                 <p className="text-sm mt-1">Your booking has been confirmed and payment was successful.</p>
                             </div>
                         </div>

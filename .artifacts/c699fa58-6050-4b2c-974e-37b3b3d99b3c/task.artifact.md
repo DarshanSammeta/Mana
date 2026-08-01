@@ -1,0 +1,17 @@
+- [x] Middleware Access Control (Allow settings access for all vendor statuses)
+- [x] API Updates:
+    - [x] Update `GET /api/vendor/profile` to include all new fields
+    - [x] Ensure `PUT /api/vendor/profile` handles all new fields from `validatedData`
+    - [x] Change `PATCH /api/vendor/account` to `PUT` and ensure validation
+- [x] Frontend Service Update:
+    - [x] Sync `vendorService` methods with new API structure
+- [x] UI Enhancements (VendorSettings):
+    - [x] Business Profile: Full 7-day Working Hours editor
+    - [x] Business Profile: Social links & Website inputs
+    - [x] Business Profile: Portfolio link and Visibility toggle
+    - [x] Account Admin: Language & Timezone persistence
+    - [x] Security: 2FA state persistence and Password flow polish
+- [x] Build & Lint Verification:
+    - [x] Run `npm run lint`
+    - [x] Run `npm run build`
+- [x] Manual Flow Verification

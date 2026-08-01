@@ -30,7 +30,7 @@ export class CouponService {
 
     if (coupon.isFirstBooking) {
       const previousBookings = await prisma.booking.count({
-        where: { customerId: userId, status: { not: "CANCELLED" } }
+        where: { customerprofile: { userId }, status: { not: "CANCELLED" } }
       });
       if (previousBookings > 0) throw new Error("This coupon is only for your first booking");
     }

@@ -12,7 +12,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: "No token provided" }, { status: 401 });
     }
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || !payload.userId) {
       return NextResponse.json({ message: "Invalid token" }, { status: 401 });
     }
@@ -24,6 +24,34 @@ export async function GET(req: Request) {
         email: true,
         fullName: true,
         role: true,
+        customerprofile: {
+          select: {
+            id: true,
+            loyaltyPoints: true,
+            referralCode: true,
+            profileImage: true,
+          }
+        },
+        vendorprofile: {
+          select: {
+            id: true,
+            businessName: true,
+            verificationStatus: true,
+            rating: true,
+            category: {
+              select: {
+                name: true
+              }
+            },
+            service: {
+              select: {
+                id: true,
+                title: true
+              },
+              take: 5
+            }
+          }
+        }
       },
     });
 
@@ -31,6 +59,29 @@ export async function GET(req: Request) {
       return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ user });
+    // Map response to match the requested contract while keeping compatibility
+    return NextResponse.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        // Keep compatibility field
+        verificationStatus: user.vendorprofile?.verificationStatus
+      },
+      customerProfile: user.customerprofile ? {
+        id: user.customerprofile.id,
+        loyaltyPoints: user.customerprofile.loyaltyPoints,
+        referralCode: user.customerprofile.referralCode,
+        profileImage: user.customerprofile.profileImage
+      } : null,
+      vendorProfile: user.vendorprofile ? {
+        id: user.vendorprofile.id,
+        businessName: user.vendorprofile.businessName,
+        verificationStatus: user.vendorprofile.verificationStatus,
+        category: user.vendorprofile.category?.name,
+        services: user.vendorprofile.service
+      } : null
+    });
   }, req);
 }

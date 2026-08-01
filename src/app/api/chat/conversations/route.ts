@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const conversations = await prisma.conversation.findMany({
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { bookingId, participantId } = await req.json();
@@ -75,12 +75,15 @@ export async function POST(req: Request) {
     if (bookingId) {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
-        select: { customerId: true, vendorprofile: { select: { userId: true } } }
+        select: {
+          customerprofile: { select: { userId: true } },
+          vendorprofile: { select: { userId: true } }
+        }
       });
 
       if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
 
-      const isCustomer = booking.customerId === payload.userId;
+      const isCustomer = booking.customerprofile?.userId === payload.userId;
       const isVendor = booking.vendorprofile?.userId === payload.userId;
 
       if (!isCustomer && !isVendor) {
@@ -89,7 +92,7 @@ export async function POST(req: Request) {
       }
 
       // Ensure the other participant is indeed part of this booking
-      const otherIsCustomer = booking.customerId === participantId;
+      const otherIsCustomer = booking.customerprofile?.userId === participantId;
       const otherIsVendor = booking.vendorprofile?.userId === participantId;
 
       if (!otherIsCustomer && !otherIsVendor) {

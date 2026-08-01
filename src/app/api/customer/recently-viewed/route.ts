@@ -8,7 +8,7 @@ export async function GET() {
 
   try {
     const recentlyViewed = await prisma.recently_viewed.findMany({
-      where: { userId: session.user.id },
+      where: { customerprofile: { userId: session.user.id } },
       include: {
         vendor: {
           select: {

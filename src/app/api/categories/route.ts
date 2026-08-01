@@ -23,15 +23,13 @@ const getVendorCategories = (vendorId: string, eventTypeId: string | null) =>
             }
           },
           ...(eventTypeId ? {
-            eventtypes: {
-              some: { id: eventTypeId }
-            }
+            eventTypeId: eventTypeId
           } : {})
         },
         orderBy: { name: "asc" }
       });
     },
-    [`vendor-categories-${vendorId}-${eventTypeId || 'all'}`],
+    [`vendor-categories-v3-${vendorId}-${eventTypeId || 'all'}`],
     { revalidate: 3600, tags: ['categories', `vendor-${vendorId}`] }
   )();
 

@@ -6,4 +6,3 @@ export * from "./marketplace";
 export * from "./payment";
 export * from "./notification";
 export * from "./review";
-export * from "./socket";

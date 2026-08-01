@@ -56,13 +56,20 @@ export interface VendorAssignment {
 
 export interface VendorSubscription {
   id: string;
-  vendorId: string;
+  vendorProfileId: string;
   planId: string;
-  status: "ACTIVE" | "EXPIRED" | "CANCELLED";
-  startDate: Date;
-  endDate: Date;
+  status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "PAST_DUE";
+  startDate: Date | string;
+  endDate: Date | string;
+  autoRenew: boolean;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   subscriptionplan: {
+    id: string;
     name: string;
+    listingLimit: number;
+    price: number;
+    features: any;
     rank: number;
   };
 }

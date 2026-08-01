@@ -2,49 +2,78 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import logger from "@/lib/logger";
-import { NotificationTriggers } from "@/lib/notifications";
 
 export async function GET(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
-    const bookings = await prisma.booking.findMany({
-      where: { vendorprofile: { userId: payload.userId } },
-      select: {
-        id: true,
-        bookingNumber: true,
-        status: true,
-        totalAmount: true,
-        eventDate: true,
-        eventTime: true,
-        eventLocation: true,
-        createdAt: true,
-        user: { select: { fullName: true, mobileNumber: true, email: true } },
-        bookingitem: {
-          select: {
-            id: true,
-            price: true,
-            quantity: true,
-            service: { select: { id: true, title: true } },
-            Renamedpackage: { select: { id: true, name: true } }
-          }
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
+    const skip = (page - 1) * limit;
+
+    const where = { vendorprofile: { userId: payload.userId } };
+
+    const [bookings, total] = await Promise.all([
+      prisma.booking.findMany({
+        where,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          bookingNumber: true,
+          status: true,
+          totalAmount: true,
+          advanceAmount: true,
+          balanceAmount: true,
+          paymentStage: true,
+          advancePaidAt: true,
+          balancePaidAt: true,
+          eventDate: true,
+          eventTime: true,
+          eventLocation: true,
+          createdAt: true,
+          customerprofile: {
+            select: {
+              user: { select: { fullName: true, mobileNumber: true, email: true } }
+            }
+          },
+          bookingitem: {
+            select: {
+              id: true,
+              price: true,
+              quantity: true,
+              service: { select: { id: true, title: true } },
+              Renamedpackage: { select: { id: true, name: true } }
+            }
+          },
+          payment: {
+            select: {
+              id: true,
+              status: true,
+              amount: true,
+              method: true
+            }
+          },
         },
-        payment: {
-          select: {
-            id: true,
-            status: true,
-            amount: true,
-            method: true
-          }
-        },
-      },
-      orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" }
+      }),
+      prisma.booking.count({ where })
+    ]);
+
+    return NextResponse.json({
+        bookings: bookings,
+        pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        }
     });
-    return NextResponse.json(bookings);
   } catch (error) {
     logger.error("Vendor Bookings GET Error", { error });
     return NextResponse.json(
@@ -58,7 +87,7 @@ export async function PATCH(req: Request) {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     try {
@@ -67,8 +96,12 @@ export async function PATCH(req: Request) {
       const booking = await prisma.booking.findUnique({
           where: { id: bookingId },
           select: {
+            status: true,
+            advanceAmount: true,
+            advancePaidAt: true,
+            paymentStage: true,
             vendorprofile: {
-              select: { userId: true }
+              select: { userId: true, businessName: true }
             }
           }
       });
@@ -77,26 +110,19 @@ export async function PATCH(req: Request) {
           return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
       }
 
-      const updatedBooking = await prisma.booking.update({
-        where: { id: bookingId },
-        data: {
-            status,
-            bookingstatuslog: {
-                create: {
-                  id: crypto.randomUUID(),
-                  status,
-                  notes
-                }
-            }
-        },
-        include: {
-            vendorprofile: true,
-            user: true
-        }
-      });
+      // Guard: Cannot complete if advance not paid
+      if (status === "EVENT_COMPLETED" && booking.paymentStage !== "ADVANCE_PAID" && booking.paymentStage !== "FULLY_PAID") {
+          return NextResponse.json({ message: "Cannot complete event until advance payment is received." }, { status: 400 });
+      }
 
-      // Notify customer of status change
-      await NotificationTriggers.bookingStatusUpdated(updatedBooking, status);
+      // 3. Transition via State Machine (Handles timeline, audit, and validation)
+      const { TimelineService } = await import("@/services/server/timeline.service");
+      const updatedBooking = await TimelineService.transitionStatus(
+          bookingId,
+          status,
+          { id: payload.userId, name: booking.vendorprofile?.businessName || "Vendor", role: payload.role },
+          notes
+      );
 
       return NextResponse.json(updatedBooking);
     } catch (error) {

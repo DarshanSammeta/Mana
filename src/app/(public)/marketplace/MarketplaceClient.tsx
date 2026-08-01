@@ -1,30 +1,35 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Search, Loader2 } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useLocationStore } from "@/store/locationStore";
-import { useInView } from "react-intersection-observer";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { marketplaceService } from "@/services/client";
+import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { MarketplaceFilters } from "@/components/marketplace/MarketplaceFilters";
-import { EventTypeSidebar } from "@/components/marketplace/EventTypeSidebar";
-import { CategoryBar } from "@/components/marketplace/CategoryBar";
 import { MarketplaceHeader } from "@/components/marketplace/MarketplaceHeader";
-import { VendorCard } from "@/components/marketplace/VendorCard";
+import { ServiceGrid } from "@/components/marketplace/ServiceGrid";
 import { CompareFloatingBar } from "@/components/marketplace/CompareFloatingBar";
 import { EmptyState } from "@/components/common/EmptyState";
+import { useQueryClient } from "@tanstack/react-query";
+import { resetBookingFlow } from "@/lib/booking-flow";
 
-const VendorMapView = dynamic(() => import("@/components/marketplace/VendorMapView").then(mod => mod.VendorMapView), {
-  ssr: false,
-  loading: () => <div className="h-[600px] w-full bg-slate-100 animate-pulse rounded-3xl" />
-});
+const VendorMapView = dynamic(
+  () =>
+    import("@/components/marketplace/VendorMapView").then(
+      (mod) => mod.VendorMapView,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[600px] w-full bg-slate-100 animate-pulse rounded-3xl" />
+    ),
+  },
+);
 
 import { DEFAULT_CITIES } from "@/data/marketplace/filters";
 
@@ -32,21 +37,27 @@ import { PAGINATION } from "@/constants";
 import { MAPS_CONFIG } from "@/config/maps";
 
 export default function MarketplaceClient({
-  initialVendors,
-  initialTotal,
-  categories,
-  eventTypes,
-  cities = DEFAULT_CITIES
+  initialServices = [],
+  initialTotal = 0,
+  cities = DEFAULT_CITIES,
+  eventTypes: _eventTypes = [],
 }: {
-  initialVendors: any[],
-  initialTotal: number,
-  categories: any[],
-  eventTypes: any[],
-  cities?: string[]
+  initialServices?: any[];
+  initialTotal?: number;
+  cities?: string[];
+  eventTypes?: any[];
 }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const lat = useLocationStore(state => state.lat);
-  const lng = useLocationStore(state => state.lng);
+  const lat = useLocationStore((state) => state.lat);
+  const lng = useLocationStore((state) => state.lng);
+
+  const handleResetFilters = useCallback(async () => {
+    await resetBookingFlow(queryClient);
+    router.push("/marketplace");
+  }, [queryClient, router]);
+
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
   const [isFirstMount, setIsFirstMount] = useState(true);
 
@@ -56,7 +67,8 @@ export default function MarketplaceClient({
 
   // Extract current filters from URL
   const eventTypeId = searchParams?.get("eventTypeId") || undefined;
-  const category = searchParams?.get("category") || searchParams?.get("subcategory") || undefined;
+  const eventType = searchParams?.get("eventType") || undefined;
+  const category = searchParams?.get("category") || undefined;
   const query = searchParams?.get("query") || undefined;
   const sort = searchParams?.get("sort") || "featured";
   const city = searchParams?.get("city") || undefined;
@@ -65,178 +77,170 @@ export default function MarketplaceClient({
   const rating = searchParams?.get("rating") ? parseFloat(searchParams.get("rating")!) : undefined;
   const currentPage = searchParams?.get("page") ? parseInt(searchParams.get("page")!) : 1;
 
-  // Single Source of Truth for Active Event Type (Step 3 & 9)
-  const activeEventType = useMemo(() =>
-    eventTypes.find(t => t.id === eventTypeId),
-  [eventTypes, eventTypeId]);
+  // Optimized Infinite Loading for Services
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery({
+      queryKey: [
+        "marketplace",
+        "services",
+        {
+          eventTypeId,
+          eventType,
+          category,
+          query,
+          sort,
+          city,
+          minPrice,
+          maxPrice,
+          rating,
+        },
+      ],
+      queryFn: async ({ pageParam = 1 }) => {
+        const res = await fetch(`/api/marketplace/services?${new URLSearchParams({
+          ...(eventTypeId && { eventTypeId }),
+          ...(eventType && { eventType }),
+          ...(category && { category }),
+          ...(query && { query }),
+          ...(sort && { sort }),
+          ...(city && { city }),
+          ...(minPrice && { minPrice: minPrice.toString() }),
+          ...(maxPrice && { maxPrice: maxPrice.toString() }),
+          ...(rating && { rating: rating.toString() }),
+          page: pageParam.toString(),
+          limit: PAGINATION.MARKETPLACE_LIMIT.toString(),
+        })}`);
 
-  // Unified Category Management (Step 4 & 6)
-  const { data: effectiveCategories = [] } = useQuery({
-    queryKey: ["categories", eventTypeId],
-    queryFn: () => marketplaceService.getCategories(eventTypeId),
-    initialData: isFirstMount ? categories : [],
-    staleTime: 1000 * 60 * 30,
-    select: (data) => Array.isArray(data) ? data : [],
-  });
-
-  // Optimized Infinite Loading with React Query (Step 4 & 7)
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-  } = useInfiniteQuery({
-    queryKey: ['marketplace', 'vendors', { eventTypeId, category, query, sort, city, minPrice, maxPrice, rating, lat, lng }],
-    queryFn: ({ pageParam = 1 }) => marketplaceService.searchVendors({
-      eventTypeId,
-      category,
-      query,
-      sort,
-      city,
-      minPrice,
-      maxPrice,
-      rating,
-      lat: lat || undefined,
-      lng: lng || undefined,
-      page: pageParam as number,
-      limit: PAGINATION.MARKETPLACE_LIMIT
-    }),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage: any) => {
-      const pagination = lastPage.pagination;
-      if (pagination && pagination.page < pagination.totalPages) {
-        return pagination.page + 1;
-      }
-      return undefined;
-    },
-    // Trust server data on first mount regardless of filters (since server uses same filters)
-    initialData: (isFirstMount && currentPage === 1) ? {
-      pages: [{
-        vendors: initialVendors,
-        pagination: {
-          page: 1,
-          totalPages: Math.ceil(initialTotal / PAGINATION.MARKETPLACE_LIMIT),
-          total: initialTotal
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || "Failed to fetch services");
         }
-      }],
-      pageParams: [1]
-    } : undefined,
-    staleTime: 1000 * 60 * 5,
-  });
 
-  // Step 15: Development Logs (Identical Verification)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log("--- Marketplace Sync Audit ---");
-      console.log("URL EventType ID:", eventTypeId);
-      console.log("Active EventType Name:", activeEventType?.name);
-      console.log("Query Key EventType ID:", eventTypeId);
-      console.log("Category List Count:", effectiveCategories?.length);
-      console.log("------------------------------");
-    }
-  }, [eventTypeId, activeEventType, effectiveCategories]);
+        return res.json();
+      },
+      initialPageParam: 1,
+      getNextPageParam: (lastPage: any) => {
+        const pagination = lastPage?.pagination;
+        if (pagination && pagination.page < pagination.totalPages) {
+          return pagination.page + 1;
+        }
+        return undefined;
+      },
+      initialData:
+        isFirstMount && currentPage === 1 && initialServices.length > 0
+          ? {
+              pages: [
+                {
+                  services: initialServices,
+                  pagination: {
+                    page: 1,
+                    totalPages: Math.ceil(initialTotal / PAGINATION.MARKETPLACE_LIMIT),
+                    total: initialTotal,
+                  },
+                },
+              ],
+              pageParams: [1],
+            }
+          : undefined,
+      staleTime: 1000 * 60 * 5,
+    });
 
-  const vendors = useMemo(() => data?.pages.flatMap(page => page.vendors) || [], [data]);
+  const services = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.reduce((acc: any[], page: any) => {
+      if (page && Array.isArray(page.services)) {
+        // Strict filter: element must be an object with an 'id' and a 'vendor' property
+        const validServices = page.services.filter((s: any) =>
+          s && typeof s === 'object' && s.id && s.vendor && s.vendor.id
+        );
+        return [...acc, ...validServices];
+      }
+      return acc;
+    }, []);
+  }, [data]);
+
+  // Extract unique vendors for map view
+  const vendors = useMemo(() => {
+    const uniqueVendors = new Map();
+    services.forEach(s => {
+      if (s.vendor && !uniqueVendors.has(s.vendor.id)) {
+        uniqueVendors.set(s.vendor.id, {
+          ...s.vendor,
+          // Add default location if missing for map clustering
+          latitude: s.vendor.latitude || MAPS_CONFIG.defaultCenter.lat,
+          longitude: s.vendor.longitude || MAPS_CONFIG.defaultCenter.lng,
+        });
+      }
+    });
+    return Array.from(uniqueVendors.values());
+  }, [services]);
+
   const totalResults = data?.pages[0]?.pagination?.total || initialTotal;
 
-  const { ref, inView } = useInView({
-    threshold: 0,
-    rootMargin: "400px",
-  });
-
-  useEffect(() => {
-    if (inView && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans">
-      <CategoryBar categories={effectiveCategories} />
-
-      <main className="flex-1 w-full max-w-[1500px] mx-auto px-4 lg:px-6 py-12 flex flex-col lg:flex-row gap-12">
-        <aside className="hidden lg:block lg:w-72 shrink-0">
-          <div className="sticky top-32 space-y-8">
-             <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100">
-                <div className="flex items-center justify-between mb-8">
-                   <h3 className="font-black text-[#111827] uppercase tracking-tighter text-lg">Filters</h3>
-                   <Link href="/marketplace">
-                    <Button variant="ghost" size="sm" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:bg-blue-50">Reset</Button>
-                   </Link>
-                </div>
-                <MarketplaceFilters cities={cities} />
-             </div>
-
-             <EventTypeSidebar eventTypes={eventTypes} />
+    <div className="min-h-screen bg-[#F1F2F4] flex flex-col font-sans">
+      <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 lg:px-6 py-8 flex flex-col lg:flex-row gap-6">
+        <aside className="hidden lg:block lg:w-64 shrink-0">
+          <div className="sticky top-24 space-y-6">
+            <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-bold text-sm text-[#0F1111] uppercase tracking-tight">
+                  Filters
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetFilters}
+                  className="text-[10px] font-bold text-blue-600 uppercase hover:underline p-0 h-auto"
+                >
+                  Clear all
+                </Button>
+              </div>
+              <MarketplaceFilters cities={cities} />
+            </div>
           </div>
         </aside>
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <MarketplaceHeader
             totalResults={totalResults}
             viewMode={viewMode}
             setViewMode={setViewMode}
             cities={cities}
-            activeEventType={activeEventType}
           />
 
-          {isLoading && vendors.length === 0 ? (
-             <div className="flex items-center justify-center py-24">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
-             </div>
+          {isLoading && services.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-32 bg-white rounded-lg border border-slate-200 shadow-sm">
+              <Loader2 className="h-10 w-10 animate-spin text-blue-600 mb-4" />
+              <p className="text-sm font-bold text-slate-500">Searching the marketplace...</p>
+            </div>
           ) : (
             <AnimatePresence mode="wait">
-              {vendors.length > 0 ? (
+              {services.length > 0 ? (
                 viewMode === "map" ? (
-                  <VendorMapView vendors={vendors} center={{ lat: lat || MAPS_CONFIG.defaultCenter.lat, lng: lng || MAPS_CONFIG.defaultCenter.lng }} />
+                  <VendorMapView
+                    vendors={vendors}
+                    center={{
+                      lat: lat || MAPS_CONFIG.defaultCenter.lat,
+                      lng: lng || MAPS_CONFIG.defaultCenter.lng,
+                    }}
+                  />
                 ) : (
-                  <div className="space-y-12">
-                    <motion.div
-                      layout
-                      className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-6 items-stretch" : "space-y-6"}
-                    >
-                      {vendors.map((vendor: any, i: number) => (
-                        <VendorCard
-                          key={`${vendor.id}-${i}`}
-                          vendor={vendor}
-                          index={i}
-                          viewMode={viewMode}
-                          priority={i < 4}
-                        />
-                      ))}
-                    </motion.div>
-
-                    {hasNextPage && (
-                      <div ref={ref} className="flex justify-center pt-8">
-                        <Button
-                          onClick={() => fetchNextPage()}
-                          disabled={isFetchingNextPage}
-                          variant="outline"
-                          className="rounded-full px-12 h-14 font-black uppercase tracking-widest text-[11px] border-2 border-slate-100 hover:bg-slate-50 min-w-[240px]"
-                        >
-                          {isFetchingNextPage ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Loading More...
-                            </>
-                          ) : (
-                            "Load More Professionals"
-                          )}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  <ServiceGrid
+                    services={services}
+                    isLoading={isLoading}
+                    hasNextPage={hasNextPage}
+                    isFetchingNextPage={isFetchingNextPage}
+                    fetchNextPage={fetchNextPage}
+                    viewMode={viewMode === "list" ? "list" : "grid"}
+                  />
                 )
               ) : (
                 <EmptyState
                   icon={Search}
-                  title="No matching vendors found"
-                  description={`We couldn't find any results matching your filters. Try adjusting your search terms or clearing filters.`}
-                  actionText="Clear All Filters"
-                  onActionClick={() => {
-                    window.location.href = '/marketplace';
-                  }}
+                  title="No results found"
+                  description="Try adjusting your filters or search terms to find what you're looking for."
+                  actionText="Reset All Filters"
+                  onActionClick={handleResetFilters}
                 />
               )}
             </AnimatePresence>

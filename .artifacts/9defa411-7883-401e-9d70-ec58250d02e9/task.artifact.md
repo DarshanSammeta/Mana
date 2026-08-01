@@ -1,0 +1,13 @@
+- [x] Finalize `ProductCard.tsx` UI
+    - [x] Replace `🛒` emoji with Lucide `ShoppingCart` icon
+    - [x] Set button text to "Add to Cart"
+    - [x] Apply Brand Purple (#6D28D9) with lift & shadow hover effects
+    - [x] Ensure entire card is clickable via absolute background Link
+    - [x] Maintain stopPropagation on CTA button
+- [x] Standardize icons in `VendorCard.tsx`
+    - [x] Replace `ShieldCheck` with `BadgeCheck`
+- [x] Audit Marketplace UI for remaining emojis
+    - [x] Checked `MarketplaceHeader.tsx`
+    - [x] Checked `MarketplaceFilters.tsx`
+    - [x] Checked `ProductGrid.tsx`
+- [x] Verify final implementation

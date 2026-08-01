@@ -18,13 +18,29 @@ export default function CustomerLayout({
   const router = useRouter();
 
   useEffect(() => {
+    console.log("[CustomerLayout] Auth Check", {
+        hasUser: !!user,
+        pathname,
+        timestamp: new Date().toISOString()
+    });
     if (!user) {
+      console.log("[CustomerLayout] Redirecting to /login: No user in store");
       router.push("/login");
     }
-  }, [user, router]);
+  }, [user, router, pathname]);
 
   if (!user) {
+    console.log("[CustomerLayout] Rendering null: No user in store");
     return null;
+  }
+
+  // Bypass dashboard UI for checkout and booking pages
+  if (pathname === "/customer/checkout" || pathname?.startsWith("/customer/booking")) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background">
+        {children}
+      </div>
+    );
   }
 
   // Generate breadcrumbs from path

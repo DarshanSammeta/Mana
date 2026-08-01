@@ -13,7 +13,12 @@ const getCachedSubcategories = (categoryId: string, vendorId: string | null) =>
               some: {
                 service: {
                   some: {
-                    vendorProfileId: vendorId
+                    vendorProfileId: vendorId,
+                    servicetype: {
+                      subcategory: {
+                        categoryId: categoryId
+                      }
+                    }
                   }
                 }
               }

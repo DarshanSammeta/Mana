@@ -4,7 +4,7 @@ import { AUTH_CONFIG } from "@/config/auth-pages";
 const JWT_ACCESS_SECRET = AUTH_CONFIG.jwtAccessSecret;
 const JWT_REFRESH_SECRET = AUTH_CONFIG.jwtRefreshSecret;
 
-export const signAccessToken = (payload: { userId: string; role: string }) => {
+export const signAccessToken = (payload: { userId: string; role: string; verificationStatus?: string }) => {
   return jwt.sign(payload, JWT_ACCESS_SECRET, { expiresIn: AUTH_CONFIG.accessTokenExpiresIn as any });
 };
 
@@ -14,8 +14,8 @@ export const signRefreshToken = (payload: { userId: string; role: string }) => {
 
 export const jwtSignRefreshToken = signRefreshToken;
 
-export const generateAccessToken = (userId: string, role: string) => {
-  return signAccessToken({ userId, role });
+export const generateAccessToken = (userId: string, role: string, verificationStatus?: string) => {
+  return signAccessToken({ userId, role, verificationStatus });
 };
 
 export const generateRefreshToken = (userId: string) => {
@@ -24,7 +24,7 @@ export const generateRefreshToken = (userId: string) => {
 
 export const verifyAccessToken = (token: string) => {
   try {
-    return jwt.verify(token, JWT_ACCESS_SECRET) as { userId: string; role: string; id: string };
+    return jwt.verify(token, JWT_ACCESS_SECRET) as { userId: string; role: string; id: string; verificationStatus?: string };
   } catch {
     return null;
   }

@@ -63,14 +63,16 @@ export const vendorService = {
   },
 
   updateBookingStatus: async (bookingId: string, status: BookingStatus): Promise<Booking> => {
+    if (status === "ACCEPTED") {
+        return (await apiClient.patch(`/bookings/${bookingId}/accept`, { action: "ACCEPT" })).data;
+    }
+    if (status === "REJECTED") {
+        return (await apiClient.patch(`/bookings/${bookingId}/accept`, { action: "REJECT" })).data;
+    }
     const response = await apiClient.patch(`/bookings/${bookingId}/status`, { status });
     return response.data;
   },
 
-  sendCounterQuote: async (bookingId: string, data: { totalAmount: number, notes?: string }): Promise<Booking> => {
-    const response = await apiClient.patch(`/bookings/${bookingId}/negotiate`, data);
-    return response.data;
-  },
 
   getBookingById: async (id: string): Promise<Booking> => {
     const response = await apiClient.get(`/bookings/${id}`);
@@ -124,6 +126,11 @@ export const vendorService = {
 
   getBookingLocation: async (bookingId: string) => {
     const response = await apiClient.get(`/bookings/${bookingId}/location`);
+    return response.data;
+  },
+
+  markBookingViewed: async (bookingId: string) => {
+    const response = await apiClient.patch(`/bookings/${bookingId}/viewed`);
     return response.data;
   },
 
@@ -310,6 +317,61 @@ export const vendorService = {
 
   removeTeamMember: async (id: string) => {
     const response = await apiClient.delete("/vendor/team", { params: { id } });
+    return response.data;
+  },
+
+  sendCounterQuote: async (bookingId: string, data: { totalAmount: number, notes?: string }) => {
+    const response = await apiClient.patch(`/bookings/${bookingId}/counter`, data);
+    return response.data;
+  },
+
+  updateAccount: async (data: { fullName: string, mobileNumber: string, language?: string, timezone?: string }) => {
+    const response = await apiClient.put("/vendor/account", data);
+    return response.data;
+  },
+
+  changePassword: async (data: any) => {
+    const response = await apiClient.post("/vendor/auth/change-password", data);
+    return response.data;
+  },
+
+  getSessions: async () => {
+    const response = await apiClient.get("/vendor/auth/sessions");
+    return response.data;
+  },
+
+  revokeSession: async (id: string) => {
+    const response = await apiClient.delete("/vendor/auth/sessions", { params: { id } });
+    return response.data;
+  },
+
+  revokeOtherSessions: async () => {
+    const response = await apiClient.delete("/vendor/auth/sessions", { params: { others: "true" } });
+    return response.data;
+  },
+
+  updateLogo: async (url: string) => {
+    const response = await apiClient.post("/vendor/logo", { url });
+    return response.data;
+  },
+
+  deleteLogo: async () => {
+    const response = await apiClient.delete("/vendor/logo");
+    return response.data;
+  },
+
+  updatePayouts: async (data: any) => {
+    const response = await apiClient.put("/vendor/payouts", data);
+    return response.data;
+  },
+
+  updateSecurity: async (data: any) => {
+    const response = await apiClient.put("/vendor/security", data);
+    return response.data;
+  },
+
+  uploadVerificationDoc: async (data: { type: string, url: string }) => {
+    const response = await apiClient.post("/vendor/verification/upload", data);
     return response.data;
   }
 };

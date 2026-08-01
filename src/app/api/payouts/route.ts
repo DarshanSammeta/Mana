@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     }
 
     const token = authHeader.split(" ")[1];
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     }
 
     const token = authHeader.split(" ")[1];
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }

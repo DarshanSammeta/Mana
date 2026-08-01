@@ -23,6 +23,7 @@ import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { formatSafe } from "@/lib/utils/date";
 import { generateEarningsPDF, generateEarningsExcel } from "@/lib/reports";
 import {
     DropdownMenu,
@@ -332,7 +333,7 @@ export default function EarningsPage() {
                                         <div className="flex justify-between items-center">
                                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{tx.type}</p>
                                             <div className="flex items-center gap-3">
-                                                <span className="text-[10px] font-bold text-muted-foreground/60">{new Date(tx.createdAt).toLocaleDateString()}</span>
+                                                <span className="text-[10px] font-bold text-muted-foreground/60">{formatSafe(tx.createdAt)}</span>
                                                 <Badge className={cn(
                                                     "text-[10px] uppercase tracking-tighter px-2 py-0 border-none",
                                                     tx.status === "COMPLETED" ? "bg-success/10 text-success" : (tx.status === "PENDING" ? "bg-amber-100 text-amber-700" : "bg-destructive/10 text-destructive")

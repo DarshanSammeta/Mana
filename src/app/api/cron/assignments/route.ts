@@ -2,7 +2,6 @@ import { APP_CONFIG } from "@/config/app";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { subMinutes } from "date-fns";
-import { sendSMS } from "@/lib/sms/twilio";
 import logger from "@/lib/logger";
 import { withErrorHandler } from "@/lib/error-handler";
 
@@ -32,48 +31,15 @@ export async function GET(req: Request) {
     const results = [];
     logger.info(`Running auto-reassign cron. Found ${expiredAssignments.length} expired assignments.`);
 
+    const { handleVendorTimeout, reassignVendor } = await import("@/lib/intelligence/assignment");
+
     for (const assignment of expiredAssignments) {
-      // Mark current as EXPIRED
-      await prisma.bookingassignment.update({
-        where: { id: assignment.id },
-        data: { status: "EXPIRED" },
-      });
-
-      // Find if there's a next vendor in line for this booking
-      const nextAssignment = await prisma.bookingassignment.findFirst({
-        where: {
-          bookingId: assignment.bookingId,
-          status: "PENDING",
-          priority: { gt: assignment.priority },
-        },
-        orderBy: { priority: "asc" },
-        include: { vendorprofile: { include: { user: true } } }
-      });
-
-      if (nextAssignment) {
-        // Notify the next vendor
-        await sendSMS(
-          nextAssignment.vendorprofile.user.mobileNumber,
-          `Urgent: A new booking #${assignment.booking.bookingNumber} is now available for you! Accept within 30 mins.`
-        );
-
-        await prisma.notification.create({
-          data: {
-            id: crypto.randomUUID(),
-            userId: nextAssignment.vendorprofile.userId,
-            title: "New Priority Booking",
-            message: `Booking #${assignment.booking.bookingNumber} is now assigned to you.`,
-            category: "BOOKING",
-            priority: "HIGH",
-            link: `/vendor/bookings/${assignment.bookingId}`
-          }
-        });
-
-        results.push({ bookingId: assignment.bookingId, status: "REASSIGNED_TO_NEXT" });
-        logger.info("Booking reassigned to next vendor", { bookingId: assignment.bookingId, vendorId: nextAssignment.vendorId });
-      } else {
-        results.push({ bookingId: assignment.bookingId, status: "NO_MORE_VENDORS" });
-        logger.warn("No more vendors available for booking", { bookingId: assignment.bookingId });
+      try {
+          await handleVendorTimeout(assignment.bookingId, assignment.vendorId);
+          results.push({ bookingId: assignment.bookingId, status: "REASSIGNED" });
+      } catch (err) {
+          logger.error("Failed to reassign booking in cron", { bookingId: assignment.bookingId, error: err });
+          results.push({ bookingId: assignment.bookingId, status: "FAILED" });
       }
     }
 
@@ -86,36 +52,11 @@ export async function GET(req: Request) {
     });
 
     for (const b of reassignPending) {
-      const previousAssignments = await prisma.bookingassignment.findMany({
-        where: { bookingId: b.id },
-        select: { vendorId: true }
-      });
-      const previousIds = previousAssignments.map(a => a.vendorId);
-
-      const nextVendor = await prisma.vendorprofile.findFirst({
-        where: {
-          id: { notIn: previousIds },
-          verificationStatus: "APPROVED"
-        },
-        orderBy: { rating: "desc" }
-      });
-
-      if (nextVendor) {
-        await prisma.bookingassignment.create({
-          data: {
-            id: crypto.randomUUID(),
-            bookingId: b.id,
-            vendorId: nextVendor.id,
-            priority: previousIds.length + 1,
-            status: "PENDING",
-            updatedAt: new Date()
-          }
-        });
-        await prisma.booking.update({
-          where: { id: b.id },
-          data: { vendorId: nextVendor.id }
-        });
-        logger.info("Found replacement vendor for rejected booking", { bookingId: b.id, vendorId: nextVendor.id });
+      try {
+          await reassignVendor(b.id);
+          logger.info("Reassigned booking via reassignVendor helper", { bookingId: b.id });
+      } catch (err) {
+          logger.error("reassignVendor failed for booking", { bookingId: b.id, error: err });
       }
     }
 

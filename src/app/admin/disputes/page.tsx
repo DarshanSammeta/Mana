@@ -5,6 +5,7 @@ import { DashboardShell } from '@/components/admin/DashboardShell';
 import {
   AlertTriangle, ExternalLink, Clock
 } from 'lucide-react';
+import { formatSafe } from '@/lib/utils/date';
 
 export default function DisputesPage() {
   const [disputes, setDisputes] = useState<any[]>([]);
@@ -75,7 +76,7 @@ export default function DisputesPage() {
                 <p className="text-sm text-gray-700 line-clamp-1">{dispute.description}</p>
                 <div className="flex items-center mt-3 text-[10px] text-gray-400">
                   <Clock className="w-3 h-3 mr-1" />
-                  {new Date(dispute.createdAt).toLocaleDateString()}
+                  {formatSafe(dispute.createdAt)}
                 </div>
               </div>
             ))}

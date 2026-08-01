@@ -24,5 +24,5 @@ export default async function CustomerDashboardPage() {
 
 async function CustomerDashboardDataWrapper({ userId }: { userId: string }) {
   const stats = await getCustomerStats(userId);
-  return <CustomerDashboardClient initialStats={stats} />;
+  return <CustomerDashboardClient initialStats={stats as any} />;
 }

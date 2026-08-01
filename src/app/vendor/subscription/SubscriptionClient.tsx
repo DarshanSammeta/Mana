@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Crown, ShieldCheck } from "lucide-react";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import toast from "react-hot-toast";
 import Script from "next/script";
 import { useAuthStore } from "@/store/authStore";
@@ -89,7 +89,7 @@ export default function SubscriptionClient({ initialData }: SubscriptionClientPr
             <div>
               <p className="text-[10px] font-black text-primary uppercase tracking-widest">Active Plan</p>
               <p className="text-lg font-black text-foreground">{currentSubscription.subscriptionplan.name} Plan</p>
-              <p className="text-[11px] text-muted-foreground font-bold">Expires: {format(new Date(currentSubscription.endDate), "PPP")}</p>
+              <p className="text-[11px] text-muted-foreground font-bold">Expires: {formatSafe(currentSubscription.endDate, "PPP")}</p>
             </div>
           </div>
         )}
@@ -117,7 +117,6 @@ export default function SubscriptionClient({ initialData }: SubscriptionClientPr
         {plans.map((plan: any) => {
           const isCurrent = currentSubscription?.planId === plan.id;
           const isBetter = plan.rank > (currentSubscription?.subscriptionplan.rank || 0);
-          const features = typeof plan.features === 'string' ? JSON.parse(plan.features) : plan.features;
 
           return (
             <div
@@ -141,14 +140,27 @@ export default function SubscriptionClient({ initialData }: SubscriptionClientPr
               </div>
 
               <div className="space-y-4 flex-1 mb-8">
-                {features.map((feature: string, i: number) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="mt-1 h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <Check className="h-3 w-3 text-primary" />
+                {(() => {
+                  const features = plan.features as string[];
+                  console.log(`[SubscriptionClient] Rendering plan ${plan.name}, features:`, {
+                    type: typeof features,
+                    isArray: Array.isArray(features),
+                    data: features
+                  });
+
+                  if (!Array.isArray(features)) {
+                    return <p className="text-xs text-destructive font-bold italic">Feature list unavailable</p>;
+                  }
+
+                  return features.map((feature: string, i: number) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <div className="mt-1 h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Check className="h-3 w-3 text-primary" />
+                      </div>
+                      <p className="text-sm font-bold text-foreground/80 leading-tight">{feature}</p>
                     </div>
-                    <p className="text-sm font-bold text-foreground/80 leading-tight">{feature}</p>
-                  </div>
-                ))}
+                  ));
+                })()}
               </div>
 
               <button

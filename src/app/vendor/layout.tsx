@@ -28,11 +28,11 @@ export default function VendorLayout({
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
       <div className="flex-1 flex min-h-0">
-        <div className="hidden lg:block w-72 border-r border-border bg-white sticky top-16 h-[calc(100vh-64px)] overflow-y-auto">
+        <div className="hidden lg:block w-72 border-r border-border bg-white sticky top-[112px] h-[calc(100vh-112px)] overflow-y-auto">
            <VendorSidebar />
         </div>
         <div className="flex-1 flex flex-col min-w-0">
-          <main className="p-8 w-full max-w-7xl mx-auto">
+          <main className="p-4 md:p-6 xl:p-8 w-full max-w-7xl mx-auto min-w-0">
             {children}
           </main>
         </div>

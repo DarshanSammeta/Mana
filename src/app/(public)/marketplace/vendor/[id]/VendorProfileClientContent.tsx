@@ -2,22 +2,22 @@
 
 import { useState, useEffect, memo } from "react";
 import {
-  Star, MapPin, ShieldCheck, Heart,
+  Star, MapPin, Heart,
   Trophy,
-  ChevronRight
+  ChevronRight,
+  ArrowRight,
+  BadgeCheck,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuthStore } from "@/store/authStore";
 import { useCommerceStore } from "@/store/commerceStore";
-import { useToggleWishlist } from "@/hooks/useCommerce";
+import { useToggleWishlist } from "@/hooks/use-commerce";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
-import { cn } from "@/lib/utils";
-import BookingWizard from "@/components/booking/BookingWizard";
+import { cn, formatCurrency } from "@/lib/utils";
 import { optimizeImage } from "@/lib/cloudinary";
+import { ServiceCard } from "@/components/marketplace/ServiceCard";
 
 function VendorProfileClientContent({
   vendor,
@@ -27,7 +27,6 @@ function VendorProfileClientContent({
   similarVendors: any[],
 }) {
   const [isMounted, setIsMounted] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(0);
   const { wishlist, toggleWishlist: toggleStore } = useCommerceStore();
   const { trackView } = useRecentlyViewed();
 
@@ -41,26 +40,10 @@ function VendorProfileClientContent({
   const { user } = useAuthStore();
   const { mutate: toggleWishlistApi } = useToggleWishlist();
 
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (vendor?.service?.[0]) {
-      setSelectedServiceId(vendor.service[0].id);
-      if (vendor.service[0].Renamedpackage?.[0]) {
-        setSelectedPackageId(vendor.service[0].Renamedpackage[0].id);
-      }
-    }
-  }, [vendor]);
-
-  const currentService = vendor.service?.find((s: { id: string }) => s.id === selectedServiceId) || vendor.service?.[0];
-  const currentPackage = currentService?.Renamedpackage?.find((p: { id: string }) => p.id === selectedPackageId) || currentService?.Renamedpackage?.[0];
-
   const images = vendor.portfolio?.length > 0
     ? vendor.portfolio.map((p: any) => p.mediaUrl)
     : [vendor.coverImage || "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=1000"];
 
-  const basePrice = currentPackage?.price || currentService?.basePrice || 0;
   const isWishlisted = isMounted && wishlist.some(i => i.targetId === vendor.id);
 
   const handleToggleWishlist = () => {
@@ -79,195 +62,205 @@ function VendorProfileClientContent({
         <div className="max-w-[1500px] mx-auto flex items-center gap-3">
           <Link href="/marketplace" className="hover:text-blue-600 transition-colors font-bold uppercase tracking-wider">Marketplace</Link>
           <ChevronRight className="h-3 w-3 text-slate-300" />
-          <span className="hover:text-blue-600 cursor-pointer transition-colors font-bold uppercase tracking-wider">
-            {currentService?.servicetype?.subcategory?.category?.name || "Services"}
-          </span>
-          <ChevronRight className="h-3 w-3 text-slate-300" />
-          <span className="text-slate-900 font-black uppercase tracking-wider">{vendor.businessName}</span>
+          <span className="text-slate-900 font-black uppercase tracking-wider">{vendor.businessName} Store</span>
         </div>
       </nav>
 
       <main className="flex-1 max-w-[1500px] mx-auto w-full px-4 lg:px-6 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
 
-          {/* Left Content Area (Columns 1-9) */}
-          <div className="lg:col-span-9 space-y-12">
-            <div className="grid grid-cols-1 lg:grid-cols-9 gap-10 items-start">
+        {/* Vendor Header Hero */}
+        <div className="relative h-[400px] rounded-[3rem] overflow-hidden mb-12 shadow-2xl border border-slate-100">
+            <Image
+                src={vendor.coverImage || images[0]}
+                fill
+                className="object-cover"
+                alt={vendor.businessName}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-              {/* Image Gallery (lg:col-span-6 of the 9-col container) */}
-              <div className="lg:col-span-6 flex flex-col md:flex-row gap-6">
-                <div className="hidden md:flex flex-col gap-4 shrink-0">
-                  {images.slice(0, 5).map((img: string, idx: number) => (
-                    <button
-                      key={idx}
-                      onMouseEnter={() => setSelectedImage(idx)}
-                      className={cn(
-                        "w-24 h-24 border-2 rounded-xl overflow-hidden shrink-0 transition-all relative shadow-sm",
-                        selectedImage === idx ? "border-blue-600 ring-4 ring-blue-50" : "border-slate-100 hover:border-blue-200"
-                      )}
-                    >
-                      <Image
-                        src={optimizeImage(img, 'avatar')}
-                        fill
-                        sizes="96px"
-                        className="object-cover"
-                        alt={`Thumb ${idx}`}
-                      />
-                    </button>
-                  ))}
+            <div className="absolute bottom-10 left-10 right-10 flex flex-col md:flex-row items-end justify-between gap-6">
+                <div className="flex items-center gap-8 text-white">
+                    <div className="h-24 w-24 rounded-3xl bg-white p-1 shadow-2xl">
+                        <div className="h-full w-full rounded-[1.2rem] bg-slate-50 relative overflow-hidden">
+                            <Image src={vendor.logo || "/logo-placeholder.png"} fill className="object-cover" alt="logo" />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-4xl font-black italic uppercase tracking-tight leading-none">{vendor.businessName}</h1>
+                            {vendor.verificationStatus === "APPROVED" && (
+                                <BadgeCheck className="h-6 w-6 text-blue-400 fill-white" />
+                            )}
+                        </div>
+                        <div className="flex items-center gap-4 text-xs font-black uppercase tracking-[0.2em] opacity-80">
+                            <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> {vendor.city}</div>
+                            <div className="flex items-center gap-1.5"><Star className="h-3.5 w-3.5 fill-orange-400 text-orange-400" /> {vendor.rating || "4.8"} ({vendor.reviewCount || 24} Reviews)</div>
+                        </div>
+                    </div>
                 </div>
-
-                <div className="flex-1 bg-slate-50 rounded-3xl overflow-hidden border border-slate-100 aspect-[3/2] relative group shadow-2xl">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={selectedImage}
-                      initial={{ opacity: 0, scale: 1.05 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.4 }}
-                      className="w-full h-full relative"
-                    >
-                      <Image
-                        src={optimizeImage(images[selectedImage], 'gallery')}
-                        fill
-                        priority={selectedImage === 0}
-                        sizes="(max-width: 768px) 100vw, 45vw"
-                        className="object-cover"
-                        alt={vendor.businessName}
-                      />
-                    </motion.div>
-                  </AnimatePresence>
-                  <div className="absolute top-6 right-6 z-10">
-                     <button
+                <div className="flex gap-3">
+                    <Button
                         onClick={handleToggleWishlist}
                         className={cn(
-                          "h-12 w-12 rounded-full bg-white/95 backdrop-blur-sm shadow-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 border border-slate-100",
-                          isWishlisted ? "text-red-500" : "text-slate-400 hover:text-red-500"
+                            "h-14 w-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20",
+                            isWishlisted && "text-red-500 fill-current"
                         )}
-                     >
+                    >
                         <Heart className={cn("h-6 w-6", isWishlisted && "fill-current")} />
-                     </button>
-                  </div>
+                    </Button>
+                    <Button className="h-14 px-8 rounded-2xl bg-primary text-white font-black uppercase tracking-widest text-[11px] shadow-2xl shadow-primary/40">
+                        Follow Store
+                    </Button>
                 </div>
-              </div>
-
-              {/* Vendor Details (lg:col-span-3 of the 9-col container) */}
-              <div className="lg:col-span-3 flex flex-col gap-6">
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                     {vendor.verificationStatus === "APPROVED" && (
-                       <div className="bg-blue-600 text-white px-3 py-1 rounded-full flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest shadow-lg shadow-blue-200">
-                         <ShieldCheck className="h-3.5 w-3.5 fill-white text-blue-600" />
-                         Verified
-                       </div>
-                     )}
-                     <Badge className="bg-slate-100 text-slate-600 border-none rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest">
-                       {currentService?.servicetype?.name || "Professional"}
-                     </Badge>
-                  </div>
-
-                  <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">{vendor.businessName}</h1>
-
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-2 bg-orange-50 w-fit px-3 py-1.5 rounded-xl border border-orange-100">
-                      <Star className="h-4 w-4 fill-orange-400 text-orange-400" />
-                      <span className="text-sm font-black text-orange-700">{vendor.rating || "4.8"}</span>
-                      <span className="text-xs font-bold text-orange-400">({vendor.reviewCount || "24"})</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-slate-500 font-bold">
-                      <MapPin className="h-4 w-4 text-blue-500" />
-                      <span className="text-sm">{vendor.city}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-6 border-t border-slate-100">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">About Vendor</h3>
-                  <p className="text-slate-600 leading-relaxed text-sm font-medium line-clamp-[8]">{vendor.description}</p>
-                </div>
-              </div>
             </div>
+        </div>
 
-            {/* Booking Wizard (Occupies full 9 columns) */}
-            <div className="pt-12 border-t border-slate-100">
-               <BookingWizard vendor={vendor} />
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
+
+          {/* Left: About & Stats */}
+          <div className="lg:col-span-4 space-y-12 sticky top-32">
+            <section className="space-y-6">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em] italic">About Professional</h3>
+                <p className="text-slate-500 font-medium leading-relaxed text-lg italic pr-10 border-l-4 border-primary/20 pl-6">
+                    {vendor.description || "Leading event professional dedicated to creating unforgettable experiences through excellence and innovation."}
+                </p>
+
+                <div className="grid grid-cols-2 gap-4 pt-6">
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase">Experience</p>
+                        <p className="text-xl font-black text-slate-900">{vendor.experienceYears || 5}+ Years</p>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase">Bookings</p>
+                        <p className="text-xl font-black text-slate-900">{vendor.totalBookings || 100}+ Events</p>
+                    </div>
+                </div>
+            </section>
+
+            <section className="p-8 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] text-white shadow-2xl">
+                 <div className="flex items-center gap-3 mb-4">
+                    <Trophy className="h-5 w-5 text-yellow-400" />
+                    <span className="text-xs font-black uppercase tracking-widest">Premium Partner</span>
+                 </div>
+                 <p className="text-xs font-bold leading-relaxed opacity-70 mb-6 italic">
+                    This store maintains a 100% response rate and exceptional service quality standards.
+                 </p>
+                 <div className="space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                        <span>Reliability</span>
+                        <span>99.9%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary w-[99%]" />
+                    </div>
+                 </div>
+            </section>
           </div>
 
-          {/* Right Column: Fixed Booking & Offer Cards (Columns 10-12) */}
-          <div className="lg:col-span-3 flex flex-col gap-6 sticky top-32">
-            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl">
-              <div className="mb-6">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-1">Pricing starts from</span>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-slate-900">₹{basePrice.toLocaleString('en-IN')}</span>
-                  <span className="text-xs font-bold text-slate-400">/ event</span>
+          {/* Right: Service Grid (Brand Store) */}
+          <div className="lg:col-span-8 space-y-12">
+            <div className="flex items-end justify-between border-b border-slate-100 pb-8">
+                <div className="space-y-1">
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight italic uppercase">All Services</h2>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Browse full collection</p>
                 </div>
-              </div>
-
-              <div className="space-y-4 mb-8">
-                <div className="flex items-center gap-3 bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Accepting {new Date().getFullYear()} Bookings</span>
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {vendor.service?.length || 0} Products
                 </div>
-              </div>
-
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-14 font-black uppercase tracking-widest text-[11px] shadow-lg shadow-blue-200 transition-all">
-                Check Availability
-              </Button>
             </div>
 
-            <div className="p-6 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[2.5rem] text-white shadow-xl shadow-blue-200">
-               <div className="flex items-center gap-2 mb-3">
-                  <Trophy className="h-4 w-4 text-yellow-400" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Premium Partner</span>
-               </div>
-               <p className="text-xs font-bold leading-relaxed opacity-90">This vendor is among our top-rated professionals with 100% response rate.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                {vendor.service?.map((s: any, idx: number) => (
+                    <ServiceCard
+                        key={s.id}
+                        index={idx}
+                        service={{
+                            id: s.id,
+                            slug: s.title.toLowerCase().replace(/ /g, '-'),
+                            title: s.title,
+                            category: s.servicetype?.name || "Service",
+                            startingPrice: Number(s.basePrice),
+                            images: vendor.portfolio?.filter((p: any) => p.serviceId === s.id).map((p: any) => p.mediaUrl) || [vendor.coverImage],
+                            rating: vendor.rating,
+                            reviewCount: vendor.reviewCount,
+                            vendor: {
+                                id: vendor.id,
+                                businessName: vendor.businessName,
+                                city: vendor.city,
+                                isVerified: vendor.verificationStatus === "APPROVED"
+                            },
+                            badges: vendor.featured ? ["Premium"] : []
+                        }}
+                    />
+                ))}
             </div>
+
+            {/* Portfolio / Lookbook */}
+            <section className="pt-20 space-y-8">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em] italic">Portfolio Lookbook</h3>
+                <div className="columns-1 sm:columns-2 gap-4 space-y-4">
+                    {vendor.portfolio?.map((p: any, i: number) => (
+                        <div key={i} className="relative rounded-3xl overflow-hidden group cursor-zoom-in aspect-[3/2]">
+                            <Image
+                                src={optimizeImage(p.mediaUrl, 'gallery')}
+                                fill
+                                className="object-cover transition-transform duration-700 group-hover:scale-110"
+                                alt="Portfolio item"
+                                sizes="(max-width: 640px) 100vw, 50vw"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <span className="text-white text-[10px] font-black uppercase tracking-widest border border-white/40 px-4 py-2 rounded-full">View Details</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
           </div>
+
         </div>
 
         {/* Similar Vendors Section */}
-        <section className="mt-20 pt-20 border-t border-slate-100">
-          <div className="flex items-end justify-between mb-12">
+        <section className="mt-40 pt-20 border-t border-slate-100">
+            <div className="flex items-end justify-between mb-16">
             <div className="space-y-2">
-               <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Similar Professionals</h2>
-               <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Based on your current interest</p>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight italic uppercase">More Professionals</h2>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Recommended based on your interest</p>
             </div>
             <Link href="/marketplace">
-               <Button variant="outline" className="rounded-full px-8 font-black uppercase tracking-widest text-[11px] border-slate-200 hover:bg-slate-50 h-12 transition-all">
-                  See All Experts
-               </Button>
+                <Button variant="outline" className="rounded-2xl px-10 font-black uppercase tracking-widest text-[11px] border-slate-200 hover:bg-slate-50 h-14 transition-all">
+                    Explore Marketplace <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
             </Link>
-          </div>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
-               {similarVendors.slice(0, 4).map((v: any) => (
-               <Link key={v.id} href={`/marketplace/vendor/${v.id}`} className="group flex flex-col">
-                  <div className="aspect-[4/3] rounded-3xl overflow-hidden bg-slate-50 mb-6 relative border border-slate-100 shadow-sm transition-all duration-500 group-hover:shadow-2xl group-hover:-translate-y-2">
-                     <Image
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+                {similarVendors.slice(0, 4).map((v: any) => (
+                <Link key={v.id} href={`/marketplace/vendor/${v.id}`} className="group flex flex-col">
+                    <div className="aspect-[4/5] rounded-[2.5rem] overflow-hidden bg-slate-50 mb-6 relative border border-slate-100 shadow-sm transition-all duration-500 group-hover:shadow-2xl group-hover:-translate-y-2">
+                        <Image
                         src={optimizeImage(v.coverImage, 'card') || "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=800"}
                         fill
                         className="object-cover transition-transform duration-1000 group-hover:scale-110"
                         alt={v.businessName}
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 25vw, 300px"
-                     />
-                     <div className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center border border-slate-100">
-                        <Star className="h-4 w-4 fill-orange-400 text-orange-400" />
-                     </div>
-                  </div>
-                  <h4 className="font-black text-lg text-slate-900 group-hover:text-blue-600 transition-colors truncate mb-1 tracking-tight">{v.businessName}</h4>
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Starts at</span>
-                        <span className="text-lg font-black text-slate-900">₹{Number(v.basePrice).toLocaleString('en-IN')}</span>
-                     </div>
-                     <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded-md">Verified</span>
-                  </div>
-               </Link>
-             ))}
-          </div>
+                        />
+                        <div className="absolute top-6 right-6 h-10 w-10 rounded-2xl bg-white/90 backdrop-blur-sm flex items-center justify-center border border-slate-100 shadow-xl">
+                            <Star className="h-4 w-4 fill-orange-400 text-orange-400" />
+                        </div>
+                    </div>
+                    <div className="px-4">
+                        <h4 className="font-black text-xl text-slate-900 group-hover:text-primary transition-colors truncate mb-1 tracking-tight italic uppercase">{v.businessName}</h4>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Starts</span>
+                                <span className="text-lg font-black text-slate-900">{formatCurrency(v.basePrice)}</span>
+                            </div>
+                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-lg">Verified</span>
+                        </div>
+                    </div>
+                </Link>
+                ))}
+            </div>
         </section>
       </main>
     </div>

@@ -1,0 +1,6 @@
+- `[ ]` Move manual scripts to `scripts/archive/`
+- `[ ]` Update `performance-bench.ts` and `security-probe.ts` endpoints
+- `[ ]` Batch delete dead files (`Testimonials`, `SearchBar`, `calculation.ts`, etc.)
+- `[ ]` Remove `GET` from `api/bookings/route.ts`
+- `[ ]` Remove dead helpers from `lib/utils.ts`
+- `[ ]` Final verification and build check

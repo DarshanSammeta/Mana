@@ -13,14 +13,20 @@ export const paymentReminder = inngest.createFunction(
             lt: new Date(Date.now() - 24 * 60 * 60 * 1000), // More than 24h old
           },
         },
-        include: { user: true },
+        include: {
+          customerprofile: {
+            include: { user: true }
+          }
+        },
       });
     })) as any[];
 
     for (const booking of pendingBookings) {
+      if (!booking.customerprofile) continue;
+
       await step.run(`send-reminder-${booking.id}`, async () => {
         await NotificationService.send({
-          userId: booking.customerId,
+          userId: booking.customerprofile.userId,
           title: "Complete Your Booking",
           message: `Your booking #${booking.bookingNumber} is pending payment. Complete it now to secure your date!`,
           category: "PAYMENT",
@@ -51,7 +57,12 @@ export const preEventTimelineReminders = inngest.createFunction(
           },
           vendorConfirmedAt5d: { not: true }
         },
-        include: { user: true, vendorprofile: true }
+        include: {
+          customerprofile: {
+            include: { user: true }
+          },
+          vendorprofile: true
+        }
       });
     })) as any[];
 
@@ -81,7 +92,12 @@ export const preEventTimelineReminders = inngest.createFunction(
             lt: new Date(threeDaysFromNow.setHours(23, 59, 59, 999)),
           }
         },
-        include: { user: true, vendorprofile: true }
+        include: {
+          customerprofile: {
+            include: { user: true }
+          },
+          vendorprofile: true
+        }
       });
     })) as any[];
 
@@ -98,8 +114,7 @@ export const preEventTimelineReminders = inngest.createFunction(
       });
     }
 
-    // 3. One-Day Final Reminder (Handled by eventReminder, but we can consolidate or keep it separate)
-    // Consolidating for clarity in the timeline
+    // 3. One-Day Final Reminder
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
@@ -112,20 +127,27 @@ export const preEventTimelineReminders = inngest.createFunction(
             lt: new Date(tomorrow.setHours(23, 59, 59, 999)),
           }
         },
-        include: { user: true, vendorprofile: true }
+        include: {
+          customerprofile: {
+            include: { user: true }
+          },
+          vendorprofile: true
+        }
       });
     })) as any[];
 
     for (const booking of oneDayBookings) {
       await step.run(`send-1d-final-${booking.id}`, async () => {
-        // To Customer
-        await NotificationService.send({
-          userId: booking.customerId,
-          title: "Get Ready! Your Event is Tomorrow",
-          message: `Your event "${booking.eventName}" with ${booking.vendorprofile?.businessName || 'your partner'} is scheduled for tomorrow at ${booking.eventTime}.`,
-          category: "BOOKING",
-          priority: "URGENT",
-        });
+        if (booking.customerprofile) {
+          // To Customer
+          await NotificationService.send({
+            userId: booking.customerprofile.userId,
+            title: "Get Ready! Your Event is Tomorrow",
+            message: `Your event "${booking.eventName}" with ${booking.vendorprofile?.businessName || 'your partner'} is scheduled for tomorrow at ${booking.eventTime}.`,
+            category: "BOOKING",
+            priority: "URGENT",
+          });
+        }
 
         // To Vendor
         if (booking.vendorprofile) {
@@ -163,14 +185,21 @@ export const eventReminder = inngest.createFunction(
             lt: new Date(tomorrow.setHours(23,59,59,999)),
           }
         },
-        include: { user: true, vendorprofile: true }
+        include: {
+          customerprofile: {
+            include: { user: true }
+          },
+          vendorprofile: true
+        }
       });
     })) as any[];
 
     for (const event of upcomingEvents) {
+      if (!event.customerprofile) continue;
+
       await step.run(`notify-event-${event.id}`, async () => {
         await NotificationService.send({
-          userId: event.customerId,
+          userId: event.customerprofile.userId,
           title: "Upcoming Event Tomorrow!",
           message: `Get ready! Your event with ${event.vendorprofile?.businessName || 'your partner'} is scheduled for tomorrow at ${event.eventTime}.`,
           category: "BOOKING",
@@ -192,13 +221,16 @@ export const reviewReminder = inngest.createFunction(
     const booking = (await step.run("get-booking", async () => {
       return prisma.booking.findUnique({
         where: { id: event.data.bookingId },
-        include: { vendorprofile: true }
+        include: {
+          customerprofile: true,
+          vendorprofile: true
+        }
       });
     })) as any;
 
-    if (booking) {
+    if (booking && booking.customerprofile) {
       await NotificationService.send({
-        userId: booking.customerId,
+        userId: booking.customerprofile.userId,
         title: "How was your experience?",
         message: `Your event with ${booking.vendorprofile?.businessName || 'your partner'} is complete. Share your feedback and earn loyalty points!`,
         category: "REVIEW",

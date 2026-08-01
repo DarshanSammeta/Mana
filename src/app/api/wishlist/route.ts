@@ -13,15 +13,30 @@ export async function POST(req: Request) {
 
     const { type, targetId } = await req.json();
 
+    // 1. Get/Ensure CustomerProfile
+    let profile = await prisma.customerprofile.findUnique({
+      where: { userId: payload.userId },
+      select: { id: true }
+    });
+
+    if (!profile) {
+        profile = await prisma.customerprofile.create({
+            data: {
+                userId: payload.userId,
+                updatedAt: new Date()
+            }
+        });
+    }
+
     let wishlist = await prisma.wishlist.findUnique({
-      where: { userId: payload.userId }
+      where: { customerProfileId: profile.id }
     });
 
     if (!wishlist) {
       wishlist = await prisma.wishlist.create({
         data: {
           id: crypto.randomUUID(),
-          userId: payload.userId,
+          customerProfileId: profile.id,
           updatedAt: new Date()
         }
       });
@@ -66,12 +81,22 @@ export async function GET(req: Request) {
     const payload = await getAuthPayload(req);
     if (!payload) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
+    // 1. Get CustomerProfile
+    const profile = await prisma.customerprofile.findUnique({
+      where: { userId: payload.userId },
+      select: { id: true }
+    });
+
+    if (!profile) {
+      return NextResponse.json({ items: [] });
+    }
+
     const dbStartTime = process.hrtime();
     const wishlist = await prisma.wishlist.findUnique({
-      where: { userId: payload.userId },
+      where: { customerProfileId: profile.id },
       select: {
         id: true,
-        userId: true,
+        customerProfileId: true,
         wishlistitem: {
           select: {
             id: true,
@@ -165,4 +190,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ ...wishlist, items: itemsWithDetails });
   }, req);
 }
-

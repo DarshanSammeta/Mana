@@ -6,14 +6,14 @@ export async function GET(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "CUSTOMER") return NextResponse.json({ status: 403 });
 
   try {
     const userId = payload.userId;
 
     const bookings = await prisma.booking.findMany({
-      where: { customerId: userId },
+      where: { customerprofile: { userId } },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,

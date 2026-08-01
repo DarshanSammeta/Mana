@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
+import { serializePrisma } from "@/lib/serialization";
 
 const getCachedCategories = (eventTypeId: string, vendorId: string | null) =>
   unstable_cache(
     async () => {
-      return prisma.category.findMany({
+      const result = await prisma.category.findMany({
         where: {
           eventTypeId: eventTypeId,
           ...(vendorId ? {
@@ -14,7 +15,9 @@ const getCachedCategories = (eventTypeId: string, vendorId: string | null) =>
                 servicetype: {
                   some: {
                     service: {
-                      some: { vendorProfileId: vendorId }
+                      some: {
+                        vendorProfileId: vendorId,
+                      }
                     }
                   }
                 }
@@ -27,8 +30,10 @@ const getCachedCategories = (eventTypeId: string, vendorId: string | null) =>
         },
         orderBy: { name: "asc" }
       });
+      console.log(`[getCachedCategories] Found ${result.length} categories for eventType ${eventTypeId} and vendor ${vendorId}`);
+      return serializePrisma(result);
     },
-    [`event-type-categories-${eventTypeId}-${vendorId || 'all'}`],
+    [`event-type-categories-v4-${eventTypeId}-${vendorId || 'all'}`],
     { revalidate: 3600, tags: ['categories'] }
   )();
 
@@ -41,7 +46,11 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const vendorId = searchParams.get("vendorId");
 
+    console.log(`[GET /api/event-types/${eventTypeId}/categories] vendorId: ${vendorId}`);
+
     const categories = await getCachedCategories(eventTypeId, vendorId);
+
+    console.log(`[GET /api/event-types/${eventTypeId}/categories] returning ${categories.length} categories`);
 
     return NextResponse.json(categories);
   } catch (error: any) {

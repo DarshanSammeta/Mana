@@ -10,7 +10,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     logger.info("Fetching specific booking details", { bookingId: resolvedParams.id, userId: payload.userId });
@@ -20,7 +20,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       select: {
         id: true,
         bookingNumber: true,
-        customerId: true,
+        customerProfileId: true,
         vendorId: true,
         eventDate: true,
         eventTime: true,
@@ -53,8 +53,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             userId: true
           }
         },
-        user: {
-          select: { id: true, fullName: true, email: true, mobileNumber: true },
+        customerprofile: {
+          select: {
+            user: {
+              select: { id: true, fullName: true, email: true, mobileNumber: true },
+            }
+          }
         },
         bookingitem: {
           select: {
@@ -93,30 +97,43 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
 
-    // Check if user is authorized to see this booking
-    if (payload.role === "CUSTOMER" && booking.customerId !== payload.userId) {
-        logger.warn("Unauthorized access attempt to booking", { bookingId: resolvedParams.id, userId: payload.userId });
-        return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
+    // Resolve customerProfileId for authorization if it's a customer
+    if (payload.role === "CUSTOMER") {
+        const profile = await prisma.customerprofile.findUnique({
+            where: { userId: payload.userId },
+            select: { id: true }
+        });
+        if (!profile || booking.customerProfileId !== profile.id) {
+            logger.warn("Unauthorized access attempt to booking", { bookingId: resolvedParams.id, userId: payload.userId });
+            return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
+        }
     }
+
     if (payload.role === "VENDOR" && booking.vendorprofile?.userId !== payload.userId) {
         logger.warn("Unauthorized vendor access attempt to booking", { bookingId: resolvedParams.id, userId: payload.userId });
         return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
     }
 
+    // Flatten for frontend compatibility if needed
+    const transformedBooking = {
+        ...booking,
+        user: (booking as any).customerprofile?.user
+    };
+
     // --- STEP 11: SAFETY & TRUST FEATURES ---
     // Hide address from vendor until Event Day unless already started
-    const isEventDay = new Date().toDateString() === new Date(booking.eventDate).toDateString();
+    const isEventDay = new Date().toDateString() === new Date(transformedBooking.eventDate).toDateString();
     const canSeeAddress = payload.role === "CUSTOMER" ||
                           isEventDay ||
-                          ["VENDOR_TRAVELING", "VENDOR_ARRIVED", "EVENT_STARTED", "EVENT_ONGOING", "EVENT_COMPLETED"].includes(booking.status);
+                          ["VENDOR_TRAVELING", "VENDOR_ARRIVED", "EVENT_STARTED", "EVENT_ONGOING", "EVENT_COMPLETED"].includes(transformedBooking.status);
 
     if (payload.role === "VENDOR" && !canSeeAddress) {
-      booking.eventLocation = "Address will be visible on the event day";
-      booking.landmark = "Hidden";
-      booking.latitude = null;
-      booking.longitude = null;
+      transformedBooking.eventLocation = "Address will be visible on the event day";
+      transformedBooking.landmark = "Hidden";
+      transformedBooking.latitude = null;
+      transformedBooking.longitude = null;
     }
 
-    return NextResponse.json(booking);
+    return NextResponse.json(transformedBooking);
   });
 }

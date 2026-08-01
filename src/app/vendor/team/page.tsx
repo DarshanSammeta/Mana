@@ -25,6 +25,7 @@ import {
     DialogTitle,
     DialogTrigger,
   } from "@/components/ui/dialog";
+import { formatSafe } from "@/lib/utils/date";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -272,7 +273,7 @@ export default function TeamManagement() {
                             )}
                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                 <Clock className="h-4 w-4" />
-                                <span className="font-medium truncate">Joined {new Date(member.joinedAt).toLocaleDateString()}</span>
+                                <span className="font-medium truncate">Joined {formatSafe(member.joinedAt)}</span>
                             </div>
                         </div>
 

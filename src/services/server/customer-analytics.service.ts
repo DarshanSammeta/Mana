@@ -3,24 +3,49 @@ import { getPrisma } from "@/lib/prisma";
 if (typeof window !== "undefined") { throw new Error("customer-analytics.service can only be used on the server."); }
 
 export class CustomerAnalyticsService {
+  /**
+   * Gets analytics for a customer based on their userId
+   */
   static async getAnalytics(userId: string) {
     const prisma = getPrisma();
-    const [bookings, wallet, reviews] = await Promise.all([
+
+    // First get the customer profile
+    const profile = await prisma.customerprofile.findUnique({
+      where: { userId },
+      select: { id: true, loyaltyPoints: true }
+    });
+
+    if (!profile) {
+      return {
+        totalBookings: 0,
+        completedBookings: 0,
+        totalSpent: 0,
+        averageOrderValue: 0,
+        loyaltyPoints: 0,
+        reviewsWritten: 0,
+        favoriteCategory: "None",
+        spendingTrends: [],
+      };
+    }
+
+    const [bookings, reviews] = await Promise.all([
       prisma.booking.findMany({
-        where: { customerId: userId },
+        where: { customerProfileId: profile.id },
         select: {
           totalAmount: true,
           status: true,
           createdAt: true,
           bookingitem: {
-            include: {
+            select: {
               service: {
-                include: {
+                select: {
                   servicetype: {
-                    include: {
+                    select: {
                       subcategory: {
-                        include: {
-                          category: true
+                        select: {
+                          category: {
+                            select: { name: true }
+                          }
                         }
                       }
                     }
@@ -31,8 +56,7 @@ export class CustomerAnalyticsService {
           }
         }
       }),
-      prisma.wallet.findUnique({ where: { userId } }),
-      prisma.review.count({ where: { userId } })
+      prisma.review.count({ where: { customerProfileId: profile.id } })
     ]);
 
     const totalSpent = bookings
@@ -69,7 +93,7 @@ export class CustomerAnalyticsService {
       completedBookings: bookings.filter(b => b.status === "EVENT_COMPLETED").length,
       totalSpent,
       averageOrderValue: bookings.length > 0 ? totalSpent / bookings.length : 0,
-      loyaltyPoints: wallet?.balance || 0,
+      loyaltyPoints: profile.loyaltyPoints,
       reviewsWritten: reviews,
       favoriteCategory,
       spendingTrends: trends,

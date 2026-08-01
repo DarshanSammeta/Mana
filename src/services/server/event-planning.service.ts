@@ -13,9 +13,12 @@ export class EventPlanningService {
    */
   static async createWorkspace(userId: string, data: any) {
     const prisma = getPrisma();
+    const profile = await prisma.customerprofile.findUnique({ where: { userId } });
+    if (!profile) throw new Error("Customer profile not found");
+
     const workspace = await prisma.event_workspace.create({
       data: {
-        userId,
+        customerProfileId: profile.id,
         title: data.title,
         description: data.description,
         eventType: data.eventType,
@@ -25,7 +28,7 @@ export class EventPlanningService {
         collaborators: {
           create: {
             email: data.userEmail,
-            userId,
+            customerProfileId: profile.id,
             role: 'OWNER',
             status: 'ACTIVE',
             joinedAt: new Date(),
@@ -54,7 +57,7 @@ export class EventPlanningService {
       where: {
         id: workspaceId,
         OR: [
-          { userId },
+          { customerprofile: { userId } },
           { collaborators: { some: { email: user.email } } }
         ]
       },
@@ -64,7 +67,7 @@ export class EventPlanningService {
         guests: true,
         budget_items: true,
         timeline_items: { orderBy: { startTime: 'asc' } },
-        notes: { include: { author: { select: { fullName: true, profileImage: true } } }, orderBy: { createdAt: 'desc' } },
+        notes: { include: { author: { select: { profileImage: true, user: { select: { fullName: true } } } } }, orderBy: { createdAt: 'desc' } },
         files: true,
         emergency_contacts: true,
         incident_reports: true,
@@ -171,14 +174,16 @@ export class EventPlanningService {
    */
   static async inviteCollaborator(workspaceId: string, email: string, role: string) {
     const prisma = getPrisma();
-    const user = await prisma.user.findUnique({ where: { email } });
+    const profile = await prisma.customerprofile.findFirst({
+        where: { user: { email } }
+    });
 
     const collaborator = await prisma.event_collaborator.create({
       data: {
         workspaceId,
         email,
         role,
-        userId: user?.id,
+        customerProfileId: profile?.id,
       },
     });
 
@@ -194,10 +199,13 @@ export class EventPlanningService {
    */
   static async uploadFile(workspaceId: string, userId: string, data: any) {
     const prisma = getPrisma();
+    const profile = await prisma.customerprofile.findUnique({ where: { userId } });
+    if (!profile) throw new Error("Customer profile not found");
+
     return await prisma.event_file.create({
       data: {
         workspaceId,
-        userId,
+        customerProfileId: profile.id,
         ...data,
       },
     });

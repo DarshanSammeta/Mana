@@ -157,8 +157,11 @@ async function runVerification() {
   let testBookingId = `verify-${Date.now()}`;
   await check("Full Booking Cycle Simulation", async () => {
     // 1. Find or Create dependencies
-    const customer = await prisma.user.findFirst({ where: { role: "CUSTOMER" } });
-    if (!customer) throw new Error("No CUSTOMER found in database. Run seed first.");
+    const customer = await prisma.user.findFirst({
+      where: { role: "CUSTOMER" },
+      include: { customerprofile: true }
+    });
+    if (!customer || !customer.customerprofile) throw new Error("No CUSTOMER profile found. Run seed first.");
 
     const vendor = await prisma.vendorprofile.findFirst({
       where: { verificationStatus: "APPROVED" },
@@ -174,7 +177,7 @@ async function runVerification() {
       data: {
         id: testBookingId,
         bookingNumber: `V-${Date.now()}`,
-        customerId: customer.id,
+        customerProfileId: customer.customerprofile.id,
         eventName: "Enterprise Verification Event",
         eventDate: new Date(Date.now() + 86400000 * 7),
         eventLocation: "123 Test Street, Bengaluru",
@@ -223,6 +226,7 @@ async function runVerification() {
     }
 
     // 5. Cleanup Simulation
+    await prisma.bookingitem.deleteMany({ where: { bookingId: testBookingId } });
     await prisma.booking.delete({ where: { id: testBookingId } });
   });
 

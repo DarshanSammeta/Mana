@@ -9,7 +9,7 @@ export async function PATCH(
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "VENDOR") {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }

@@ -5,10 +5,9 @@ import dynamic from "next/dynamic";
 
 // Components
 import HomeClient from "./HomeClient";
-import CategoryGrid from "@/components/home/sections/CategoryGrid";
 import FeaturedVendors from "@/components/home/sections/FeaturedVendors";
-import TrendingDeals from "@/components/home/sections/TrendingDeals";
 import CategoryIcons from "@/components/home/sections/CategoryIcons";
+import TrendingDeals from "@/components/home/sections/TrendingDeals";
 import HomeStats from "@/components/home/sections/HomeStats";
 
 // Dynamic Imports for below-the-fold components
@@ -168,13 +167,11 @@ export default async function HomePage() {
           initialTrending={serializableTrending}
         />
 
-        <CategoryGrid eventTypes={serializableEventTypes} />
+        <CategoryIcons eventTypes={serializableEventTypes} />
 
         <FeaturedVendors vendors={serializableFeatured} />
 
         <TrendingDeals vendors={serializableTrending} />
-
-        <CategoryIcons eventTypes={serializableEventTypes} />
 
         <PopularLocations />
 

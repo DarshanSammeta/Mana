@@ -69,10 +69,15 @@ export class OperationsService {
     return await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
         where: { id: bookingId },
-        include: { user: true, vendorprofile: true },
+        include: {
+          customerprofile: {
+            include: { user: true }
+          },
+          vendorprofile: true
+        },
       });
 
-      if (!booking) throw new Error("Booking not found");
+      if (!booking || !booking.customerprofile) throw new Error("Booking or profile not found");
 
       // Calculate Penalties (Business Logic)
       let penalty = new Decimal(0);
@@ -96,25 +101,32 @@ export class OperationsService {
         },
       });
 
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: "CANCELLED" },
-      });
+      // Update booking status via State Machine
+      const { TimelineService } = await import("@/services/server/timeline.service");
+      await TimelineService.transitionStatus(
+          bookingId,
+          "CANCELLED",
+          { id: cancelledBy, name: booking.customerprofile.user.fullName, role: "CUSTOMER" }, // Assuming CUSTOMER for now
+          `Booking Cancelled: ${reason}`,
+          tx
+      );
 
       // Integrated Wallet Refund Logic
       if (refundAmount.gt(0)) {
         await FinanceService.transferFunds(
-          "ESCROW", // Usually funds are in escrow until completion
-          "USER",   // Transfer back to customer wallet
+          { type: "ESCROW" },
+          { userId: booking.customerprofile.userId },
           refundAmount,
           {
             description: `Refund for cancelled booking #${booking.id}`,
-            reference: cancellation.id
+            reference: cancellation.id,
+            bookingId: booking.id
           }
         );
       }
 
-      emitSocketEvent(booking.customerId, SOCKET_EVENTS.BOOKING_NEGOTIATING, { bookingId, status: "CANCELLED" });
+      // Socket notification to customer
+      emitSocketEvent(booking.customerprofile.userId, SOCKET_EVENTS.BOOKING_NEGOTIATING, { bookingId, status: "CANCELLED" });
       if (booking.vendorprofile) {
         emitSocketEvent(booking.vendorprofile.userId, SOCKET_EVENTS.BOOKING_NEGOTIATING, { bookingId, status: "CANCELLED" });
       }
@@ -205,10 +217,20 @@ export class OperationsService {
         status: "OPEN",
         updatedAt: new Date(),
       },
-      include: { booking: { include: { vendorprofile: true } } }
+      include: {
+        booking: {
+          include: {
+            vendorprofile: true,
+            customerprofile: { select: { userId: true } }
+          }
+        }
+      }
     });
 
-    emitSocketEvent(dispute.booking.customerId, "dispute:raised", dispute);
+    if (dispute.booking.customerprofile) {
+      emitSocketEvent(dispute.booking.customerprofile.userId, "dispute:raised", dispute);
+    }
+
     if (dispute.booking.vendorprofile) {
       emitSocketEvent(dispute.booking.vendorprofile.userId, "dispute:raised", dispute);
     }

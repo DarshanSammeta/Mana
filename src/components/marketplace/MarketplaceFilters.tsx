@@ -1,13 +1,12 @@
 "use client";
 
 import { Star, Navigation } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useLocationStore } from "@/store/locationStore";
 import { useLocation } from "@/hooks/useLocation";
 import { RATING_FILTERS } from "@/data/marketplace/filters";
+import { cn } from "@/lib/utils";
 
 interface MarketplaceFiltersProps {
   cities: string[];
@@ -16,8 +15,6 @@ interface MarketplaceFiltersProps {
 export function MarketplaceFilters({ cities }: MarketplaceFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const lat = useLocationStore(state => state.lat);
-  const lng = useLocationStore(state => state.lng);
   const { detectLocation } = useLocation();
 
   const [localMinPrice, setLocalMinPrice] = useState(searchParams?.get("minPrice") || "");
@@ -25,14 +22,12 @@ export function MarketplaceFilters({ cities }: MarketplaceFiltersProps) {
   const debouncedMin = useDebounce(localMinPrice, 500);
   const debouncedMax = useDebounce(localMaxPrice, 500);
 
-  // Sync local state with URL changes (for multi-instance sync)
   useEffect(() => {
     const urlMin = searchParams?.get("minPrice") || "";
     const urlMax = searchParams?.get("maxPrice") || "";
-
-    if (urlMin !== localMinPrice) setLocalMinPrice(urlMin);
-    if (urlMax !== localMaxPrice) setLocalMaxPrice(urlMax);
-  }, [searchParams, localMinPrice, localMaxPrice]);
+    setLocalMinPrice(urlMin);
+    setLocalMaxPrice(urlMax);
+  }, [searchParams]);
 
   const updateFilters = useCallback((updates: Record<string, string | number | undefined | null>) => {
     const params = new URLSearchParams(searchParams?.toString() || "");
@@ -44,123 +39,120 @@ export function MarketplaceFilters({ cities }: MarketplaceFiltersProps) {
       }
     });
 
-    // Automatically inject coordinates if available for proximity ranking
-    if (lat && lng) {
-      params.set("lat", lat.toString());
-      params.set("lng", lng.toString());
-    }
-
-    // Reset to page 1 when filters change
     if (!updates.page) params.delete("page");
-
     router.replace(`/marketplace?${params.toString()}`, { scroll: false });
-  }, [router, searchParams, lat, lng]);
+  }, [router, searchParams]);
 
   useEffect(() => {
     const currentMin = searchParams?.get("minPrice") || "";
     const currentMax = searchParams?.get("maxPrice") || "";
-
-    // Only update if the debounced value actually differs from the URL
     if (debouncedMin !== currentMin || debouncedMax !== currentMax) {
       updateFilters({
         minPrice: debouncedMin,
         maxPrice: debouncedMax
       });
     }
-  }, [debouncedMin, debouncedMax, updateFilters, searchParams, localMinPrice, localMaxPrice]);
+  }, [debouncedMin, debouncedMax, updateFilters, searchParams]);
 
   const rating = searchParams?.get("rating") ? parseInt(searchParams.get("rating")!) : 0;
   const selectedCity = searchParams?.get("city") || "";
   const sort = searchParams?.get("sort") || "featured";
 
   return (
-    <div className="space-y-8 bg-white p-6 lg:p-0 rounded-2xl lg:border-none shadow-none">
-      <div>
-        <h3 className="text-[11px] font-black mb-6 uppercase tracking-widest text-slate-400">Sort By</h3>
+    <div className="space-y-6 text-[#0F1111]">
+      {/* Sort Section */}
+      <div className="pb-6 border-b border-slate-100">
+        <h3 className="text-sm font-bold mb-4">Sort by</h3>
         <select
           value={sort}
           onChange={(e) => updateFilters({ sort: e.target.value })}
-          className="w-full bg-slate-50 border-slate-200 rounded-xl h-11 px-4 text-sm font-bold focus:ring-primary/20 transition-all outline-none"
+          className="w-full bg-slate-50 border-slate-200 rounded-md h-9 px-3 text-sm font-medium focus:ring-1 focus:ring-orange-500 outline-none"
         >
-          <option value="featured">Featured (Recommended)</option>
-          <option value="nearby">Nearby Professionals</option>
-          <option value="rating">Highest Rated</option>
-          <option value="popularity">Most Popular</option>
+          <option value="featured">Featured</option>
           <option value="price_low">Price: Low to High</option>
           <option value="price_high">Price: High to Low</option>
-          <option value="newest">Newest First</option>
+          <option value="rating">Avg. Customer Review</option>
+          <option value="newest">Newest Arrivals</option>
+          <option value="popularity">Best Sellers</option>
         </select>
       </div>
 
-      <div>
-        <h3 className="text-[11px] font-black mb-6 uppercase tracking-widest text-slate-400">Customer Rating</h3>
-        <div className="space-y-4">
+      {/* Rating Section */}
+      <div className="pb-6 border-b border-slate-100">
+        <h3 className="text-sm font-bold mb-4">Customer Review</h3>
+        <div className="space-y-2">
           {RATING_FILTERS.map((r) => (
             <button
               key={r}
-              aria-label={`${r} stars and up`}
               onClick={() => updateFilters({ rating: rating === r ? 0 : r })}
-              className={`flex items-center gap-3 w-full text-left transition-colors group ${rating === r ? 'text-primary' : 'text-slate-600 hover:text-primary'}`}
+              className={cn(
+                "flex items-center gap-2 w-full text-left transition-colors group text-sm",
+                rating === r ? 'font-bold' : 'hover:text-orange-600'
+              )}
             >
               <div className="flex gap-0.5">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} className={`h-4 w-4 transition-colors ${i < r ? 'fill-[#F59E0B] text-[#F59E0B]' : 'text-slate-100 group-hover:text-slate-200'}`} />
+                  <Star key={i} className={cn("h-4 w-4 transition-colors", i < r ? 'fill-[#FFA41C] text-[#FFA41C]' : 'text-slate-200')} />
                 ))}
               </div>
-              <span className={`text-sm font-bold ${rating === r ? 'opacity-100' : 'opacity-60'}`}>& Up</span>
+              <span className="text-xs">& Up</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div>
-        <h3 className="text-[11px] font-black mb-6 uppercase tracking-widest text-slate-400">Budget Range</h3>
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">₹</span>
-              <Input
-                placeholder="Min"
-                value={localMinPrice}
-                onChange={(e) => setLocalMinPrice(e.target.value)}
-                className="h-10 pl-6 text-sm bg-slate-50 border-slate-200 rounded-lg focus-visible:ring-primary/20"
-              />
-            </div>
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">₹</span>
-              <Input
-                placeholder="Max"
-                value={localMaxPrice}
-                onChange={(e) => setLocalMaxPrice(e.target.value)}
-                className="h-10 pl-6 text-sm bg-slate-50 border-slate-200 rounded-lg focus-visible:ring-primary/20"
-              />
-            </div>
+      {/* Price Section */}
+      <div className="pb-6 border-b border-slate-100">
+        <h3 className="text-sm font-bold mb-4">Price</h3>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">₹</span>
+            <input
+              placeholder="Min"
+              value={localMinPrice}
+              onChange={(e) => setLocalMinPrice(e.target.value)}
+              className="w-full h-8 pl-5 pr-2 text-sm bg-white border border-slate-300 rounded focus:border-orange-500 outline-none"
+            />
           </div>
+          <div className="relative flex-1">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">₹</span>
+            <input
+              placeholder="Max"
+              value={localMaxPrice}
+              onChange={(e) => setLocalMaxPrice(e.target.value)}
+              className="w-full h-8 pl-5 pr-2 text-sm bg-white border border-slate-300 rounded focus:border-orange-500 outline-none"
+            />
+          </div>
+          <button
+            onClick={() => updateFilters({ minPrice: localMinPrice, maxPrice: localMaxPrice })}
+            className="h-8 px-3 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            Go
+          </button>
         </div>
       </div>
 
+      {/* City Section */}
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Popular Cities</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-bold">Location</h3>
           <button
             onClick={() => detectLocation(true)}
-            className="text-[10px] font-black uppercase tracking-widest text-blue-600 flex items-center gap-1 hover:underline"
+            className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1"
           >
             <Navigation className="h-3 w-3" /> Detect
           </button>
         </div>
-        <div className="space-y-3">
-          {cities.map((city: string) => (
-            <label key={city} className="flex items-center gap-3 cursor-pointer group">
-              <div className="relative flex items-center justify-center">
-                <input
-                  type="checkbox"
-                  checked={selectedCity === city}
-                  onChange={() => updateFilters({ city: selectedCity === city ? "" : city })}
-                  className="peer h-5 w-5 rounded-md border-slate-300 text-primary focus:ring-primary/20 transition-all cursor-pointer"
-                />
-              </div>
-              <span className="text-sm font-semibold text-slate-600 group-hover:text-secondary transition-colors">{city}</span>
+        <div className="space-y-2">
+          {cities.slice(0, 8).map((city) => (
+            <label key={city} className="flex items-center gap-2 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={selectedCity === city}
+                onChange={() => updateFilters({ city: selectedCity === city ? "" : city })}
+                className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+              />
+              <span className="text-sm text-[#0F1111] group-hover:text-orange-600">{city}</span>
             </label>
           ))}
         </div>

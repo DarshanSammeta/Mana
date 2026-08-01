@@ -11,9 +11,10 @@ import { booking_status, payment_status, transaction_status, transaction_type, w
 
 export async function processSuccessfulPayment(payment: any) {
   const bookingId = payment.notes.bookingId;
+  const paymentType = payment.notes.paymentType || "FULL";
   const razorpayPaymentId = payment.id;
 
-  logger.info(`[PaymentService] Processing success for booking ${bookingId}, payment ${razorpayPaymentId}`);
+  logger.info(`[PaymentService] Processing success for booking ${bookingId}, type ${paymentType}, payment ${razorpayPaymentId}`);
 
   // 1. Idempotency Check
   const existingPayment = await prisma.payment.findUnique({
@@ -26,26 +27,43 @@ export async function processSuccessfulPayment(payment: any) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    // 2. Update Booking
+    // 2. Determine New Status & Milestone Data
+    let newStatus: booking_status = booking_status.CONFIRMED;
+    const milestoneData: any = {};
+
+    if (paymentType === "ADVANCE") {
+      newStatus = booking_status.ADVANCE_PAID;
+      milestoneData.advancePaidAt = new Date();
+      milestoneData.paymentStage = "ADVANCE_PAID";
+    } else if (paymentType === "BALANCE") {
+      newStatus = booking_status.FULLY_PAID;
+      milestoneData.balancePaidAt = new Date();
+      milestoneData.paymentStage = "FULLY_PAID";
+    } else {
+      newStatus = booking_status.CONFIRMED;
+      milestoneData.advancePaidAt = new Date();
+      milestoneData.balancePaidAt = new Date();
+      milestoneData.paymentStage = "FULLY_PAID";
+    }
+
+    // 3. Update Booking via State Machine
+    const { TimelineService } = await import("@/services/server/timeline.service");
+    await TimelineService.transitionStatus(
+      bookingId,
+      newStatus,
+      { id: "SYSTEM", name: "Razorpay", role: "ADMIN" },
+      `Payment (${paymentType}) successful. Razorpay ID: ${razorpayPaymentId}`,
+      tx
+    );
+
+    // Sync Milestone Data (since state machine only updates status)
     const booking = await tx.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: booking_status.CONFIRMED,
-        bookingstatuslog: {
-          create: {
-            id: crypto.randomUUID(),
-            status: booking_status.CONFIRMED,
-            notes: `Payment successful. Razorpay ID: ${razorpayPaymentId}`
-          }
-        }
-      },
-      include: {
-        user: true,
-        vendorprofile: true
-      }
+        where: { id: bookingId },
+        data: milestoneData,
+        include: { vendorprofile: true }
     });
 
-    // 3. Upsert Payment Record
+    // 4. Upsert Payment Record
     const paymentRecord = await tx.payment.upsert({
       where: { razorpayPaymentId },
       update: { status: payment_status.SUCCESS },
@@ -54,6 +72,7 @@ export async function processSuccessfulPayment(payment: any) {
         bookingId,
         amount: new Decimal(payment.amount / 100),
         status: payment_status.SUCCESS,
+        paymentType: paymentType,
         razorpayOrderId: payment.order_id,
         razorpayPaymentId,
         method: payment.method,
@@ -81,7 +100,7 @@ export async function processSuccessfulPayment(payment: any) {
         paymentId: paymentRecord.id,
         bookingId: bookingId,
         vendorId: booking.vendorId,
-        customerId: booking.customerId,
+        customerProfileId: booking.customerProfileId,
         totalAmount,
         adminShare,
         vendorShare,
@@ -155,12 +174,19 @@ export async function processSuccessfulPayment(payment: any) {
   try {
     await NotificationTriggers.paymentSuccess(result.booking, result);
 
-    // Phase 1: Standardized Events
-    emitSocketEvent(result.booking.customerId, SOCKET_EVENTS.BOOKING_PAYMENT, {
-      bookingId,
-      bookingNumber: result.booking.bookingNumber,
-      status: "SUCCESS"
+    // Get customer userId from profile
+    const profile = await prisma.customerprofile.findUnique({
+      where: { id: result.booking.customerProfileId },
+      select: { userId: true }
     });
+
+    if (profile) {
+      emitSocketEvent(profile.userId, SOCKET_EVENTS.BOOKING_PAYMENT, {
+        bookingId,
+        bookingNumber: result.booking.bookingNumber,
+        status: "SUCCESS"
+      });
+    }
 
     if (result.booking.vendorprofile) {
       emitSocketEvent(result.booking.vendorprofile.userId, SOCKET_EVENTS.BOOKING_CONFIRMED, {
@@ -185,7 +211,6 @@ export async function handleFailedPayment(payment: any) {
             data: {
                 bookingstatuslog: {
                     create: {
-                        id: crypto.randomUUID(),
                         status: "PAYMENT_PENDING",
                         notes: `Payment failed. Razorpay ID: ${razorpayPaymentId}. Error: ${payment.error_description || 'Unknown error'}`
                     }
@@ -193,11 +218,18 @@ export async function handleFailedPayment(payment: any) {
             }
         });
 
-        emitSocketEvent(payment.notes.customerId, SOCKET_EVENTS.BOOKING_PAYMENT, {
-            bookingId,
-            status: "FAILED",
-            error: payment.error_description || 'Payment was unsuccessful'
+        const profile = await prisma.customerprofile.findUnique({
+            where: { id: payment.notes.customerProfileId || '' }, // Assuming it's in notes
+            select: { userId: true }
         });
+
+        if (profile) {
+            emitSocketEvent(profile.userId, SOCKET_EVENTS.BOOKING_PAYMENT, {
+                bookingId,
+                status: "FAILED",
+                error: payment.error_description || 'Payment was unsuccessful'
+            });
+        }
     }
 
     await prisma.payment.upsert({
@@ -222,11 +254,18 @@ export async function processRefund(refundData: any) {
 
     const payment = await prisma.payment.findUnique({
         where: { razorpayPaymentId: paymentId },
-        include: { booking: { include: { vendorprofile: true, user: true } } }
+        include: {
+          booking: {
+            include: {
+              vendorprofile: true,
+              customerprofile: { include: { user: true } }
+            }
+          }
+        }
     });
 
-    if (!payment) {
-        logger.error(`[PaymentService] Payment ${paymentId} not found for refund ${razorpayRefundId}`);
+    if (!payment || !payment.booking || !payment.booking.customerprofile) {
+        logger.error(`[PaymentService] Payment ${paymentId} or associated booking/profile not found for refund ${razorpayRefundId}`);
         return;
     }
 
@@ -252,7 +291,7 @@ export async function processRefund(refundData: any) {
             data: {
                 status: "CANCELLED",
                 bookingstatuslog: {
-                    create: { id: crypto.randomUUID(), status: "CANCELLED", notes: `Refund processed: ${razorpayRefundId}` }
+                    create: { status: "CANCELLED", notes: `Refund processed: ${razorpayRefundId}` }
                 }
             }
         });
@@ -273,9 +312,9 @@ export async function processRefund(refundData: any) {
         }
 
         const customerWallet = await tx.wallet.upsert({
-            where: { userId: payment.booking.customerId },
+            where: { userId: payment.booking.customerprofile.userId },
             update: { balance: { increment: amount } },
-            create: { id: crypto.randomUUID(), userId: payment.booking.customerId, balance: amount, type: "USER" }
+            create: { id: crypto.randomUUID(), userId: payment.booking.customerprofile.userId, balance: amount, type: "USER" }
         });
 
         await tx.transaction.create({
@@ -292,7 +331,7 @@ export async function processRefund(refundData: any) {
         });
     });
 
-    emitSocketEvent(payment.booking.customerId, SOCKET_EVENTS.BOOKING_PAYMENT, {
+    emitSocketEvent(payment.booking.customerprofile.userId, SOCKET_EVENTS.BOOKING_PAYMENT, {
         bookingId,
         type: 'REFUND',
         amount: refundData.amount / 100

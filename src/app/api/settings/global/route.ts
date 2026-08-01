@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   // Only Admin should be able to update global settings
   // Assuming role check for ADMIN exists or using a specific check
   if (!payload || payload.role !== "ADMIN" as any) return NextResponse.json({ status: 403 });

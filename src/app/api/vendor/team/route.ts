@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") return NextResponse.json({ status: 403 });
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "VENDOR") return NextResponse.json({ status: 403 });
 
     const { name, role, email, phone, status } = await req.json();
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   return withErrorHandler(async () => {
     const token = req.headers.get("authorization")?.split(" ")[1];
-    const payload = verifyAccessToken(token || "");
+    const payload = await verifyAccessToken(token || "");
     if (!payload || payload.role !== "VENDOR") return NextResponse.json({ status: 403 });
 
     const { id, ...data } = await req.json();
@@ -82,7 +82,7 @@ export async function PATCH(req: Request) {
 export async function DELETE(req: Request) {
     return withErrorHandler(async () => {
       const token = req.headers.get("authorization")?.split(" ")[1];
-      const payload = verifyAccessToken(token || "");
+      const payload = await verifyAccessToken(token || "");
       if (!payload || payload.role !== "VENDOR") return NextResponse.json({ status: 403 });
 
       const { searchParams } = new URL(req.url);

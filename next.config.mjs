@@ -2,6 +2,7 @@
 import withPWA from 'next-pwa';
 
 const nextConfig = {
+  serverExternalPackages: ['@opentelemetry/sdk-node', '@opentelemetry/auto-instrumentations-node', '@grpc/grpc-js'],
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
@@ -16,6 +17,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: '*.unsplash.com' },
       { protocol: 'https', hostname: 'picsum.photos' },
+      { protocol: 'https', hostname: 'cdn-icons-png.flaticon.com' },
     ],
   },
   experimental: {

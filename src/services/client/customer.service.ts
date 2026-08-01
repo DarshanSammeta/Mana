@@ -74,7 +74,7 @@ export const customerService = {
   },
 
   checkout: async (data: any) => {
-    const response = await apiClient.post("/customer/checkout", data);
+    const response = await apiClient.post("/v2/checkout", data);
     return response.data;
   },
 
@@ -93,7 +93,7 @@ export const customerService = {
     return response.data;
   },
 
-  createRazorpayOrder: async (data: { amount: number }) => {
+  createRazorpayOrder: async (data: { amount: number, bookingId?: string, paymentType?: string }) => {
     const response = await apiClient.post("/checkout/razorpay", data);
     return response.data;
   },
@@ -103,7 +103,7 @@ export const customerService = {
     return response.data;
   },
 
-  submitReview: async (data: { vendorId: string, rating: number, comment: string }) => {
+  submitReview: async (data: { bookingId: string, rating: number, comment: string }) => {
     const response = await apiClient.post("/reviews", data);
     return response.data;
   },
@@ -115,6 +115,16 @@ export const customerService = {
 
   verifyPhoneOtp: async (bookingId: string, otp: string) => {
     const response = await apiClient.patch(`/bookings/${bookingId}/otp/verification`, { otp });
+    return response.data;
+  },
+
+  acceptCounter: async (id: string) => {
+    const response = await apiClient.patch(`/bookings/${id}/accept-counter`);
+    return response.data;
+  },
+
+  rejectCounter: async (id: string) => {
+    const response = await apiClient.patch(`/bookings/${id}/reject-counter`);
     return response.data;
   }
 };

@@ -1,7 +1,5 @@
-import "server-only";
 import { PrismaClient } from "@prisma/client";
-import { observability } from "./observability";
-import logger from "./logger";
+import { cache } from "react";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -17,6 +15,7 @@ export const prisma = client;
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
 
-export const getPrisma = (): PrismaClient => {
+// Request-level memoization for Prisma client access
+export const getPrisma = cache((): PrismaClient => {
   return prisma;
-};
+});

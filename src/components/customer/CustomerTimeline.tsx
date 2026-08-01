@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/apiClient';
 import { CheckCircle2, Clock, MapPin, Truck, Play, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { formatSafe } from '@/lib/utils/date';
 
 interface TimelineEvent {
   status: string;
@@ -52,7 +52,7 @@ export function CustomerTimeline({ bookingId }: { bookingId: string }) {
             <div className="pb-6">
               <p className="text-sm font-bold text-slate-900">{event.message}</p>
               <p className="text-xs text-slate-500 mt-1">
-                {format(new Date(event.timestamp), 'MMM dd, yyyy • hh:mm a')}
+                {formatSafe(event.timestamp, 'MMM dd, yyyy • hh:mm a')}
               </p>
             </div>
           </div>

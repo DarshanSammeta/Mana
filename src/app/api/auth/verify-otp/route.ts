@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateAccessToken, generateRefreshToken } from "@/lib/auth";
-import { z } from "zod";
-import { createAuditLog } from "@/lib/audit";
+import { AuditService } from "@/services/server/audit.service";
 import { withErrorHandler } from "@/lib/error-handler";
-import logger from "@/lib/logger";
 import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { AUTH_LIMITS } from "@/config/auth-limits";
+import { SessionService } from "@/services/server/session.service";
+import { timingSafeEqual } from "crypto";
 
-const verifyOTPSchema = z.object({
-  userId: z.string(),
-  otp: z.string().length(6),
-});
+import { verifyOTPSchema } from "@/validations/auth";
+
+/**
+ * Constant-time comparison for OTP strings to prevent timing attacks.
+ */
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
@@ -19,113 +23,87 @@ export async function POST(req: Request) {
     const validated = verifyOTPSchema.parse(body);
 
     const ip = req.headers.get("x-forwarded-for") || "unknown";
+    const userAgent = req.headers.get("user-agent") || "unknown";
 
-    // Rate limit OTP verification attempts
+    // 1. Perimeter Rate Limiting
     const identifier = `otp-verify:${ip}:${validated.userId}`;
     const rateLimitResult = await rateLimit(identifier, AUTH_LIMITS.OTP_VERIFY);
-
-    if (!rateLimitResult.success) {
-      return rateLimitResponse(
-        rateLimitResult,
-        `Too many verification attempts. Please wait ${Math.ceil(rateLimitResult.reset / 60)} minutes.`
-      );
-    }
-
-    logger.info("OTP Verification attempt", { userId: validated.userId, ip });
+    if (!rateLimitResult.success) return rateLimitResponse(rateLimitResult);
 
     const user = await prisma.user.findUnique({
       where: { id: validated.userId },
       include: {
-        vendorprofile: {
-          select: {
-            verificationStatus: true
-          }
-        }
+        vendorprofile: { select: { verificationStatus: true } }
       }
     });
 
-    if (!user) {
-      logger.warn("OTP Verification failed: User not found", { userId: validated.userId });
-      return NextResponse.json({
-        message: "Invalid or expired session. Please login again.",
-        _dev_reason: process.env.NODE_ENV === "development" ? "User not found by ID" : undefined
-      }, { status: 401 });
+    if (!user) return NextResponse.json({ message: "Invalid session" }, { status: 401 });
+
+    // 2. Account Lockout Check
+    if (user.lockUntil && user.lockUntil > new Date()) {
+        return NextResponse.json({ message: "Too many failed attempts. Try again later." }, { status: 403 });
     }
 
     if (!user.otp || !user.otpExpiry) {
-      logger.warn("OTP Verification failed: No OTP active", { userId: user.id });
-      return NextResponse.json({
-        message: "No active verification code found. Please login again.",
-        _dev_reason: process.env.NODE_ENV === "development" ? "otp or otpExpiry is null in DB" : undefined
-      }, { status: 401 });
+      return NextResponse.json({ message: "No active code found" }, { status: 401 });
     }
 
-    const now = new Date();
-    // Use a small buffer (5 seconds) for network latency/clock drift
-    const expiryWithBuffer = new Date(user.otpExpiry.getTime() + 5000);
-
-    if (expiryWithBuffer < now) {
-      logger.warn("OTP Verification failed: Expired", {
-        userId: user.id,
-        expiry: user.otpExpiry,
-        now
-      });
-      return NextResponse.json({
-        message: "Verification code has expired. Please login again.",
-        _dev_reason: process.env.NODE_ENV === "development" ? `Expired at ${user.otpExpiry.toISOString()}` : undefined
-      }, { status: 401 });
+    // 3. Expiration Check
+    if (new Date() > user.otpExpiry) {
+      return NextResponse.json({ message: "Code expired" }, { status: 401 });
     }
 
-    // Trim and compare to avoid whitespace issues
-    const providedOtp = validated.otp.trim();
-    const storedOtp = user.otp.trim();
+    // 4. Timing-Safe Comparison
+    const isMatch = safeCompare(validated.otp.trim(), user.otp.trim());
 
-    if (storedOtp !== providedOtp) {
-      logger.warn("OTP Verification failed: Incorrect code", {
-        userId: user.id,
-        provided: providedOtp,
-        expected: storedOtp
-      });
-      return NextResponse.json({
-        message: "Invalid verification code",
-        _dev_reason: process.env.NODE_ENV === "development" ? `Expected ${storedOtp}, got ${providedOtp}` : undefined
-      }, { status: 401 });
-    }
+    if (!isMatch) {
+      // 5. Increment failed attempts
+      const newAttempts = user.loginAttempts + 1;
+      const isLocked = newAttempts >= 5;
 
-    // OTP is valid - clear it and create session
-    // We do this in a transaction to ensure atomicity
-    const [refreshTokenResult] = await prisma.$transaction([
-      prisma.refreshtoken.create({
-        data: {
-          id: crypto.randomUUID(),
-          token: generateRefreshToken(user.id),
-          userId: user.id,
-          expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        },
-      }),
-      prisma.user.update({
+      await prisma.user.update({
         where: { id: user.id },
         data: {
-          otp: null,
-          otpExpiry: null,
-          isEmailVerified: true,
-          loginAttempts: 0 // Reset attempts on successful 2FA
+            loginAttempts: newAttempts,
+            lockUntil: isLocked ? new Date(Date.now() + 15 * 60 * 1000) : null // 15 min lock
         }
-      }),
-      // Audit log as part of transaction or separately
-    ]);
+      });
 
-    // Separate audit log creation to not block the main transaction if it's slow
-    createAuditLog({
-      userId: user.id,
-      action: "LOGIN_SUCCESS_2FA",
-      ipAddress: ip
-    }).catch(err => logger.error("Audit log failed after OTP", err));
+      if (isLocked) {
+          await AuditService.log({
+              entityType: "USER",
+              entityId: user.id,
+              module: "AUTH",
+              action: "ACCOUNT_LOCKED",
+              metadata: { reason: "OTP_FAILED_LIMIT" }
+          });
+      }
 
-    const accessToken = generateAccessToken(user.id, user.role);
-    const refreshToken = refreshTokenResult.token;
+      return NextResponse.json({ message: "Invalid verification code" }, { status: 401 });
+    }
 
-    logger.info("2FA Login successful", { userId: user.id });
+    // 6. Success: Clear OTP and create session
+    const { accessToken, refreshToken } = await SessionService.createSession({
+        userId: user.id,
+        role: user.role,
+        verificationStatus: (user as any).vendorprofile?.verificationStatus
+    }, {
+        ipAddress: ip,
+        userAgent: userAgent
+    });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otp: null,
+        otpExpiry: null,
+        isEmailVerified: true,
+        loginAttempts: 0,
+        lockUntil: null
+      }
+    });
+
+    await AuditService.logAuth(user.id, "LOGIN_SUCCESS_2FA", user.role, user.fullName);
 
     const response = NextResponse.json({
       message: "Login successful",
@@ -139,16 +117,6 @@ export async function POST(req: Request) {
       accessToken,
     });
 
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict" as const,
-      path: "/",
-    };
-
-    response.cookies.set("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 });
-    response.cookies.set("accessToken", accessToken, { ...cookieOptions, maxAge: 15 * 60 });
-
-    return response;
+    return SessionService.setSessionCookies(response, accessToken, refreshToken);
   });
 }

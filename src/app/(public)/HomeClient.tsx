@@ -1,16 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Star, ShieldCheck, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Star, ShieldCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { RecentlyViewed } from "@/components/home/RecentlyViewed";
 import { RecommendationCarouselSection } from "@/components/customer/RecommendationCarousel";
 import { optimizeImage } from "@/lib/cloudinary";
-import { HERO_SLIDES, IMAGES, EVENT_TYPE_ICONS } from "@/constants";
-
-const eventIcon = IMAGES.DEFAULT_EVENT;
+import { HERO_SLIDES } from "@/constants";
 
 interface HomeClientProps {
   initialFeatured?: any[];
@@ -135,7 +133,7 @@ export default function HomeClient({
             <h3 className="text-xl font-black mb-4">Plan Your Event</h3>
             <div className="space-y-4">
               <Link href="/marketplace" className="block relative aspect-[4/3] group overflow-hidden">
-                <Image src="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=800" fill className="object-cover group-hover:scale-105 transition-transform" alt="Plan" />
+                <Image src="/images/home/plan-cta.jpg" fill className="object-cover group-hover:scale-105 transition-transform" alt="Plan" />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                 <div className="absolute bottom-4 left-4">
                    <span className="bg-white px-3 py-1 text-xs font-black uppercase tracking-widest shadow-lg">Start Now</span>
@@ -146,20 +144,6 @@ export default function HomeClient({
                  <Link href="/vendor/register" className="bg-slate-900 text-white hover:bg-slate-800 py-2 text-center text-sm font-black rounded-lg shadow-sm">Join as Vendor</Link>
               </div>
             </div>
-          </div>
-
-          <div className="bg-white p-6 shadow-md rounded-none">
-             <h3 className="text-xl font-black mb-4">Quick Links</h3>
-             <div className="grid grid-cols-2 gap-2">
-                {initialEventTypes.slice(0, 6).map(type => (
-                  <Link key={type.id} href={`/marketplace?eventTypeId=${type.id}`} className="bg-slate-50 hover:bg-slate-100 p-3 text-center rounded-xl border border-slate-100 transition-colors">
-                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{type.name}</span>
-                  </Link>
-                ))}
-                {initialEventTypes.length === 0 && Array(6).fill(0).map((_, i) => (
-                  <div key={i} className="h-10 bg-slate-50 animate-pulse rounded-xl" />
-                ))}
-             </div>
           </div>
         </div>
 
@@ -203,32 +187,6 @@ export default function HomeClient({
                   <p className="text-lg font-black mt-1">₹{Number(vendor.basePrice || 0).toLocaleString()}</p>
                 </Link>
               ))}
-            </div>
-          </section>
-        )}
-
-        {/* Categories Bar (Level 7) */}
-        {initialEventTypes.length > 0 && (
-          <section className="bg-white p-8 shadow-md">
-            <h2 className="text-2xl font-black tracking-tight mb-8 uppercase text-center">Popular Event Categories</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-8">
-                {initialEventTypes.map(type => (
-                  <Link key={type.id} href={`/marketplace?eventTypeId=${type.id}`} className="group flex flex-col items-center">
-                    <div className="h-24 w-24 rounded-full bg-slate-50 border-2 border-slate-100 flex items-center justify-center mb-4 group-hover:border-purple-600 transition-all shadow-sm relative overflow-hidden p-4">
-                        { (type.image || EVENT_TYPE_ICONS[type.icon?.toLowerCase()]) ? (
-                          <Image
-                            src={type.image || EVENT_TYPE_ICONS[type.icon?.toLowerCase()] || eventIcon}
-                            fill
-                            className="p-6 opacity-70 group-hover:opacity-100 transition-opacity object-contain"
-                            alt={type.name}
-                          />
-                        ) : (
-                          <Sparkles className="h-10 w-10 text-purple-600" />
-                        )}
-                    </div>
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-900 group-hover:text-purple-600 transition-colors">{type.name}</span>
-                  </Link>
-                ))}
             </div>
           </section>
         )}

@@ -18,12 +18,10 @@ import { useToast } from "@/hooks/use-toast";
 import { vendorService } from "@/services/client";
 import { useAuthStore } from "@/store/authStore";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import { ReportsSkeleton } from "@/components/vendor/ReportsSkeleton";
 import { ScheduleReportDialog } from "@/components/vendor/reports/ScheduleReportDialog";
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 const REPORT_TYPES = [
   {
@@ -87,14 +85,17 @@ export default function VendorReports() {
       }
 
       if (format === 'excel' || format === 'csv') {
+        const XLSX = await import('xlsx');
         const worksheet = XLSX.utils.json_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
         XLSX.writeFile(workbook, `ManaEvents_${selectedReport}_${Date.now()}.${format === 'excel' ? 'xlsx' : 'csv'}`);
       } else {
+        const { jsPDF } = await import('jspdf');
+        await import('jspdf-autotable');
         const doc = new jsPDF();
         doc.text(`Mana Events - ${selectedReport.toUpperCase()} REPORT`, 14, 15);
-        doc.text(`Period: ${dateRange.from.toLocaleDateString()} to ${dateRange.to.toLocaleDateString()}`, 14, 25);
+        doc.text(`Period: ${formatSafe(dateRange.from)} to ${formatSafe(dateRange.to)}`, 14, 25);
 
         if (data.length > 0) {
           const headers = Object.keys(data[0]);

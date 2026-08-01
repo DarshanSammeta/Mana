@@ -7,13 +7,17 @@ if (typeof window !== "undefined") {
 import logger from "@/lib/logger";
 
 export class LoyaltyService {
-  static async earnPoints(userId: string, points: number, reason: string, referenceId?: string) {
+  /**
+   * Earn points for a customer
+   * @param customerProfileId - The ID of the CustomerProfile
+   */
+  static async earnPoints(customerProfileId: string, points: number, reason: string, referenceId?: string) {
     const prisma = getPrisma();
     return await prisma.$transaction(async (tx) => {
       // 1. Create transaction log
       await tx.loyalty_transaction.create({
         data: {
-          userId,
+          customerProfileId,
           points,
           type: "EARNED",
           reason,
@@ -21,40 +25,42 @@ export class LoyaltyService {
         },
       });
 
-      // 2. Update user points
-      const user = await tx.user.update({
-        where: { id: userId },
+      // 2. Update profile points
+      const profile = await tx.customerprofile.update({
+        where: { id: customerProfileId },
         data: {
           loyaltyPoints: { increment: points },
         },
       });
 
-      // 3. Update wallet if points are convertible (optional logic)
-
-      logger.info(`User ${userId} earned ${points} points for ${reason}`);
-      return user;
+      logger.info(`CustomerProfile ${customerProfileId} earned ${points} points for ${reason}`);
+      return profile;
     });
   }
 
-  static async redeemPoints(userId: string, points: number, reason: string) {
+  /**
+   * Redeem points for a customer
+   * @param customerProfileId - The ID of the CustomerProfile
+   */
+  static async redeemPoints(customerProfileId: string, points: number, reason: string) {
     const prisma = getPrisma();
     return await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user || user.loyaltyPoints < points) {
+      const profile = await tx.customerprofile.findUnique({ where: { id: customerProfileId } });
+      if (!profile || profile.loyaltyPoints < points) {
         throw new Error("Insufficient loyalty points");
       }
 
       await tx.loyalty_transaction.create({
         data: {
-          userId,
+          customerProfileId,
           points: -points,
           type: "REDEEMED",
           reason,
         },
       });
 
-      return await tx.user.update({
-        where: { id: userId },
+      return await tx.customerprofile.update({
+        where: { id: customerProfileId },
         data: {
           loyaltyPoints: { decrement: points },
         },
@@ -62,26 +68,32 @@ export class LoyaltyService {
     });
   }
 
-  static async handleReferral(referrerCode: string, referredUserId: string) {
+  /**
+   * Handle referral points when a new user signs up
+   */
+  static async handleReferral(referrerCode: string, referredCustomerProfileId: string) {
     try {
       const prisma = getPrisma();
-      const referrer = await prisma.user.findUnique({
+      const referrerProfile = await prisma.customerprofile.findUnique({
         where: { referralCode: referrerCode }
       });
 
-      if (!referrer) return;
+      if (!referrerProfile) {
+        logger.warn(`Referral failed: Referrer code ${referrerCode} not found`);
+        return;
+      }
 
       await prisma.referral.create({
         data: {
-          referrerId: referrer.id,
-          referredId: referredUserId,
+          referrerId: referrerProfile.id,
+          referredId: referredCustomerProfileId,
           code: referrerCode,
           status: "SIGNUP"
         }
       });
 
       // Award points for signup
-      await this.earnPoints(referrer.id, 50, "REFERRAL_SIGNUP", referredUserId);
+      await this.earnPoints(referrerProfile.id, 50, "REFERRAL_SIGNUP", referredCustomerProfileId);
     } catch (error) {
       logger.error("Referral handling failed", error);
     }

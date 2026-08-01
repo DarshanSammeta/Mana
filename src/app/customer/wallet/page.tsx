@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import CountUp from "react-countup";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -183,7 +183,7 @@ export default function WalletPage() {
                            <div>
                               <p className="text-base font-extrabold text-slate-900 group-hover:text-primary transition-colors">{tx.description || (tx.type === 'CREDIT' ? 'Money Added to Wallet' : 'Service Payment')}</p>
                               <div className="flex flex-wrap items-center gap-3 mt-1.5">
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(new Date(tx.createdAt), 'MMM dd, yyyy • hh:mm a')}</p>
+                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{formatSafe(tx.createdAt, 'MMM dd, yyyy • hh:mm a')}</p>
                                  <div className="h-1 w-1 rounded-full bg-slate-300" />
                                  <span className={cn(
                                     "text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider",

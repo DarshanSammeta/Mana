@@ -14,6 +14,7 @@ export default function PageTransition({ children }: { children: React.ReactNode
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.15, ease: "easeOut" }}
+        className="w-full"
       >
         {children}
       </motion.div>

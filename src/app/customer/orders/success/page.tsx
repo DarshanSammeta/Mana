@@ -4,8 +4,10 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, Download, Home, Calendar, Package } from "lucide-react";
+import { CheckCircle2, Download, Home, Calendar, Package, Clock } from "lucide-react";
+import { formatSafe } from "@/lib/utils/date";
 import { customerService } from "@/services/client";
+import { PaymentTimeline } from "@/components/booking/PaymentTimeline";
 
 function SuccessContent() {
   const searchParams = useSearchParams();
@@ -58,7 +60,7 @@ function SuccessContent() {
                   </div>
                   <div>
                     <p className="text-sm font-black text-slate-900 mb-1">Event Schedule</p>
-                    <p className="text-slate-600 font-medium">{new Date(booking.eventDate).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p className="text-slate-600 font-medium">{formatSafe(booking.eventDate, 'eeee, dd MMMM, yyyy')}</p>
                     <p className="text-slate-500 text-sm mt-0.5">{booking.eventTime}</p>
                   </div>
                 </div>
@@ -75,6 +77,14 @@ function SuccessContent() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="mb-12 max-w-2xl mx-auto">
+            <div className="flex items-center gap-3 mb-6">
+                <Clock className="h-5 w-5 text-primary" />
+                <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm italic">Payment Schedule</h3>
+            </div>
+            <PaymentTimeline />
+          </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-lg mx-auto">
             <Button variant="outline" className="w-full h-12 rounded-xl font-bold border-slate-200 hover:bg-slate-50 shadow-sm" onClick={() => window.print()}>

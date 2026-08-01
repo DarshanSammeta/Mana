@@ -9,7 +9,8 @@ import { notificationService } from "@/services/client";
  * Supports infinite scrolling for the notification bell/list.
  */
 export const useLiveNotifications = () => {
-  const accessToken = useAuthStore(state => state.accessToken);
+  const user = useAuthStore(state => state.user);
+  const isInitialized = useAuthStore(state => state.isInitialized);
 
   // 1. Fetch unread count separately for high-performance badge updates
   const { data: unreadData } = useQuery({
@@ -18,7 +19,7 @@ export const useLiveNotifications = () => {
       const res = await notificationService.getNotifications(1);
       return res.unreadCount || 0;
     },
-    enabled: !!accessToken,
+    enabled: isInitialized && !!user,
     refetchInterval: 60000, // Fallback poll every minute
     refetchOnWindowFocus: false, // Prevent redundant calls on tab switch if socket is active
   });
@@ -36,7 +37,7 @@ export const useLiveNotifications = () => {
     queryFn: ({ pageParam }) => notificationService.getNotifications(10, pageParam as string | undefined),
     initialPageParam: undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: !!accessToken,
+    enabled: isInitialized && !!user,
     staleTime: 30000,
   });
 

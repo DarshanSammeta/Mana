@@ -17,17 +17,20 @@ export async function POST(req: Request) {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "CUSTOMER") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
     const validated = reviewSchema.parse(body);
 
     const booking = await prisma.booking.findUnique({
-      where: { id: validated.bookingId }
+      where: { id: validated.bookingId },
+      include: {
+        customerprofile: true
+      }
     });
 
-    if (!booking || booking.customerId !== payload.userId) {
+    if (!booking || !booking.customerprofile || booking.customerprofile.userId !== payload.userId) {
       return NextResponse.json({ message: "Invalid booking" }, { status: 400 });
     }
 
@@ -41,7 +44,7 @@ export async function POST(req: Request) {
     const review = await prisma.review.create({
       data: {
         bookingId: validated.bookingId,
-        userId: payload.userId,
+        customerProfileId: booking.customerProfileId,
         vendorId: booking.vendorId!,
         rating: validated.rating,
         comment: validated.comment,

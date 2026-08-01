@@ -82,7 +82,7 @@ export const updateCRMDataJob = inngest.createFunction(
     { id: "update-crm-data-job", triggers: [{ event: "booking/completed" }] }, // Triggered when a booking is finished
     async ({ event, step }) => {
         await step.run("update-crm", async () => {
-            await MarketingService.updateCustomerCRM(event.data.customerId);
+            await MarketingService.updateCustomerCRM(event.data.userId || event.data.customerId);
         });
         await step.run("update-vendor-crm", async () => {
             await MarketingService.updateVendorCRM(event.data.vendorId);

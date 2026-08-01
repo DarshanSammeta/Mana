@@ -6,18 +6,15 @@ export async function GET(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload) return NextResponse.json({ status: 403 });
 
   try {
     const userId = payload.userId;
 
-    // Use a more optimized query if possible, or just ensure indices exist
-    // Prisma's include can sometimes be slow if not indexed correctly.
-    // Adding a timeout to the prisma call to prevent hanging.
     const invoices = await prisma.invoice.findMany({
       where: {
-        booking: { customerId: userId }
+        booking: { customerprofile: { userId } }
       },
       select: {
         id: true,

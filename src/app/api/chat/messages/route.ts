@@ -3,6 +3,18 @@ import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
+
+import { z } from "zod";
+
+const messageSchema = z.object({
+    conversationId: z.string(),
+    content: z.string().min(1).max(5000),
+    attachments: z.array(z.object({
+        url: z.string().url(),
+        type: z.string()
+    })).optional()
+});
 
 export async function GET(req: Request) {
   return withErrorHandler(async () => {
@@ -13,10 +25,14 @@ export async function GET(req: Request) {
 
     if (!conversationId) return NextResponse.json({ message: "Conversation ID is required" }, { status: 400 });
 
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
+    const rl = await rateLimit(`chat-read:${ip}:${conversationId}`, { limit: 60, window: 60 });
+    if (!rl.success) return rateLimitResponse(rl);
+
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     // Security check: Verify user is a participant in the conversation
@@ -70,13 +86,18 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
+    const rl = await rateLimit(`chat-send:${ip}`, { limit: 20, window: 60 });
+    if (!rl.success) return rateLimitResponse(rl);
+
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-    const { conversationId, content, attachments } = await req.json();
+    const body = await req.json();
+    const { conversationId, content, attachments } = messageSchema.parse(body);
 
     // Security check: Verify user is a participant in the conversation
     const participant = await prisma.conversationparticipant.findUnique({
@@ -115,6 +136,19 @@ export async function POST(req: Request) {
       }
     });
 
+    // Side Effect: Real-time broadcast (Authorized by conversation ID)
+    const { emitSocketEvent } = await import("@/lib/socket-helper");
+    // Fetch participants to notify
+    const participants = await prisma.conversationparticipant.findMany({
+        where: { conversationId }
+    });
+
+    for (const p of participants) {
+        if (p.userId !== payload.userId) {
+            emitSocketEvent(p.userId, "chat:message", message);
+        }
+    }
+
     await prisma.conversation.update({
       where: { id: conversationId },
       data: { updatedAt: new Date() }
@@ -122,6 +156,11 @@ export async function POST(req: Request) {
 
     logger.info("Chat message sent", { conversationId, senderId: payload.userId, messageId: message.id });
 
-    return NextResponse.json(message, { status: 201 });
+    return NextResponse.json({
+        success: true,
+        message: "Message sent",
+        data: message,
+        requestId: req.headers.get("x-request-id")
+    }, { status: 201 });
   }, req);
 }

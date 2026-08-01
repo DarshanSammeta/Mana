@@ -22,7 +22,7 @@ export default async function VendorDashboardPage() {
     redirect("/login?callbackUrl=/vendor/dashboard");
   }
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "VENDOR") {
     redirect("/login");
   }

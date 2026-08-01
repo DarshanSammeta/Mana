@@ -7,17 +7,24 @@ import { revalidateTag } from "next/cache";
 import { z } from "zod";
 
 const serviceSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters"),
-  description: z.string().min(10, "Description must be at least 10 characters"),
-  basePrice: z.coerce.number().nonnegative("Price must be a non-negative number"),
-  serviceTypeId: z.string().uuid("Invalid Service Type ID"),
+  title: z.string().min(5, "Title must be at least 5 characters"),
+  description: z.string().min(20, "Description must be at least 20 characters"),
+  basePrice: z.coerce.number().gt(0, "Price must be greater than 0"),
+  discountPrice: z.coerce.number().optional(),
+  serviceTypeId: z.string().min(1, "Service Type is required"),
   pricingType: z.enum(["PACKAGE", "HOURLY", "FIXED"]).default("PACKAGE"),
-  inclusions: z.any().optional(),
-  exclusions: z.any().optional(),
-  faqs: z.any().optional(),
-  terms: z.any().optional(),
+  duration: z.string().optional(),
+  maxGuests: z.coerce.number().optional(),
+  advancePercentage: z.coerce.number().optional(),
   cancellationPolicy: z.string().optional(),
-  images: z.array(z.string().url()).optional(),
+  serviceRadius: z.coerce.number().optional(),
+  citiesServed: z.array(z.string()).optional(),
+  features: z.array(z.string()).min(1, "At least one highlight required").optional(),
+  images: z.array(z.string().url()).min(3, "At least 3 portfolio images required").optional(),
+  availableDays: z.array(z.number()).optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  isDraft: z.boolean().default(false),
 });
 
 export async function GET(request: Request) {
@@ -25,62 +32,30 @@ export async function GET(request: Request) {
     const token = request.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
-    if (!payload || payload.role !== "VENDOR") {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    }
+    const payload = await verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId }
     });
 
-    if (!vendorProfile) {
-      return NextResponse.json({ message: "Vendor profile not found" }, { status: 404 });
-    }
+    if (!vendorProfile) return NextResponse.json({ message: "Vendor profile not found" }, { status: 404 });
 
     const services = await prisma.service.findMany({
       where: { vendorProfileId: vendorProfile.id },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        basePrice: true,
-        pricingType: true,
-        serviceTypeId: true,
+      include: {
         servicetype: {
-          select: {
-            id: true,
-            name: true,
+          include: {
             subcategory: {
-              select: {
-                id: true,
-                name: true,
-                category: {
-                  select: {
-                    id: true,
-                    name: true,
-                    eventtype: {
-                      select: {
-                        id: true,
-                        name: true
-                      }
-                    }
-                  }
-                }
+              include: {
+                category: true
               }
             }
           }
         },
-        Renamedpackage: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            price: true,
-            inclusions: true
-          }
-        }
-      }
+        Renamedpackage: true
+      },
+      orderBy: { createdAt: "desc" }
     });
     return NextResponse.json(services);
   }, request);
@@ -91,22 +66,20 @@ export async function POST(request: Request) {
     const token = request.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
-    if (!payload || payload.role !== "VENDOR") {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    }
+    const payload = await verifyAccessToken(token);
+    if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const body = await request.json();
-    const result = serviceSchema.safeParse(body);
+    const validation = serviceSchema.safeParse(body);
 
-    if (!result.success) {
+    if (!validation.success) {
       return NextResponse.json({
         message: "Validation failed",
-        errors: result.error.flatten().fieldErrors
+        errors: validation.error.flatten().fieldErrors
       }, { status: 400 });
     }
 
-    const validated = result.data;
+    const validated = validation.data;
 
     const vendorProfile = await prisma.vendorprofile.findUnique({
       where: { userId: payload.userId },
@@ -124,69 +97,88 @@ export async function POST(request: Request) {
       }
     });
 
-    if (!vendorProfile) {
-      return NextResponse.json({ message: "Vendor profile not found" }, { status: 404 });
-    }
+    if (!vendorProfile) return NextResponse.json({ message: "Vendor profile not found" }, { status: 404 });
 
-    // Check Listing Limit
-    const currentServiceCount = await prisma.service.count({
-      where: { vendorProfileId: vendorProfile.id }
+    // 1. Duplicate Title Check
+    const existing = await prisma.service.findFirst({
+      where: {
+        vendorProfileId: vendorProfile.id,
+        title: { equals: validated.title, mode: 'insensitive' }
+      }
     });
 
-    const limit = vendorProfile.vendorsubscription?.subscriptionplan.listingLimit ?? 3;
-    if (limit !== -1 && currentServiceCount >= limit) {
-      return NextResponse.json({
-        message: `Your current plan allows only ${limit} listings. Please upgrade to add more.`
-      }, { status: 403 });
+    if (existing) {
+      return NextResponse.json({ message: "You already have a service listing with this title." }, { status: 400 });
     }
 
-    const service = await prisma.service.create({
-      data: {
-        id: crypto.randomUUID(),
-        vendorProfileId: vendorProfile.id,
-        serviceTypeId: validated.serviceTypeId,
-        title: validated.title,
-        description: validated.description,
-        basePrice: validated.basePrice,
-        pricingType: validated.pricingType,
-        // Note: inclusions, exclusions, etc. should be on the Renamedpackage model if using PACKAGE pricingType
-        // based on the schema.
-        updatedAt: new Date(),
-        portfolio: {
-          create: (validated.images || []).map((url: string) => ({
+    // 2. Listing Limit Enforcement
+    const currentServiceCount = await prisma.service.count({ where: { vendorProfileId: vendorProfile.id } });
+    const limit = vendorProfile.vendorsubscription?.subscriptionplan.listingLimit ?? 3;
+    if (limit !== -1 && currentServiceCount >= limit) {
+      return NextResponse.json({ message: `Listing limit reached (${limit}). Please upgrade your plan.` }, { status: 403 });
+    }
+
+    // 3. Atomic Creation
+    const service = await prisma.$transaction(async (tx) => {
+      const newService = await tx.service.create({
+        data: {
+          id: crypto.randomUUID(),
+          vendorProfileId: vendorProfile.id,
+          serviceTypeId: validated.serviceTypeId,
+          title: validated.title,
+          description: validated.description,
+          basePrice: validated.basePrice,
+          pricingType: validated.pricingType,
+          updatedAt: new Date(),
+        }
+      });
+
+      if (validated.images && validated.images.length > 0) {
+        await tx.portfolio.createMany({
+          data: validated.images.map((url) => ({
             id: crypto.randomUUID(),
             vendorProfileId: vendorProfile.id,
+            serviceId: newService.id,
             mediaUrl: url,
             mediaType: "IMAGE",
             title: validated.title
           }))
-        }
-      },
-      select: {
-        id: true,
-        vendorProfileId: true,
-        serviceTypeId: true,
-        title: true,
-        description: true,
-        basePrice: true,
-        pricingType: true,
-        // inclusions: true, - Removed as it's not in service model
-        updatedAt: true,
-        portfolio: {
-          select: {
-            id: true,
-            mediaUrl: true,
-            mediaType: true,
-            title: true
+        });
+      }
+
+      // Metadata stored in default package
+      await tx.renamedpackage.create({
+        data: {
+          id: crypto.randomUUID(),
+          serviceId: newService.id,
+          name: "Standard Package",
+          price: validated.basePrice,
+          description: `Default package for ${validated.title}`,
+          inclusions: {
+            features: validated.features,
+            duration: validated.duration,
+            maxGuests: validated.maxGuests,
+            advancePercentage: validated.advancePercentage,
+            cancellationPolicy: validated.cancellationPolicy,
+            citiesServed: validated.citiesServed,
+            operatingHours: { start: validated.startTime, end: validated.endTime, days: validated.availableDays }
           }
         }
+      });
+
+      if (validated.serviceRadius) {
+        await tx.vendorprofile.update({
+          where: { id: vendorProfile.id },
+          data: { serviceRadius: validated.serviceRadius }
+        });
       }
+
+      return newService;
     });
 
     revalidateTag('vendors');
     revalidateTag('marketplace');
-
-    logger.info("New service created by vendor", { vendorId: vendorProfile.id, serviceId: service.id });
+    logger.info("New service created", { vendorId: vendorProfile.id, serviceId: service.id });
 
     return NextResponse.json(service);
   }, request);

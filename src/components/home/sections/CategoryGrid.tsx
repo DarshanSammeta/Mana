@@ -21,12 +21,12 @@ export default function CategoryGrid({ eventTypes }: CategoryGridProps) {
   return (
     <section className="max-w-[1500px] mx-auto px-4 lg:px-6 mt-0 relative z-10">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
-        {categoryCards.map((card: any, idx: number) => (
-          <div key={idx} className="bg-white p-5 shadow-sm flex flex-col h-full border border-gray-200">
+        {categoryCards.map((card: any) => (
+          <div key={card.title} className="bg-white p-5 shadow-sm flex flex-col h-full border border-gray-200">
             <h2 className="text-[21px] font-bold text-[#111827] mb-3 leading-tight">{card.title}</h2>
             <div className="grid grid-cols-2 gap-3 flex-1">
-              {card.items.map((item: any, i: number) => (
-                <Link key={i} href={item.link} className="group flex flex-col">
+              {card.items.map((item: any) => (
+                <Link key={item.name} href={item.link} className="group flex flex-col">
                   <div className="relative aspect-square overflow-hidden mb-1 bg-gray-100">
                     <Image
                       src={item.image}

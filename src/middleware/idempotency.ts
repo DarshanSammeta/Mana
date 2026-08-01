@@ -15,7 +15,7 @@ export async function withIdempotency(req: Request, handler: (req: Request) => P
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return handler(req);
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload) return handler(req);
 
   const cacheKey = `req:${payload.userId}:${idempotencyKey}`;

@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useConversations, useMessages, useSendMessage } from "@/hooks/chat/useChat";
 import { useAuthStore } from "@/store/authStore";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MessagesPage() {
@@ -109,7 +109,7 @@ export default function MessagesPage() {
                           </h3>
                           {lastMsg && (
                             <span className="text-[10px] text-slate-400 font-medium">
-                              {format(new Date(lastMsg.createdAt), 'p')}
+                              {formatSafe(lastMsg.createdAt, 'p')}
                             </span>
                           )}
                        </div>
@@ -187,7 +187,7 @@ export default function MessagesPage() {
                             <p className="text-sm leading-relaxed">{msg.content}</p>
                             <div className={cn("flex items-center gap-1 mt-2", isMe ? "justify-end" : "")}>
                                <p className={cn("text-[10px] font-medium", isMe ? "text-blue-100" : "text-slate-400")}>
-                                 {format(new Date(msg.createdAt), 'p')}
+                                 {formatSafe(msg.createdAt, 'p')}
                                </p>
                                {isMe && <CheckCheck className="h-3 w-3 text-blue-100" />}
                             </div>

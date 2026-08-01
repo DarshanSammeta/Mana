@@ -107,7 +107,7 @@ export async function getFrequentlyBookedTogether(serviceId: string, limit: numb
 export async function getPersonalizedRecommendations(userId: string, limit: number = 8) {
   // Logic: Based on user's past bookings or recently viewed
   const userBookings = await prisma.booking.findMany({
-    where: { customerId: userId },
+    where: { customerprofile: { userId } },
     select: {
       bookingitem: {
         select: {

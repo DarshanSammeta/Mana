@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   Package,
@@ -28,42 +29,38 @@ import Image from "next/image";
 import { customerService } from "@/services/client";
 import { toast } from "react-hot-toast";
 
-import { formatCurrency, formatDate } from "@/utils/format";
+import { formatCurrency, formatSafe } from "@/lib/utils";
 
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("ALL");
 
   const tabs = [
-    { label: "All Bookings", value: "ALL" },
-    { label: "Ongoing", value: "ONGOING" },
-    { label: "Completed", value: "EVENT_COMPLETED" },
+    { label: "All", value: "ALL" },
+    { label: "Awaiting Vendor", value: "PENDING_VENDOR_RESPONSE" },
+    { label: "Counter Received", value: "COUNTERED" },
+    { label: "Advance Pending", value: "ADVANCE_PAYMENT_PENDING" },
+    { label: "Confirmed", value: "CONFIRMED" },
+    { label: "Completed", value: "COMPLETED" },
     { label: "Cancelled", value: "CANCELLED" },
   ];
 
-  const fetchBookings = useCallback(async () => {
-    try {
-      setLoading(true);
+  const { data: bookings = [], isLoading: loading, isError } = useQuery({
+    queryKey: ["customer-bookings", activeTab],
+    queryFn: async () => {
       const data = await customerService.getBookings({
         status: activeTab === "ALL" ? undefined : activeTab
       });
-      // Ensure data is an array, handling various potential wrapper structures
-      const bookingsData = Array.isArray(data) ? data : (data?.bookings || data?.items || data?.data || []);
-      setBookings(bookingsData);
-    } catch (error) {
-      console.error("Fetch bookings error:", error);
-      toast.error("Failed to load bookings");
-      setBookings([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab]);
+      return Array.isArray(data) ? data : (data?.bookings || data?.items || data?.data || []);
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
   useEffect(() => {
-    fetchBookings();
-  }, [fetchBookings]);
+    if (isError) {
+      toast.error("Failed to load bookings");
+    }
+  }, [isError]);
 
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -80,7 +77,7 @@ export default function BookingsPage() {
     }
   };
 
-  const filteredBookings = bookings.filter(b =>
+  const filteredBookings = bookings.filter((b: any) =>
     b.bookingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     b.vendorprofile?.businessName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -134,7 +131,7 @@ export default function BookingsPage() {
         </div>
       ) : filteredBookings.length > 0 ? (
         <div className="space-y-6">
-          {filteredBookings.map((booking) => {
+          {filteredBookings.map((booking: any) => {
             const status = getStatusConfig(booking.status);
             return (
               <div key={booking.id} className="group border border-slate-200 rounded-2xl overflow-hidden hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/5 transition-all bg-white">
@@ -143,7 +140,7 @@ export default function BookingsPage() {
                   <div className="flex items-center gap-10">
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Order Placed</p>
-                      <p className="text-sm font-black text-slate-700">{formatDate(booking.createdAt, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                      <p className="text-sm font-black text-slate-700">{formatSafe(booking.createdAt, 'd MMM yyyy')}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Amount</p>
@@ -151,7 +148,7 @@ export default function BookingsPage() {
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Event Date</p>
-                      <p className="text-sm font-black text-slate-700">{formatDate(booking.eventDate, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                      <p className="text-sm font-black text-slate-700">{formatSafe(booking.eventDate, 'd MMM yyyy')}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">

@@ -1,0 +1,8 @@
+- `[x]` Fix duplicate keys in `src/components/vendor/BookingCalendarWidget.tsx`
+- `[x]` Audit and fix `src/components/marketplace/SearchInput.tsx` (Verified handled correctly)
+- `[x]` Audit and fix `src/components/marketplace/MarketplaceFilters.tsx` (Verified handled correctly)
+- `[x]` Final project-wide audit for duplicate key warnings
+    - `[x]` Fixed `src/app/customer/bookings/[id]/page.tsx`
+    - `[x]` Fixed `src/app/vendor/bookings/[id]/BookingDetailsClient.tsx`
+    - `[x]` Fixed `src/components/home/sections/CategoryGrid.tsx`
+    - `[x]` Fixed `src/components/vendor/VerificationStatusPage.tsx`

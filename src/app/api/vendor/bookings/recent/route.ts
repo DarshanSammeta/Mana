@@ -7,7 +7,7 @@ export async function GET(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
@@ -21,12 +21,31 @@ export async function GET(req: Request) {
         eventDate: true,
         eventLocation: true,
         createdAt: true,
-        user: { select: { fullName: true } }
+        customerprofile: {
+          select: {
+            user: {
+              select: { fullName: true, mobileNumber: true }
+            }
+          }
+        },
+        bookingitem: {
+          select: {
+            id: true,
+            service: { select: { title: true } }
+          }
+        }
       },
       orderBy: { createdAt: "desc" },
       take: 5
     });
-    return NextResponse.json(bookings);
+
+    // Flatten for compatibility
+    const transformedBookings = bookings.map(b => ({
+      ...b,
+      user: b.customerprofile?.user
+    }));
+
+    return NextResponse.json(transformedBookings);
   } catch (error) {
     logger.error("Vendor Recent Bookings GET Error", { error });
     return NextResponse.json(

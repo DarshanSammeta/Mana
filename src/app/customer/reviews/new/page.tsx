@@ -13,7 +13,7 @@ import { customerService } from "@/services/client";
 export default function NewReviewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const vendorId = searchParams?.get("vendorId");
+  const bookingId = searchParams?.get("bookingId");
 
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
@@ -21,8 +21,8 @@ export default function NewReviewPage() {
 
   const { mutate: submitReview, isPending } = useMutation({
     mutationFn: async () => {
-      if (!vendorId) throw new Error("Vendor ID is missing");
-      return customerService.submitReview({ vendorId, rating, comment });
+      if (!bookingId) throw new Error("Booking ID is missing");
+      return customerService.submitReview({ bookingId, rating, comment });
     },
     onSuccess: () => {
       toast({ title: "Review submitted successfully!" });
@@ -37,7 +37,7 @@ export default function NewReviewPage() {
     },
   });
 
-  if (!vendorId) return <div className="container py-8">Invalid vendor ID.</div>;
+  if (!bookingId) return <div className="container py-8">Invalid booking ID. Review must be tied to a verified booking.</div>;
 
   return (
     <div className="container py-8 max-w-2xl">

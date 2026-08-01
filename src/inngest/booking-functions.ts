@@ -2,7 +2,138 @@ import { inngest } from "@/lib/inngest";
 import { prisma } from "@/lib/prisma";
 import { sendSMS } from "@/lib/sms/twilio";
 import { sendBookingConfirmationEmail, sendVendorNotificationEmail } from "@/lib/mail/resend";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
+
+/**
+ * Enterprise Fulfillment Worker
+ * Sequence: Validate -> Create Bookings -> Assign Vendors -> Confirm Reservations -> Notify
+ */
+export const handleOrderConfirmation = inngest.createFunction(
+  {
+    id: "handle-order-confirmation",
+    triggers: [{ event: "order/confirmed" }],
+  },
+  async ({ event, step }) => {
+    const { orderId, correlationId } = event.data;
+
+    // 1. Validate Order & Payments
+    const order = (await step.run("validate-order", async () => {
+      const o = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+            order_item: true,
+            customer: { include: { user: true } },
+            payments: { where: { status: "SUCCESS" } }
+        }
+      });
+      if (!o) throw new Error("CRITICAL: Order not found during fulfillment");
+      if (o.payments.length === 0) throw new Error("CRITICAL: Order has no successful payment");
+      return o;
+    })) as any;
+
+    // 2. Process each Order Item into a Booking
+    for (const item of order.order_item) {
+      await step.run(`fulfill-item-${item.id}`, async () => {
+        // Idempotency Check: Don't create if booking already exists for this item
+        const existing = await prisma.booking.findFirst({
+            where: { orderId: order.id, packageId: item.packageId, vendorId: item.vendorId }
+        });
+        if (existing) return;
+
+        return await prisma.$transaction(async (tx) => {
+            // A. Create Service Execution Unit (Booking)
+            const bookingNumber = `BK-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000000)}`;
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+            const booking = await tx.booking.create({
+                data: {
+                    bookingNumber,
+                    orderId: order.id,
+                    customerProfileId: order.customerProfileId,
+                    vendorId: item.vendorId,
+                    packageId: item.packageId,
+                    eventDate: item.eventDate,
+                    eventTime: item.eventTime,
+                    eventLocation: item.location,
+                    guestCount: item.guestCount,
+                    // Financial Snapshot (Locked from order item)
+                    subTotal: item.packageAmount,
+                    taxAmount: item.gstAmount,
+                    totalAmount: item.totalAmount,
+                    advanceAmount: item.totalAmount.mul(0.3), // 30% rule
+                    balanceAmount: item.totalAmount.mul(0.7),
+                    status: "PENDING_VENDOR_RESPONSE",
+                    otp,
+                    bookingitem: {
+                        create: {
+                            serviceId: item.serviceId,
+                            packageId: item.packageId,
+                            price: item.packageAmount,
+                            quantity: item.quantity
+                        }
+                    }
+                }
+            });
+
+            // B. Create Vendor Assignment
+            await tx.bookingassignment.create({
+                data: {
+                    bookingId: booking.id,
+                    vendorId: item.vendorId,
+                    priority: 1,
+                    status: "PENDING",
+                    updatedAt: new Date()
+                }
+            });
+
+            // C. Log Audit Event
+            await tx.audit_log.create({
+                data: {
+                    entityType: "BOOKING",
+                    entityId: booking.id,
+                    bookingId: booking.id,
+                    module: "FULFILLMENT",
+                    action: "BOOKING_CREATED_FROM_ORDER",
+                    metadata: { orderId, correlationId }
+                }
+            });
+
+            return booking.id;
+        });
+      });
+    }
+
+    // 3. Finalize Order Lifecycle
+    await step.run("finalize-order-status", async () => {
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { status: "PROCESSING" }
+      });
+    });
+
+    // 4. Dispatch Notifications
+    await step.run("dispatch-notifications", async () => {
+       // Logic to trigger global booking notifications (delegated to existing worker)
+       await inngest.send({
+           name: "notifications/order.fulfilled",
+           data: { orderId, customerId: order.customerProfileId }
+       });
+    });
+
+    return { status: "fulfilled", orderId, correlationId };
+  }
+);
+
+/**
+ * Worker to release expired reservations every 5 minutes
+ */
+export const reservationCleanupWorker = inngest.createFunction(
+  { id: "reservation-cleanup", triggers: [{ cron: "*/5 * * * *" }] },
+  async () => {
+    const { OrderService } = await import("@/services/server/order.service");
+    await OrderService.cleanupExpiredReservations();
+  }
+);
 
 export const sendBookingNotifications = inngest.createFunction(
   { id: "send-booking-notifications", triggers: [{ event: "booking/created" }] },
@@ -13,27 +144,33 @@ export const sendBookingNotifications = inngest.createFunction(
       return await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          user: { select: { fullName: true, mobileNumber: true, email: true } },
+          customerprofile: {
+            include: {
+              user: { select: { fullName: true, mobileNumber: true, email: true } }
+            }
+          },
           vendorprofile: { include: { user: { select: { email: true, fullName: true, mobileNumber: true } } } }
         }
       });
     })) as any;
 
-    if (!booking) return;
+    if (!booking || !booking.customerprofile) return;
+
+    const customerUser = booking.customerprofile.user;
 
     await step.run("send-customer-notifications", async () => {
       const notifications = [];
       notifications.push(sendSMS(
-        booking.user.mobileNumber,
-        `Hi ${booking.user.fullName}, your booking ${booking.bookingNumber} is created. Track it at ${process.env.NEXT_PUBLIC_APP_URL}/customer/bookings`
+        customerUser.mobileNumber,
+        `Hi ${customerUser.fullName}, your booking ${booking.bookingNumber} is created. Track it at ${process.env.NEXT_PUBLIC_APP_URL}/customer/bookings`
       ));
 
-      if (booking.user.email) {
-        notifications.push(sendBookingConfirmationEmail(booking.user.email, {
-          customerName: booking.user.fullName,
+      if (customerUser.email) {
+        notifications.push(sendBookingConfirmationEmail(customerUser.email, {
+          customerName: customerUser.fullName,
           bookingNumber: booking.bookingNumber,
           eventName: booking.eventName || "Event",
-          eventDate: format(new Date(booking.eventDate), "PPP"),
+          eventDate: formatSafe(booking.eventDate, "PPP"),
           totalAmount: booking.totalAmount.toString()
         }));
       }
@@ -55,8 +192,8 @@ export const sendBookingNotifications = inngest.createFunction(
             vendorName: v.user.fullName,
             bookingNumber: booking.bookingNumber,
             eventName: booking.eventName || "Event",
-            eventDate: format(new Date(booking.eventDate), "PPP"),
-            customerName: booking.user.fullName,
+            eventDate: formatSafe(booking.eventDate, "PPP"),
+            customerName: customerUser.fullName,
             payoutAmount: booking.vendorPayout.toString()
           }));
         }
@@ -116,17 +253,24 @@ export const sendEventReminders = inngest.createFunction(
           status: "CONFIRMED"
         },
         include: {
-          user: { select: { fullName: true, mobileNumber: true } },
+          customerprofile: {
+            include: {
+              user: { select: { fullName: true, mobileNumber: true } }
+            }
+          },
           vendorprofile: { include: { user: { select: { fullName: true, mobileNumber: true } } } }
         }
       });
     })) as any[];
 
     for (const booking of upcomingBookings) {
+      if (!booking.customerprofile) continue;
+      const customerUser = booking.customerprofile.user;
+
       await step.run(`send-reminder-${booking.id}`, async () => {
         // Customer Reminder
         await sendSMS(
-          booking.user.mobileNumber,
+          customerUser.mobileNumber,
           `Reminder: Your event "${booking.eventName}" is tomorrow! Our vendor ${booking.vendorprofile?.businessName || 'partner'} is looking forward to serving you.`
         );
 
@@ -144,16 +288,45 @@ export const sendEventReminders = inngest.createFunction(
   }
 );
 
+export const generateBookingDocument = inngest.createFunction(
+  { id: "generate-booking-document", triggers: [{ event: "booking/document.generate" }] },
+  async ({ event, step }) => {
+    const { bookingId, type } = event.data;
+
+    await step.run("generate-document", async () => {
+      const { DocumentService } = await import("@/services/server/document.service");
+      const name = type === "RECEIPT" ? "Advance Payment Receipt" : (type === "AGREEMENT" ? "Booking Agreement" : "Final Service Invoice");
+      return await DocumentService.generateDocument(bookingId, type, name);
+    });
+  }
+);
+
+export const initiateAutomatedRefund = inngest.createFunction(
+  { id: "initiate-automated-refund", triggers: [{ event: "booking/refund.initiate" }] },
+  async ({ event, step }) => {
+    const { bookingId, reason, isSystemAction } = event.data;
+
+    await step.run("initiate-refund", async () => {
+      const { RefundService } = await import("@/services/server/refund.service");
+      return await RefundService.initiateRefund(bookingId, reason, isSystemAction);
+    });
+  }
+);
+
 export const handleBookingStatusChange = inngest.createFunction(
   { id: "handle-booking-status-change", triggers: [{ event: "booking/status.updated" }] },
   async ({ event, step }) => {
-    const { bookingId, status, previousStatus } = event.data;
+    const { bookingId, status, previousStatus, _performer } = event.data;
 
     const booking = (await step.run("fetch-booking-details", async () => {
       return await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          user: { select: { fullName: true, mobileNumber: true, email: true } },
+          customerprofile: {
+            include: {
+              user: { select: { fullName: true, mobileNumber: true, email: true } }
+            }
+          },
           vendorprofile: {
             include: {
               user: { select: { id: true, fullName: true, mobileNumber: true, email: true } }
@@ -169,13 +342,25 @@ export const handleBookingStatusChange = inngest.createFunction(
       });
     })) as any;
 
-    if (!booking) return { status: "booking_not_found" };
+    if (!booking || !booking.customerprofile) return { status: "booking_not_found" };
+
+    const customerUser = booking.customerprofile.user;
+
+    // Standard Notification side-effects
+    await step.run("send-status-notifications", async () => {
+        const { NotificationTriggers } = await import("@/lib/notifications");
+        if (status === "ADVANCE_PAID") {
+            await NotificationTriggers.advancePaid(booking);
+        } else {
+            await NotificationTriggers.bookingStatusUpdated(booking, status);
+        }
+    });
 
     // 1. Send SMS for VENDOR_TRAVELING
     if (status === "VENDOR_TRAVELING" && booking.vendorprofile) {
       await step.run("send-traveling-sms", async () => {
         await sendSMS(
-          booking.user.mobileNumber,
+          customerUser.mobileNumber,
           `Your vendor ${booking.vendorprofile?.businessName || 'partner'} is on the way for "${booking.eventName}"!`
         );
       });
@@ -187,7 +372,7 @@ export const handleBookingStatusChange = inngest.createFunction(
         const checkin = await prisma.eventcheckin.findUnique({ where: { bookingId } });
         if (checkin) {
           await sendSMS(
-            booking.user.mobileNumber,
+            customerUser.mobileNumber,
             `Your vendor has arrived! Provide OTP ${checkin.otp} to start the event.`
           );
         }
@@ -222,11 +407,11 @@ export const handleBookingStatusChange = inngest.createFunction(
 
         await Promise.all([
           sendSMS(
-            booking.user.mobileNumber,
+            customerUser.mobileNumber,
             `Event Completed! Your invoice #${invoice.invoiceNumber} is now available in the app. Please rate your experience!`
           ),
-          booking.user.email ? sendInvoiceEmail(booking.user.email, {
-            customerName: booking.user.fullName,
+          customerUser.email ? sendInvoiceEmail(customerUser.email, {
+            customerName: customerUser.fullName,
             invoiceNumber: invoice.invoiceNumber,
             bookingNumber: booking.bookingNumber,
             amount: booking.totalAmount.toString(),
@@ -245,126 +430,19 @@ export const bookingTimelineAutomation = inngest.createFunction(
 
     await step.run("create-timeline-entry", async () => {
         // We use bookingstatuslog as the immutable timeline
-        // The API already creates these entries, but we could add enriched data here
-        // like geofencing verification or system-level notes.
         return { success: true };
     });
   }
 );
-export const handleVendorRejection = inngest.createFunction(
-  { id: "handle-vendor-rejection", triggers: [{ event: "booking/vendor.rejected" }] },
+
+export const handleVendorRejectionJob = inngest.createFunction(
+  { id: "handle-vendor-rejection-job", triggers: [{ event: "booking/vendor.rejected" }] },
   async ({ event, step }) => {
-    const { bookingId } = event.data;
+    const { bookingId, vendorId } = event.data;
 
     await step.run("reassign-next-vendor", async () => {
-      const booking = await prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: { bookingassignment: true }
-      });
-
-      if (!booking) return;
-
-      // Mark current assignment as REJECTED if it was PENDING
-      // This part might already be handled in the API that triggers this event.
-      // But let's ensure we find the "next" best vendor.
-
-      const nextAssignment = await prisma.bookingassignment.findFirst({
-        where: {
-          bookingId,
-          status: "PENDING"
-        },
-        orderBy: { priority: "asc" }
-      });
-
-      if (nextAssignment) {
-        const vendor = await prisma.vendorprofile.findUnique({
-          where: { id: nextAssignment.vendorId },
-          include: { user: true }
-        });
-
-        if (vendor) {
-          // Notify the next vendor
-          await sendSMS(vendor.user.mobileNumber, `New booking request ${booking.bookingNumber} is available! Claim it now.`);
-
-          // Emit socket event to notify vendor in real-time
-          const { emitSocketEvent } = await import("@/lib/socket-helper");
-          const { SOCKET_EVENTS } = await import("@/constants/socket-events");
-          emitSocketEvent(vendor.userId, SOCKET_EVENTS.BOOKING_ASSIGNED, {
-              bookingId: booking.id,
-              bookingNumber: booking.bookingNumber
-          });
-        }
-      } else {
-        // No more vendors left in current batch - Could trigger expansion or cancel
-        // For now, cancel as per existing logic, but in a real enterprise app,
-        // we might trigger the worker to find more vendors with a larger radius.
-
-        await prisma.booking.update({
-          where: { id: bookingId },
-          data: {
-            status: "CANCELLED",
-            bookingstatuslog: {
-              create: {
-                id: crypto.randomUUID(),
-                status: "CANCELLED",
-                notes: "No vendors available after all rejections/timeouts."
-              }
-            }
-          }
-        });
-
-        const customer = await prisma.user.findUnique({ where: { id: booking.customerId } });
-        if (customer) {
-            await sendSMS(customer.mobileNumber, `We're sorry, we couldn't find a vendor for your booking ${booking.bookingNumber}. It has been cancelled and a refund is being processed.`);
-
-            const { emitSocketEvent } = await import("@/lib/socket-helper");
-            const { SOCKET_EVENTS } = await import("@/constants/socket-events");
-            emitSocketEvent(customer.id, SOCKET_EVENTS.BOOKING_NEGOTIATING, {
-                bookingId: booking.id,
-                status: "CANCELLED",
-                message: "No vendors available."
-            });
-        }
-      }
+      const { handleVendorRejection } = await import("@/lib/intelligence/assignment");
+      await handleVendorRejection(bookingId, vendorId);
     });
-  }
-);
-
-export const vendorTimeoutReassignment = inngest.createFunction(
-  { id: "vendor-timeout-reassignment", triggers: [{ event: "booking/created" }] },
-  async ({ event, step }) => {
-    const { bookingId } = event.data;
-
-    // Wait for 45 seconds for the first vendor to respond
-    await step.sleep("wait-for-vendor-response", "45s");
-
-    const booking = (await step.run("check-booking-status", async () => {
-      return await prisma.booking.findUnique({
-        where: { id: bookingId },
-        select: { status: true, bookingNumber: true }
-      });
-    })) as any;
-
-    if (booking?.status === "PENDING") {
-      // Find the first priority vendor who hasn't responded
-      const firstAssignment = await prisma.bookingassignment.findFirst({
-        where: { bookingId, priority: 1, status: "PENDING" }
-      });
-
-      if (firstAssignment) {
-        await step.run("mark-expired-and-reassign", async () => {
-          await prisma.bookingassignment.update({
-            where: { id: firstAssignment.id },
-            data: { status: "EXPIRED" }
-          });
-
-          // Trigger rejection logic to find next vendor
-          await inngest.send({
-            name: "booking/vendor.rejected",
-            data: { bookingId, vendorId: firstAssignment.vendorId, reason: "TIMEOUT" }
-          });
-        });
-      }
-    }
   }
 );

@@ -11,12 +11,15 @@ export async function generateAndUploadInvoice(booking: any) {
 
   try {
     // 1. Prepare data for the template
+    // Use customerprofile.user if available, else fallback to user for compatibility
+    const customerUser = booking.customerprofile?.user;
+
     const invoiceData = {
       invoiceNumber: `INV-${booking.bookingNumber.split('-').pop()}-${Date.now().toString().slice(-4)}`,
       createdAt: new Date(),
-      customerName: booking.user.fullName,
-      customerEmail: booking.user.email,
-      customerPhone: booking.user.mobileNumber,
+      customerName: customerUser?.fullName || 'N/A',
+      customerEmail: customerUser?.email || 'N/A',
+      customerPhone: customerUser?.mobileNumber || 'N/A',
       vendorName: booking.vendorprofile?.businessName || 'N/A',
       vendorCity: booking.vendorprofile?.city || '',
       vendorState: booking.vendorprofile?.state || '',

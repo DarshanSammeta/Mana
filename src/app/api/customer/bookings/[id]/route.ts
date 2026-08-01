@@ -10,7 +10,7 @@ export async function GET(
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload) return NextResponse.json({ status: 403 });
 
   try {
@@ -19,7 +19,7 @@ export async function GET(
       select: {
         id: true,
         bookingNumber: true,
-        customerId: true,
+        customerProfileId: true,
         vendorId: true,
         eventDate: true,
         eventTime: true,
@@ -49,6 +49,18 @@ export async function GET(
             address: true,
             city: true,
             state: true
+          }
+        },
+        customerprofile: {
+          select: {
+            userId: true,
+            user: {
+              select: {
+                fullName: true,
+                email: true,
+                mobileNumber: true
+              }
+            }
           }
         },
         bookingitem: {
@@ -97,7 +109,7 @@ export async function GET(
     }
 
     // Security check: only the customer who made the booking can see it
-    if (booking.customerId !== payload.userId && payload.role !== "ADMIN") {
+    if (booking.customerprofile?.userId !== payload.userId && payload.role !== "ADMIN") {
       return NextResponse.json({ status: 403 });
     }
 
@@ -107,6 +119,7 @@ export async function GET(
 
     const responseData = {
       ...booking,
+      user: booking.customerprofile?.user, // Maintain compatibility
       eventLocation: (isEventDay || isTraveling) ? booking.eventLocation : "Unlocked on event day",
       latitude: (isEventDay || isTraveling) ? booking.latitude : null,
       longitude: (isEventDay || isTraveling) ? booking.longitude : null,

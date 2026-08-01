@@ -25,7 +25,7 @@ import {
   DollarSign
 } from "lucide-react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { BookingTimeline } from "@/components/booking/timeline/BookingTimeline";
@@ -59,7 +59,14 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
 
   const { data: booking } = useQuery({
     queryKey: ["booking", id],
-    queryFn: () => vendorService.getBookingById(id),
+    queryFn: async () => {
+      const data = await vendorService.getBookingById(id);
+      // Track as viewed
+      if (!(data as any).viewedByVendor) {
+          vendorService.markBookingViewed(id).catch(console.error);
+      }
+      return data;
+    },
     initialData: initialBooking,
     enabled: !!id,
     refetchOnMount: false
@@ -133,6 +140,22 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
     onError: (err: any) => {
       toast.error(err.response?.data?.message || "Negotiation failed");
     }
+  });
+
+  const { mutate: acceptBooking, isPending: isAccepting } = useMutation({
+    mutationFn: () => vendorService.updateBookingStatus(id, "ACCEPTED" as any), // This API should point to the correct logic
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["booking", id] });
+        toast.success("Booking accepted! Waiting for customer payment.");
+    },
+  });
+
+  const { mutate: rejectBooking, isPending: isRejecting } = useMutation({
+    mutationFn: () => vendorService.updateBookingStatus(id, "REJECTED" as any),
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["booking", id] });
+        toast.success("Booking rejected");
+    },
   });
 
   const { mutate: removeStaff } = useMutation({
@@ -228,7 +251,8 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
 
   if (!booking) return <div className="container py-8">Booking not found.</div>;
 
-  const isEventDay = format(new Date(booking.eventDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+  const isEventDay = formatSafe(booking.eventDate, 'yyyy-MM-dd') === formatSafe(new Date(), 'yyyy-MM-dd');
+  const customerUser = booking.customerprofile?.user;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
@@ -243,11 +267,11 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
               <Badge className="bg-primary/10 text-primary border-none font-bold uppercase text-[10px]">
                 {booking.status.replace(/_/g, ' ')}
               </Badge>
-              {booking.status === "PENDING" && (
+              {(booking.status === "PENDING_VENDOR_RESPONSE" || (booking as any).status === "COUNTER_REJECTED") && (
                 <div className="flex items-center gap-2">
-                   <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-[10px] rounded-lg" onClick={() => updateStatus("CONFIRMED")}>Accept Booking</Button>
+                   <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-[10px] rounded-lg" onClick={() => acceptBooking()} disabled={isAccepting}>Accept Booking</Button>
                    <Button size="sm" variant="outline" className="h-7 text-[10px] rounded-lg" onClick={() => setIsNegotiateOpen(true)}>Send Counter Quote</Button>
-                   <Button size="sm" variant="destructive" className="h-7 text-[10px] rounded-lg" onClick={() => updateStatus("REJECTED")}>Decline</Button>
+                   <Button size="sm" variant="destructive" className="h-7 text-[10px] rounded-lg" onClick={() => rejectBooking()} disabled={isRejecting}>Decline</Button>
                 </div>
               )}
               {booking.vendorConfirmedAt5d === null && booking.status === "CONFIRMED" && (
@@ -257,7 +281,7 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
                 </div>
               )}
            </div>
-           <p className="text-sm text-gray-500">Booking #{booking.bookingNumber} • {format(new Date(booking.eventDate), 'PPP')}</p>
+           <p className="text-sm text-gray-500">Booking #{booking.bookingNumber} • {formatSafe(booking.eventDate, 'PPP')}</p>
         </div>
         <div className="flex items-center gap-3">
            {isEventDay && (
@@ -335,6 +359,43 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
               </CardContent>
            </Card>
 
+           {/* Negotiation History */}
+           {booking.counterquote && (booking as any).counterquote.length > 0 && (
+             <Card className="border-gray-100 rounded-3xl shadow-sm">
+                <CardHeader className="border-b border-gray-50 flex flex-row items-center justify-between">
+                   <div className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg font-bold">Negotiation History</CardTitle>
+                   </div>
+                   <Badge variant="outline" className="font-black text-[10px] uppercase">{(booking as any).counterquote.length} Versions</Badge>
+                </CardHeader>
+                <CardContent className="p-6">
+                   <div className="space-y-6">
+                      {(booking as any).counterquote.map((quote: any) => (
+                        <div key={quote.id} className="relative pl-8 border-l-2 border-slate-100 pb-6 last:pb-0">
+                           <div className={cn(
+                             "absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-white",
+                             quote.status === "ACCEPTED" ? "bg-green-500" : quote.status === "REJECTED" ? "bg-rose-500" : "bg-slate-300"
+                           )} />
+                           <div className="flex justify-between items-start mb-2">
+                              <div>
+                                 <p className="text-xs font-black text-slate-900 uppercase">Version {quote.version}</p>
+                                 <p className="text-[10px] font-bold text-slate-400">{formatSafe(quote.createdAt, 'PPp')}</p>
+                              </div>
+                              <Badge className={cn(
+                                "text-[9px] font-black uppercase",
+                                quote.status === "ACCEPTED" ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"
+                              )}>{quote.status}</Badge>
+                           </div>
+                           <p className="text-lg font-black text-slate-900">₹{Number(quote.totalAmount).toLocaleString()}</p>
+                           {quote.notes && <p className="text-xs text-slate-500 mt-2 italic">&quot;{quote.notes}&quot;</p>}
+                        </div>
+                      ))}
+                   </div>
+                </CardContent>
+             </Card>
+           )}
+
            {/* Client & Venue Info */}
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="border-gray-100 rounded-3xl shadow-sm">
@@ -363,11 +424,11 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
                     )}
                     <div className="flex items-center gap-4">
                        <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center font-black text-indigo-600">
-                          {booking.user.fullName.substring(0, 2).toUpperCase()}
+                          {(customerUser?.fullName || "Guest").substring(0, 2).toUpperCase()}
                        </div>
                        <div>
-                          <h4 className="font-bold text-gray-900">{booking.user.fullName}</h4>
-                          <p className="text-xs text-gray-500">{booking.user.email}</p>
+                          <h4 className="font-bold text-gray-900">{customerUser?.fullName || "Guest"}</h4>
+                          <p className="text-xs text-gray-500">{customerUser?.email}</p>
                        </div>
                     </div>
                     <div className="flex gap-2">
@@ -477,8 +538,8 @@ export default function BookingDetailsClient({ id, initialBooking, initialTeam }
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                  {team && team.length > 0 ? (
-                   team.map((member: BookingTeamMember, i: number) => (
-                    <div key={i} className="flex items-center justify-between group">
+                   team.map((member: BookingTeamMember) => (
+                    <div key={member.id} className="flex items-center justify-between group">
                        <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-primary">
                              {member.name.substring(0, 2).toUpperCase()}

@@ -8,21 +8,25 @@ export class InvoiceService {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        user: true,
+        customerprofile: {
+          include: { user: true }
+        },
         vendorprofile: { include: { user: true } },
         bookingitem: { include: { service: true, Renamedpackage: true } }
       }
     });
 
-    if (!booking) throw new Error("Booking not found");
+    if (!booking || !booking.customerprofile) throw new Error("Booking or profile not found");
+
+    const customerUser = booking.customerprofile.user;
 
     const invoiceData = {
       invoiceNumber: `INV-${booking.bookingNumber}`,
       date: new Date().toISOString(),
       customer: {
-        name: booking.user.fullName,
-        email: booking.user.email,
-        mobile: booking.user.mobileNumber,
+        name: customerUser.fullName,
+        email: customerUser.email,
+        mobile: customerUser.mobileNumber,
         address: booking.eventLocation
       },
       vendor: {

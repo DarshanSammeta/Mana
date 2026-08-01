@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatSafe } from "@/lib/utils/date";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -130,7 +131,7 @@ export default function VendorAvailability() {
         date: date.toISOString(),
         ...currentDay
       });
-      toast.success("Availability updated for " + date.toLocaleDateString());
+      toast.success("Availability updated for " + formatSafe(date));
       fetchData();
     } catch {
       toast.error("Update failed");
@@ -281,7 +282,7 @@ export default function VendorAvailability() {
                         <Card className="border-none shadow-xl bg-card rounded-[2.5rem] overflow-hidden">
                             <CardHeader className="bg-primary text-white pb-8 pt-8">
                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-1">Selected Date</p>
-                                <h3 className="text-2xl font-black">{date?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</h3>
+                                <h3 className="text-2xl font-black">{formatSafe(date, "d MMM, yyyy")}</h3>
                             </CardHeader>
                             <CardContent className="p-8 -mt-4 bg-card rounded-t-[2.5rem] space-y-8">
                                 <div className="flex items-center justify-between p-4 rounded-2xl bg-secondary/30 border border-border/50">
@@ -326,7 +327,7 @@ export default function VendorAvailability() {
 
                                         <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex gap-3">
                                             <AlertCircle className="h-5 w-5 text-blue-500 shrink-0" />
-                                            <p className="text-[10px] font-bold text-blue-600 leading-relaxed uppercase tracking-widest">Changes will apply only to {date?.toLocaleDateString()}.</p>
+                                            <p className="text-[10px] font-bold text-blue-600 leading-relaxed uppercase tracking-widest">Changes will apply only to {formatSafe(date)}.</p>
                                         </div>
                                     </div>
                                 ) : (

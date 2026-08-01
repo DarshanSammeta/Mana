@@ -8,30 +8,40 @@ import { LoyaltyService } from "./loyalty.service";
 import logger from "@/lib/logger";
 
 export class ReferralService {
-  static async generateReferralCode(userId: string) {
+  /**
+   * Generates or retrieves a referral code for a customer profile
+   */
+  static async generateReferralCode(customerProfileId: string) {
     const prisma = getPrisma();
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (user?.referralCode) return user.referralCode;
+    const profile = await prisma.customerprofile.findUnique({ where: { id: customerProfileId } });
+    if (profile?.referralCode) return profile.referralCode;
 
     const code = `MANA-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    await prisma.user.update({
-      where: { id: userId },
+    await prisma.customerprofile.update({
+      where: { id: customerProfileId },
       data: { referralCode: code }
     });
     return code;
   }
 
+  /**
+   * Tracks booking completion to award referral points
+   */
   static async trackBookingCompletion(bookingId: string) {
     try {
       const prisma = getPrisma();
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
-        include: { user: { include: { referral_received: true } } }
+        include: {
+          customerprofile: {
+            include: { referral_received: true }
+          }
+        }
       });
 
       if (!booking || booking.status !== "EVENT_COMPLETED") return;
 
-      const referral = booking.user.referral_received;
+      const referral = booking.customerprofile.referral_received;
       if (referral && referral.status === "SIGNUP") {
         // Update referral status
         await prisma.referral.update({
@@ -50,36 +60,56 @@ export class ReferralService {
     }
   }
 
-  static async getReferralStats(userId: string) {
+  /**
+   * Gets referral statistics for a customer profile
+   */
+  static async getReferralStats(customerProfileId: string) {
     const prisma = getPrisma();
     const referrals = await prisma.referral.findMany({
-      where: { referrerId: userId },
-      include: { referred: { select: { fullName: true, createdAt: true } } }
+      where: { referrerId: customerProfileId },
+      include: {
+        referred: {
+          include: {
+            user: { select: { fullName: true, createdAt: true } }
+          }
+        }
+      }
     });
 
     const totalEarned = referrals.reduce((acc, curr) => acc + curr.rewardPoints, 0);
+    const profile = await prisma.customerprofile.findUnique({
+      where: { id: customerProfileId },
+      select: { referralCode: true }
+    });
 
     return {
-      referrals,
+      referrals: referrals.map(r => ({
+        ...r,
+        userName: r.referred.user.fullName,
+        createdAt: r.referred.user.createdAt
+      })),
       totalEarned,
-      referralCode: (await prisma.user.findUnique({ where: { id: userId } }))?.referralCode
+      referralCode: profile?.referralCode
     };
   }
 
-  static async detectFraud(userId: string, ipAddress: string, deviceId: string) {
+  /**
+   * Basic fraud detection for referrals
+   */
+  static async detectFraud(customerProfileId: string, ipAddress: string, deviceId: string) {
     const prisma = getPrisma();
-    // Basic fraud detection: same IP/Device for multiple referrals
-    const similarReferrals = await prisma.referral_fraud_log.count({
+    // Basic fraud detection: too many referrals in 24h
+    const recentLogsCount = await prisma.referral_fraud_log.count({
       where: {
-        userId,
+        customerProfileId,
         createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
       }
     });
 
-    if (similarReferrals > 5) {
+    if (recentLogsCount > 5) {
       await prisma.referral_fraud_log.create({
         data: {
-          userId,
+          customerProfileId,
           reason: "Excessive referral activity from same source",
           evidence: { ipAddress, deviceId },
           severity: "HIGH"
@@ -90,6 +120,9 @@ export class ReferralService {
     return false;
   }
 
+  /**
+   * Gets the referral leaderboard
+   */
   static async getReferralLeaderboard() {
     const prisma = getPrisma();
     const leaders = await prisma.referral.groupBy({
@@ -101,11 +134,14 @@ export class ReferralService {
     });
 
     const leaderDetails = await Promise.all(leaders.map(async (l) => {
-        const user = await prisma.user.findUnique({ where: { id: l.referrerId }, select: { fullName: true, profileImage: true } });
+        const profile = await prisma.customerprofile.findUnique({
+          where: { id: l.referrerId },
+          include: { user: { select: { fullName: true } } }
+        });
         return {
             ...l,
-            userName: user?.fullName,
-            profileImage: user?.profileImage
+            userName: profile?.user.fullName,
+            profileImage: profile?.profileImage
         };
     }));
 

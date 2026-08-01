@@ -1,0 +1,1 @@
+CREATE INDEX booking_customerProfileId_createdAt_idx ON public.booking ("customerProfileId", "createdAt" DESC);

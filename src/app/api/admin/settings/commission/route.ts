@@ -3,12 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
 import logger from "@/lib/logger";
-import { createAuditLog } from "@/lib/audit";
+import { AuditService } from "@/services/server/audit.service";
 
 async function checkAdmin(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return null;
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "ADMIN") return null;
   return payload;
 }
@@ -50,10 +50,14 @@ export async function POST(req: Request) {
       }
     });
 
-    await createAuditLog({
-      userId: admin.userId,
+    await AuditService.log({
+      entityType: "SYSTEM_SETTING",
+      entityId: "admin_commission_percentage",
+      module: "ADMIN",
       action: "UPDATE_GLOBAL_SETTING",
-      details: { key: "admin_commission_percentage", value: commissionPercentage },
+      performedByUserId: admin.userId,
+      performedByRole: "ADMIN",
+      metadata: { key: "admin_commission_percentage", value: commissionPercentage },
       ipAddress: req.headers.get("x-forwarded-for") || undefined
     });
 

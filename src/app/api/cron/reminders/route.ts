@@ -13,25 +13,43 @@ export async function GET(req: Request) {
 
   try {
     const today = new Date();
-
-    // 1. Five-Day Reminder (Vendor Confirmation Required - Step 9)
     const fiveDaysFromNow = addDays(today, 5);
-    const bookings5d = await prisma.booking.findMany({
-      where: {
-        eventDate: {
-          gte: startOfDay(fiveDaysFromNow),
-          lte: endOfDay(fiveDaysFromNow),
-        },
-        status: "CONFIRMED",
-        vendorConfirmedAt5d: null // Only if not already confirmed
-      },
-      include: {
-        user: true,
-        vendorprofile: { include: { user: true } },
-      },
-    });
+    const threeDaysFromNow = addDays(today, 3);
+    const oneDayFromNow = addDays(today, 1);
 
+    // Optimized: Fetch all upcoming reminder candidates in parallel
+    const [bookings5d, bookings3d, bookings1d] = await Promise.all([
+      prisma.booking.findMany({
+        where: {
+          eventDate: { gte: startOfDay(fiveDaysFromNow), lte: endOfDay(fiveDaysFromNow) },
+          status: "CONFIRMED",
+          vendorConfirmedAt5d: null
+        },
+        include: {
+          customerprofile: { include: { user: true } },
+          vendorprofile: { include: { user: true } },
+        },
+      }),
+      prisma.booking.findMany({
+        where: {
+          eventDate: { gte: startOfDay(threeDaysFromNow), lte: endOfDay(threeDaysFromNow) },
+          status: "CONFIRMED",
+        },
+        include: { vendorprofile: { include: { user: true } } },
+      }),
+      prisma.booking.findMany({
+        where: {
+          eventDate: { gte: startOfDay(oneDayFromNow), lte: endOfDay(oneDayFromNow) },
+          status: "CONFIRMED",
+        },
+        include: { vendorprofile: { include: { user: true } } },
+      })
+    ]);
+
+    // 1. Process Five-Day Reminders
     for (const b of bookings5d) {
+      if (!b.customerprofile) continue;
+
       // Notify Vendor (Action Required)
       await sendSMS(
         b.vendorprofile!.user.mobileNumber,
@@ -51,26 +69,12 @@ export async function GET(req: Request) {
       });
       // Notify Customer
       await sendSMS(
-        b.user.mobileNumber,
-        `Hi ${b.user.fullName}, your event "${b.eventName}" is in 5 days! Your vendor ${b.vendorprofile?.businessName} has been notified.`
+        b.customerprofile.user.mobileNumber,
+        `Hi ${b.customerprofile.user.fullName}, your event "${b.eventName}" is in 5 days! Your vendor ${b.vendorprofile?.businessName} has been notified.`
       );
     }
 
-    // 2. Three-Day Reminder (Checklist Reminder)
-    const threeDaysFromNow = addDays(today, 3);
-    const bookings3d = await prisma.booking.findMany({
-      where: {
-        eventDate: {
-          gte: startOfDay(threeDaysFromNow),
-          lte: endOfDay(threeDaysFromNow),
-        },
-        status: "CONFIRMED",
-      },
-      include: {
-        vendorprofile: { include: { user: true } },
-      },
-    });
-
+    // 2. Three-Day Reminders
     for (const b of bookings3d) {
       await sendSMS(
         b.vendorprofile!.user.mobileNumber,
@@ -78,21 +82,7 @@ export async function GET(req: Request) {
       );
     }
 
-    // 3. One-Day Reminder (Final Confirmation)
-    const oneDayFromNow = addDays(today, 1);
-    const bookings1d = await prisma.booking.findMany({
-      where: {
-        eventDate: {
-          gte: startOfDay(oneDayFromNow),
-          lte: endOfDay(oneDayFromNow),
-        },
-        status: "CONFIRMED",
-      },
-      include: {
-        vendorprofile: { include: { user: true } },
-      },
-    });
-
+    // 3. One-Day Reminders
     for (const b of bookings1d) {
       await sendSMS(
         b.vendorprofile!.user.mobileNumber,

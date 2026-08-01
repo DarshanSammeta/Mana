@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     }
 
     const token = authHeader.split(" ")[1];
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }

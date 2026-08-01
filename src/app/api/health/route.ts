@@ -4,6 +4,11 @@ import { redis } from "@/lib/redis";
 import { meiliClient } from "@/lib/meilisearch";
 import os from "os";
 
+interface ServiceHealth {
+  status: "UP" | "DOWN" | "UNKNOWN";
+  latency?: number;
+}
+
 interface HealthStatus {
   status: "OK" | "ERROR" | "DEGRADED";
   timestamp: string;
@@ -29,14 +34,14 @@ interface HealthStatus {
     };
   };
   services: {
-    database: "UP" | "DOWN" | "UNKNOWN";
-    redis: "UP" | "DOWN" | "UNKNOWN";
-    meilisearch: "UP" | "DOWN" | "UNKNOWN";
-    socket: "UP" | "DOWN" | "UNKNOWN";
-    inngest: "UP" | "DOWN" | "UNKNOWN";
-    cloudinary: "UP" | "DOWN" | "UNKNOWN";
-    resend: "UP" | "DOWN" | "UNKNOWN";
-    twilio: "UP" | "DOWN" | "UNKNOWN";
+    database: ServiceHealth;
+    redis: ServiceHealth;
+    meilisearch: ServiceHealth;
+    socket: ServiceHealth;
+    inngest: ServiceHealth;
+    cloudinary: ServiceHealth;
+    resend: ServiceHealth;
+    twilio: ServiceHealth;
   };
 }
 
@@ -66,65 +71,69 @@ export async function GET() {
       disk: {},
     },
     services: {
-      database: "UNKNOWN",
-      redis: "UNKNOWN",
-      meilisearch: "UNKNOWN",
-      socket: "UNKNOWN",
-      inngest: "UNKNOWN",
-      cloudinary: "UNKNOWN",
-      resend: "UNKNOWN",
-      twilio: "UNKNOWN",
+      database: { status: "UNKNOWN" },
+      redis: { status: "UNKNOWN" },
+      meilisearch: { status: "UNKNOWN" },
+      socket: { status: "UNKNOWN" },
+      inngest: { status: "UNKNOWN" },
+      cloudinary: { status: "UNKNOWN" },
+      resend: { status: "UNKNOWN" },
+      twilio: { status: "UNKNOWN" },
     },
   };
 
   const checks = [];
 
-  // Database check
+  // Database check with latency
+  const dbStart = Date.now();
   checks.push(
     prisma.$queryRaw`SELECT 1`
-      .then(() => { healthStatus.services.database = "UP"; })
+      .then(() => {
+          healthStatus.services.database.status = "UP";
+          healthStatus.services.database.latency = Date.now() - dbStart;
+      })
       .catch((err) => {
         console.error("[Health Check] Database down:", err);
-        healthStatus.services.database = "DOWN";
+        healthStatus.services.database.status = "DOWN";
       })
   );
 
-  // Redis check
+  // Redis check with latency
   if (redis) {
+    const redisStart = Date.now();
     checks.push(
       redis.ping()
-        .then((res: boolean) => { healthStatus.services.redis = res ? "UP" : "DOWN"; })
-        .catch(() => { healthStatus.services.redis = "DOWN"; })
+        .then((res: boolean) => {
+            healthStatus.services.redis.status = res ? "UP" : "DOWN";
+            healthStatus.services.redis.latency = Date.now() - redisStart;
+        })
+        .catch(() => { healthStatus.services.redis.status = "DOWN"; })
     );
   } else {
-    healthStatus.services.redis = "DOWN";
+    healthStatus.services.redis.status = "DOWN";
   }
 
-  // Meilisearch check
+  // Meilisearch check with latency
   if (meiliClient) {
+    const meiliStart = Date.now();
     checks.push(
       meiliClient.isHealthy()
-        .then((res: boolean) => { healthStatus.services.meilisearch = res ? "UP" : "DOWN"; })
-        .catch(() => { healthStatus.services.meilisearch = "DOWN"; })
+        .then((res: boolean) => {
+            healthStatus.services.meilisearch.status = res ? "UP" : "DOWN";
+            healthStatus.services.meilisearch.latency = Date.now() - meiliStart;
+        })
+        .catch(() => { healthStatus.services.meilisearch.status = "DOWN"; })
     );
   } else {
-    healthStatus.services.meilisearch = "DOWN";
+    healthStatus.services.meilisearch.status = "DOWN";
   }
 
-  // Socket check (Simplified for Next.js - checks if socket URL is configured)
-  healthStatus.services.socket = process.env.NEXT_PUBLIC_SOCKET_URL ? "UP" : "DOWN";
-
-  // Inngest check
-  healthStatus.services.inngest = (process.env.INNGEST_EVENT_KEY && process.env.INNGEST_SIGNING_KEY) ? "UP" : "DOWN";
-
-  // Cloudinary check
-  healthStatus.services.cloudinary = (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY) ? "UP" : "DOWN";
-
-  // Resend check (Email)
-  healthStatus.services.resend = process.env.RESEND_API_KEY ? "UP" : "DOWN";
-
-  // Twilio check (SMS)
-  healthStatus.services.twilio = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? "UP" : "DOWN";
+  // Configuration checks (Immediate)
+  healthStatus.services.socket.status = process.env.NEXT_PUBLIC_SOCKET_URL ? "UP" : "DOWN";
+  healthStatus.services.inngest.status = (process.env.INNGEST_EVENT_KEY && process.env.INNGEST_SIGNING_KEY) ? "UP" : "DOWN";
+  healthStatus.services.cloudinary.status = (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY) ? "UP" : "DOWN";
+  healthStatus.services.resend.status = process.env.RESEND_API_KEY ? "UP" : "DOWN";
+  healthStatus.services.twilio.status = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? "UP" : "DOWN";
 
   // Wait for all async checks
   await Promise.allSettled(checks);
@@ -132,12 +141,12 @@ export async function GET() {
   healthStatus.responseTime = Date.now() - startTime;
 
   // Determine overall status
-  const criticalServices = [healthStatus.services.database, healthStatus.services.redis];
+  const criticalServices = [healthStatus.services.database.status, healthStatus.services.redis.status];
   const secondaryServices = [
-    healthStatus.services.meilisearch,
-    healthStatus.services.resend,
-    healthStatus.services.twilio,
-    healthStatus.services.cloudinary
+    healthStatus.services.meilisearch.status,
+    healthStatus.services.resend.status,
+    healthStatus.services.twilio.status,
+    healthStatus.services.cloudinary.status
   ];
 
   if (criticalServices.includes("DOWN")) {

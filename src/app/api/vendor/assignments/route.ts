@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {
+  const ip = req.headers.get("x-forwarded-for") || "unknown";
+  const limit = await rateLimit(`vendor-api-${ip}`, { limit: 30, window: 60 });
+  if (!limit.success) return rateLimitResponse(limit);
+
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
@@ -26,7 +31,11 @@ export async function GET(req: Request) {
             eventName: true,
             eventDate: true,
             totalAmount: true,
-            user: { select: { fullName: true } },
+            customerprofile: {
+              select: {
+                user: { select: { fullName: true } }
+              }
+            },
             bookingitem: {
               select: {
                 id: true,
@@ -42,7 +51,16 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(assignments);
+    // Flatten user data for frontend compatibility
+    const transformedAssignments = assignments.map(a => ({
+      ...a,
+      booking: {
+        ...a.booking,
+        user: a.booking.customerprofile?.user
+      }
+    }));
+
+    return NextResponse.json(transformedAssignments);
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
@@ -52,7 +70,7 @@ export async function PATCH(req: Request) {
   const token = req.headers.get("authorization")?.split(" ")[1];
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   if (!payload || payload.role !== "VENDOR") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
@@ -62,11 +80,17 @@ export async function PATCH(req: Request) {
       where: { id: assignmentId },
       include: {
         vendorprofile: true,
-        booking: true,
+        booking: {
+          include: {
+            customerprofile: {
+              include: { user: true }
+            }
+          }
+        },
       },
     });
 
-    if (!assignment || assignment.vendorprofile.userId !== payload.userId) {
+    if (!assignment || !assignment.booking.customerprofile || assignment.vendorprofile.userId !== payload.userId) {
       return NextResponse.json({ message: "Assignment not found" }, { status: 404 });
     }
 
@@ -117,7 +141,7 @@ export async function PATCH(req: Request) {
       await prisma.notification.create({
         data: {
           id: crypto.randomUUID(),
-          userId: assignment.booking.customerId,
+          userId: assignment.booking.customerprofile.userId,
           title: "Vendor Assigned!",
           message: `Vendor ${assignment.vendorprofile.businessName} has accepted your booking #${assignment.booking.bookingNumber}.`,
           category: "BOOKING",
@@ -129,7 +153,7 @@ export async function PATCH(req: Request) {
       // Emit Socket Event for Real-time Update
       try {
         const { emitSocketEvent } = await import("@/lib/socket-helper");
-        emitSocketEvent(assignment.booking.customerId, "BOOKING_UPDATED", {
+        emitSocketEvent(assignment.booking.customerprofile.userId, "BOOKING_UPDATED", {
           bookingId: assignment.bookingId,
           status: "VENDOR_ASSIGNED",
           vendorName: assignment.vendorprofile.businessName
@@ -138,12 +162,20 @@ export async function PATCH(req: Request) {
 
       return NextResponse.json({ message: "Assignment accepted successfully" });
     } else if (action === "REJECT") {
-      await prisma.bookingassignment.update({
-        where: { id: assignmentId },
-        data: { status: "REJECTED" },
-      });
+      const { handleVendorRejection } = await import("@/lib/intelligence/assignment");
+      await handleVendorRejection(assignment.bookingId, assignment.vendorId);
 
-      return NextResponse.json({ message: "Assignment rejected" });
+      // Emit Socket Event for Real-time Update to Customer
+      try {
+        const { emitSocketEvent } = await import("@/lib/socket-helper");
+        emitSocketEvent(assignment.booking.customerprofile.userId, "BOOKING_REASSIGNED", {
+          bookingId: assignment.bookingId,
+          status: "PENDING_VENDOR_RESPONSE",
+          oldVendorName: assignment.vendorprofile.businessName
+        });
+      } catch (e) { console.error("Socket error", e); }
+
+      return NextResponse.json({ message: "Assignment rejected and reassigned successfully" });
     }
 
     return NextResponse.json({ message: "Invalid action" }, { status: 400 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { withErrorHandler } from "@/lib/error-handler";
+import { SessionService } from "@/services/server/session.service";
 import logger from "@/lib/logger";
 
 export async function POST(_req: Request) {
@@ -10,10 +10,8 @@ export async function POST(_req: Request) {
     const refreshToken = cookieStore.get("refreshToken")?.value;
 
     if (refreshToken) {
-      await prisma.refreshtoken.deleteMany({
-        where: { token: refreshToken },
-      });
-      logger.info("User logged out, refresh token cleared");
+      await SessionService.revokeSession(refreshToken);
+      logger.info("User logged out, session revoked");
     }
 
     const response = NextResponse.json({ message: "Logged out successfully" });

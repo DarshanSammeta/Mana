@@ -2,44 +2,64 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
+import { ChecklistService } from "@/services/server/checklist.service";
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+import { BookingAuthService } from "@/lib/services/booking-auth.service";
+
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
-    const { id } = await params;
+    const { id: bookingId } = await params;
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
-    if (!payload || payload.role !== "VENDOR") {
-      return NextResponse.json({ message: "Forbidden - Only vendors can update checklists" }, { status: 403 });
-    }
+    const payload = await verifyAccessToken(token);
+    if (!payload) return NextResponse.json({ status: 403 });
 
-    const { checklist } = await req.json(); // Expected: Array of { id: number, task: string, completed: boolean }
+    // 1. Authorization Check
+    const canAccess = await BookingAuthService.canAccess(bookingId, payload.userId, payload.role);
+    if (!canAccess) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
-    const booking = await prisma.booking.findUnique({
-      where: { id },
-      include: { vendorprofile: true }
+    const checklist = await prisma.booking_checklist.findMany({
+      where: { bookingId },
+      orderBy: { createdAt: "asc" }
     });
 
-    if (!booking) return NextResponse.json({ message: "Booking not found" }, { status: 404 });
-    if (booking.vendorprofile?.userId !== payload.userId) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
+    const progress = await ChecklistService.getProgress(bookingId);
+
+    return NextResponse.json({ checklist, progress });
+  }, req);
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  return withErrorHandler(async () => {
+    const { id: bookingId } = await params;
+    const token = req.headers.get("authorization")?.split(" ")[1];
+    if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+    const payload = await verifyAccessToken(token);
+    if (!payload) return NextResponse.json({ status: 403 });
+
+    // 1. Authorization Check (Only Vendor or Admin can update checklist)
+    const isVendor = await BookingAuthService.isAssignedVendor(bookingId, payload.userId);
+    if (!isVendor && payload.role !== "ADMIN") {
+        return NextResponse.json({ message: "Only the assigned vendor can update checklist items." }, { status: 403 });
     }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { id },
-      data: {
-        checklist: checklist || [],
-        bookingstatuslog: {
-          create: {
-            id: crypto.randomUUID(),
-            status: booking.status,
-            notes: "Vendor updated the event checklist."
-          }
-        }
-      }
+    const { itemId, isCompleted } = await req.json();
+
+    const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { fullName: true }
     });
 
-    return NextResponse.json({ message: "Checklist updated successfully", checklist: updatedBooking.checklist });
-  });
+    const item = await ChecklistService.toggleItem(
+        bookingId,
+        itemId,
+        isCompleted,
+        payload.userId,
+        user?.fullName || "Staff"
+    );
+
+    return NextResponse.json(item);
+  }, req);
 }

@@ -2,14 +2,21 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAccessToken } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
+import logger from "@/lib/logger";
 
 export async function GET(req: Request) {
   return withErrorHandler(async () => {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const payload = verifyAccessToken(token);
+    const payload = await verifyAccessToken(token);
     if (!payload || payload.role !== "ADMIN") return NextResponse.json({ status: 403 });
+
+    // Production Gate for partially implemented dashboard
+    if (process.env.NODE_ENV === "production" && process.env.ENABLE_MOCKS !== "true") {
+        logger.warn("[SECURITY] Attempted to hit mock Dashboard/Revenue in production", { userId: payload.userId });
+        return NextResponse.json({ message: "Dashboard under construction" }, { status: 501 });
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);

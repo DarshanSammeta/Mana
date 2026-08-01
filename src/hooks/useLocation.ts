@@ -81,12 +81,14 @@ export function useLocation() {
               break;
           }
           setPermissionStatus(status);
-          console.error("Geolocation error:", {
+          const formattedError = {
             code: error.code,
             message: error.message,
-            status
-          });
-          reject(error);
+            status,
+            toString: () => `Geolocation Error: ${error.message} (Code: ${error.code})`
+          };
+          console.error("Geolocation error:", formattedError);
+          reject(formattedError);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -105,10 +107,14 @@ export function useLocation() {
 
   // Automatic re-sync logic for when a user regains internet connectivity
   useEffect(() => {
-    const handleOnline = () => {
+    const handleOnline = async () => {
       console.log("Internet connection regained. Re-validating location...");
       if (!lat || !lng) {
-        detectLocation(false);
+        try {
+          await detectLocation(false);
+        } catch (e) {
+          console.warn("Background location re-sync failed:", e);
+        }
       }
     };
 

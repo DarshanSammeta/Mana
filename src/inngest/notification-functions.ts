@@ -1,8 +1,9 @@
 import { inngest } from "@/lib/inngest";
 import { prisma } from "@/lib/prisma";
-import { sendVendorNotificationEmail } from "@/lib/mail/resend";
+import { sendVendorNotificationEmail, sendVendorVerificationUpdateEmail } from "@/lib/mail/resend";
 import { sendSMS } from "@/lib/sms/twilio";
 import logger from "@/lib/logger";
+import { VerificationStatus } from "@/components/emails/VendorVerificationEmail";
 
 /**
  * Inngest function to handle external notification delivery (Email, SMS, Push)
@@ -31,16 +32,33 @@ export const dispatchExternalNotification = inngest.createFunction(
     if (channels.email && user.email) {
       const emailResult = await step.run("send-email", async () => {
         try {
-          // You can expand this to use templates based on category/metadata
-          await sendVendorNotificationEmail(user.email!, {
-            vendorName: user.fullName || "User",
-            bookingNumber: payload.metadata?.bookingNumber || "N/A",
-            eventName: payload.metadata?.eventName || "Event",
-            eventDate: payload.metadata?.eventDate || "N/A",
-            customerName: payload.metadata?.customerName || "Customer",
-            payoutAmount: payload.metadata?.amount || "0",
-          });
-          return true;
+          if (payload.metadata?.templateId === "VENDOR_VERIFICATION") {
+            const status = payload.metadata.status;
+            // Only send status update emails for defined administrative states (not internal PENDING)
+            const VALID_EMAIL_STATUSES: VerificationStatus[] = ['APPROVED', 'REJECTED', 'CHANGES_REQUIRED', 'SUSPENDED'];
+
+            if (VALID_EMAIL_STATUSES.includes(status)) {
+              await sendVendorVerificationUpdateEmail(user.email!, {
+                vendorName: user.fullName || "Vendor",
+                status: status,
+                message: payload.message,
+                rejectionReason: payload.metadata.reason
+              });
+              return true;
+            }
+            return false; // Skip email for other internal statuses
+          } else {
+            // Default: Booking/Operations Template
+            await sendVendorNotificationEmail(user.email!, {
+              vendorName: user.fullName || "User",
+              bookingNumber: payload.metadata?.bookingNumber || "N/A",
+              eventName: payload.metadata?.eventName || "Event",
+              eventDate: payload.metadata?.eventDate || "N/A",
+              customerName: payload.metadata?.customerName || "Customer",
+              payoutAmount: payload.metadata?.amount || "0",
+            });
+            return true;
+          }
         } catch (e) {
           logger.error("Email delivery failed in Inngest", e);
           return false;

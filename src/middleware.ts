@@ -1,13 +1,35 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { verifyAccessToken } from "@/lib/auth-edge";
+import { getCorsHeaders, handleOptions } from "@/lib/cors";
 
 export async function middleware(req: NextRequest) {
-  const token = req.headers.get("authorization")?.split(" ")[1] || req.cookies.get("accessToken")?.value;
-
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const correlationId = req.headers.get("x-correlation-id") || requestId;
+  const start = Date.now();
+  const origin = req.headers.get("origin");
   const { pathname } = req.nextUrl;
 
-  // Public routes check
+  console.log(`[TRACE] Middleware Entry | ${pathname} | ID: ${requestId} | Method: ${req.method} | Origin: ${origin}`);
+
+  // 1. Handle Preflight
+  const optionsResponse = handleOptions(req);
+  if (optionsResponse) {
+    console.log(`[TRACE] Middleware: Handled OPTIONS for ${pathname}`);
+    return optionsResponse;
+  }
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-request-id", requestId);
+  requestHeaders.set("x-correlation-id", correlationId);
+
+  // Security: Strip incoming user identity headers
+  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-role");
+  requestHeaders.delete("x-user-status");
+
+  const token = req.headers.get("authorization")?.split(" ")[1] || req.cookies.get("accessToken")?.value;
+
   const isPublicRoute =
     pathname === "/" ||
     pathname.startsWith("/login") ||
@@ -15,6 +37,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/marketplace") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/health") ||
+    pathname.startsWith("/api/ready") ||
     pathname.startsWith("/api/socket") ||
     pathname.startsWith("/api/marketplace") ||
     pathname.startsWith("/api/categories") ||
@@ -28,88 +51,74 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/robots.txt") ||
     pathname.startsWith("/sitemap.xml");
 
-  if (isPublicRoute) {
-    return NextResponse.next();
-  }
+  let response: NextResponse;
 
-  // Protected routes for all authenticated users
-  const isProtectedRoute =
-    pathname.startsWith("/bookings") ||
-    pathname.startsWith("/wishlist") ||
-    pathname.startsWith("/messages") ||
-    pathname.startsWith("/notifications") ||
-    pathname.startsWith("/profile") ||
-    pathname.startsWith("/settings") ||
-    pathname.startsWith("/customer");
+  try {
+    if (isPublicRoute) {
+      response = NextResponse.next({
+        request: { headers: requestHeaders },
+      });
+    } else {
+      // Protected routes logic
+      if (!token) {
+          console.warn(`[TRACE] Middleware: Unauthorized access to ${pathname} (No token)`);
+          if (pathname.startsWith("/api/")) {
+              return NextResponse.json({ message: "Unauthorized" }, { status: 401, headers: getCorsHeaders(origin) });
+          }
+          const url = new URL("/login", req.url);
+          url.searchParams.set("message", "Please login to continue.");
+          return NextResponse.redirect(url);
+      }
 
-  if (isProtectedRoute && !token) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      const payload = await verifyAccessToken(token);
+
+      if (!payload) {
+          console.warn(`[TRACE] Middleware: Invalid token for ${pathname}`);
+          if (pathname.startsWith("/api/")) {
+              return NextResponse.json({ message: "Invalid token" }, { status: 401, headers: getCorsHeaders(origin) });
+          }
+          const url = new URL("/login", req.url);
+          url.searchParams.set("message", "Session expired.");
+          return NextResponse.redirect(url);
+      }
+
+      // Pass auth details to API routes
+      requestHeaders.set("x-user-id", payload.userId);
+      requestHeaders.set("x-user-role", payload.role);
+      if (payload.verificationStatus) {
+          requestHeaders.set("x-user-status", payload.verificationStatus);
+      }
+
+      // RBAC for Pages
+      if (!pathname.startsWith("/api/")) {
+          if (pathname.startsWith("/admin") && payload.role !== "ADMIN") {
+              console.warn(`[TRACE] Middleware: Forbidden access to admin page ${pathname} for role ${payload.role}`);
+              return NextResponse.redirect(new URL("/", req.url));
+          }
+      }
+
+      response = NextResponse.next({
+          request: { headers: requestHeaders },
+      });
     }
-    const url = new URL("/login", req.url);
-    url.searchParams.set("message", "Please login to continue.");
-    return NextResponse.redirect(url);
+  } catch (error: any) {
+    console.error(`[TRACE] Middleware Error for ${pathname}:`, error.message);
+    return NextResponse.json({ message: "Internal Auth Error" }, { status: 500, headers: getCorsHeaders(origin) });
   }
 
-  if (!token && !isPublicRoute) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
+  // Apply Global Headers
+  const corsHeaders = getCorsHeaders(origin);
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
 
-  const payload = await verifyAccessToken(token as string);
-  if (!payload) {
-    console.error(`[Middleware] Token verification failed for ${pathname}`);
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ message: "Invalid token" }, { status: 401 });
-    }
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  // Role-based access control
-  if (pathname.startsWith("/admin") && payload.role !== "ADMIN") {
-    const url = new URL("/", req.url);
-    url.searchParams.set("error", "access_denied");
-    return NextResponse.redirect(url);
-  }
-
-  if (pathname.startsWith("/vendor") && payload.role !== "VENDOR") {
-    const url = new URL("/", req.url);
-    url.searchParams.set("error", "access_denied");
-    return NextResponse.redirect(url);
-  }
-
-  if (pathname.startsWith("/customer") && payload.role !== "CUSTOMER" && payload.role !== "VENDOR") {
-    // Both Customers and Vendors (who might be buying) can access /customer routes usually,
-    // but if we want strict CUSTOMER-only:
-    const url = new URL("/", req.url);
-    url.searchParams.set("error", "access_denied");
-    return NextResponse.redirect(url);
-  }
-
-  const response = NextResponse.next();
-
-  // Add Request ID for tracing
-  const requestId = crypto.randomUUID();
   response.headers.set("x-request-id", requestId);
-
-  // Add Security Headers and Cache Control
+  response.headers.set("x-correlation-id", correlationId);
   response.headers.set("Cache-Control", "no-store, max-age=0, must-revalidate");
-  response.headers.set("Pragma", "no-cache");
-  response.headers.set("Expires", "0");
-
-  response.headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com https://picsum.photos https://maps.gstatic.com https://maps.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; connect-src 'self' ws: wss: https://api.razorpay.com https://maps.googleapis.com;");
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
-  response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  response.headers.set("X-XSS-Protection", "1; mode=block");
 
   return response;
 }
 
 export const config = {
-  matcher: ["/((?!api/auth|api/socket|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!manifest.json|icons/|_next/static|_next/image|favicon.ico).*)"],
 };

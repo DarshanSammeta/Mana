@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useSocketStore } from "@/store/socketStore";
-import { useCommerceSync } from "@/hooks/useCommerceSync";
+import { useCommerceSync } from "@/hooks/use-commerce-sync";
 import { NotificationListener } from "@/components/notifications/NotificationListener";
 
 function CommerceSync() {

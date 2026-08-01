@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn, formatRating } from "@/lib/utils";
 import { useState } from "react";
 import { toast } from "react-hot-toast";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { EmptyState } from "@/components/common/EmptyState";
 
 interface ReviewWithDetails {
@@ -215,7 +215,7 @@ export default function ReviewsClient({ initialReviews }: ReviewsClientProps) {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(new Date(review.createdAt), "dd MMM, yyyy")}</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{formatSafe(review.createdAt, "dd MMM, yyyy")}</span>
                       {!review.vendorResponse && (
                         <button
                           onClick={() => setReplyingTo(replyingTo === review.id ? null : review.id)}
@@ -247,7 +247,7 @@ export default function ReviewsClient({ initialReviews }: ReviewsClientProps) {
                       </div>
                       <div>
                           <span className="font-black text-[10px] uppercase tracking-widest text-blue-600 block leading-none">Your Response</span>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Replied on {format(new Date(review.responseAt || review.updatedAt), "dd MMM")}</span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Replied on {formatSafe(review.responseAt || review.updatedAt, "dd MMM")}</span>
                       </div>
                     </div>
                     <p className="text-sm font-bold text-slate-600 leading-relaxed">

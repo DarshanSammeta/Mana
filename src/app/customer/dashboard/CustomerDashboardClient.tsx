@@ -16,9 +16,10 @@ import {
   Settings
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { cn, formatCurrency } from "@/lib/utils";
+import { formatSafe } from "@/lib/utils/date";
 import CountUp from "react-countup";
 import { optimizeImage } from "@/lib/cloudinary";
 import Image from "next/image";
@@ -41,6 +42,11 @@ export default function CustomerDashboardClient({ initialStats }: CustomerDashbo
     queryFn: () => customerService.getStats(),
     initialData: initialStats,
     refetchOnMount: false
+  });
+
+  const { data: orders } = useQuery({
+    queryKey: ["customer-orders"],
+    queryFn: () => customerService.getOrders({ limit: 5 }),
   });
 
   return (
@@ -115,6 +121,59 @@ export default function CustomerDashboardClient({ initialStats }: CustomerDashbo
            <section>
               <div className="flex items-center justify-between mb-6 md:mb-8">
                 <div className="flex items-center gap-3">
+                   <h2 className="text-xl md:text-2xl font-bold text-slate-900">Recent Orders</h2>
+                   {orders?.total > 0 && (
+                      <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-0.5 rounded-full">
+                        {orders.total} Total
+                      </span>
+                   )}
+                </div>
+                <Link href="/customer/orders" className="text-sm text-primary hover:text-blue-700 font-bold flex items-center gap-1.5 group">
+                  View all <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+
+              {orders?.items?.length > 0 ? (
+                <div className="space-y-4">
+                  {orders.items.map((order: any) => (
+                    <div key={order.id} className="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order #{order.orderNumber}</p>
+                                <p className="text-sm font-bold text-slate-600">{formatSafe(order.createdAt, 'PPP')}</p>
+                            </div>
+                            <Badge variant="secondary" className={cn(
+                                "border-none font-bold",
+                                order.status === 'PAYMENT_SUCCESS' ? 'bg-emerald-50 text-emerald-600' :
+                                order.status === 'PROCESSING' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'
+                            )}>
+                                {order.status.replace(/_/g, ' ')}
+                            </Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex -space-x-3">
+                                {order.bookings?.slice(0, 3).map((b: any, idx: number) => (
+                                    <div key={idx} className="h-8 w-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold">
+                                        {b.vendorprofile?.businessName?.substring(0, 1)}
+                                    </div>
+                                ))}
+                                {order.bookings?.length > 3 && (
+                                    <div className="h-8 w-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold">
+                                        +{order.bookings.length - 3}
+                                    </div>
+                                )}
+                            </div>
+                            <p className="text-lg font-black">{formatCurrency(order.totalAmount)}</p>
+                        </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+           </section>
+
+           <section>
+              <div className="flex items-center justify-between mb-6 md:mb-8">
+                <div className="flex items-center gap-3">
                    <h2 className="text-xl md:text-2xl font-bold text-slate-900">Active Bookings</h2>
                    {stats?.activeBookings > 0 && (
                       <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-0.5 rounded-full">
@@ -130,7 +189,7 @@ export default function CustomerDashboardClient({ initialStats }: CustomerDashbo
               {stats?.recentBookings?.length > 0 ? (
                 <div className="grid md:grid-cols-2 gap-6">
                   {stats.recentBookings.map((booking: any) => (
-                    <Link key={booking.id} href={`/customer/orders/${booking.id}`}>
+                    <Link key={booking.id} href={`/customer/bookings/${booking.id}/tracking`}>
                       <div className="border border-slate-200 rounded-2xl p-5 flex gap-5 hover:border-primary/30 hover:shadow-lg transition-all bg-white group">
                           <div className="h-20 w-20 bg-slate-50 rounded-xl flex items-center justify-center font-bold text-slate-400 text-2xl shrink-0 border border-slate-100 overflow-hidden relative">
                             {booking.vendorLogo ? (
@@ -156,7 +215,7 @@ export default function CustomerDashboardClient({ initialStats }: CustomerDashbo
                                 )}>
                                   {booking.status.replace(/_/g, ' ')}
                                 </span>
-                                <span className="text-[11px] font-bold text-slate-400">{format(new Date(booking.eventDate), 'MMM dd, yyyy')}</span>
+                                <span className="text-[11px] font-bold text-slate-400">{formatSafe(booking.eventDate, 'MMM dd, yyyy')}</span>
                             </div>
                             <h4 className="text-base font-bold text-slate-900 truncate group-hover:text-primary transition-colors">{booking.vendorName}</h4>
                             <p className="text-sm text-slate-500 truncate mt-0.5">{booking.serviceTitle}</p>
@@ -207,7 +266,7 @@ export default function CustomerDashboardClient({ initialStats }: CustomerDashbo
               </div>
            </section>
 
-           <div className="-mx-6 md:-mx-10 border-t border-slate-100 pt-8 md:pt-12">
+           <div className="-mx-4 border-t border-slate-100 pt-8 md:pt-12">
               <RecentlyViewed />
            </div>
         </div>

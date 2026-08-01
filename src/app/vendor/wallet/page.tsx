@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import CountUp from "react-countup";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import toast from "react-hot-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableSkeleton } from "@/components/vendor/TableSkeleton";
@@ -101,7 +101,7 @@ export default function VendorWallet() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `transactions-${format(new Date(), "yyyy-MM-dd")}.csv`;
+      a.download = `transactions-${formatSafe(new Date(), "yyyy-MM-dd")}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -222,7 +222,7 @@ export default function VendorWallet() {
                                     <div>
                                         <h4 className="font-black text-foreground">{tx.description}</h4>
                                         <div className="flex items-center gap-3 mt-1">
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(tx.createdAt), "dd MMM, yyyy • HH:mm")}</span>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{formatSafe(tx.createdAt, "dd MMM, yyyy • HH:mm")}</span>
                                             <span className={cn(
                                                 "text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter",
                                                 tx.status === 'COMPLETED' ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"
@@ -267,7 +267,7 @@ export default function VendorWallet() {
                                 </div>
                                 <div>
                                     <p className="text-sm font-black tracking-tight">₹{Number(wd.amount).toLocaleString()}</p>
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{format(new Date(wd.createdAt), "dd MMM")}</p>
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{formatSafe(wd.createdAt, "dd MMM")}</p>
                                 </div>
                             </div>
                             <span className={cn(

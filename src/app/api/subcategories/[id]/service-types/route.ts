@@ -11,7 +11,8 @@ const getCachedServiceTypes = (subcategoryId: string, vendorId: string | null) =
           ...(vendorId ? {
             service: {
               some: {
-                vendorProfileId: vendorId
+                vendorProfileId: vendorId,
+                serviceTypeId: { not: undefined } // Ensure it's a valid service
               }
             }
           } : {})

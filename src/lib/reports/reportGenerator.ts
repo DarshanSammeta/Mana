@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { formatSafe } from "../utils/date";
 
 export type ReportType = "bookings" | "revenue" | "transactions" | "withdrawals" | "taxes";
 
@@ -30,16 +31,16 @@ export async function getReportData(vendorId: string, type: ReportType, startDat
           eventDate: true,
           eventName: true,
           city: true,
-          user: { select: { fullName: true } }
+          customerprofile: { include: { user: { select: { fullName: true } } } }
         },
         orderBy: { createdAt: "desc" }
       });
       data = bookings.map(b => ({
         "Booking #": b.bookingNumber,
-        "Date": b.createdAt.toLocaleDateString(),
-        "Customer": b.user.fullName,
+        "Date": formatSafe(b.createdAt, "dd/MM/yyyy"),
+        "Customer": b.customerprofile.user.fullName,
         "Event": b.eventName || "N/A",
-        "Event Date": b.eventDate.toLocaleDateString(),
+        "Event Date": formatSafe(b.eventDate, "dd/MM/yyyy"),
         "City": b.city || "N/A",
         "Amount": Number(b.totalAmount),
         "Status": b.status
@@ -58,7 +59,7 @@ export async function getReportData(vendorId: string, type: ReportType, startDat
         orderBy: { createdAt: "desc" }
       });
       data = splits.map(s => ({
-        "Date": s.createdAt.toLocaleDateString(),
+        "Date": formatSafe(s.createdAt, "dd/MM/yyyy"),
         "Booking #": s.booking.bookingNumber,
         "Total Amount": Number(s.totalAmount),
         "Admin Commission": Number(s.adminShare),
@@ -77,7 +78,7 @@ export async function getReportData(vendorId: string, type: ReportType, startDat
           orderBy: { createdAt: "desc" }
         });
         data = transactions.map(t => ({
-          "Date": t.createdAt.toLocaleDateString(),
+          "Date": formatSafe(t.createdAt, "dd/MM/yyyy"),
           "Type": t.type,
           "Amount": Number(t.amount),
           "Status": t.status,
@@ -96,11 +97,11 @@ export async function getReportData(vendorId: string, type: ReportType, startDat
         orderBy: { createdAt: "desc" }
       });
       data = payouts.map(p => ({
-        "Date": p.createdAt.toLocaleDateString(),
+        "Date": formatSafe(p.createdAt, "dd/MM/yyyy"),
         "Amount": Number(p.amount),
         "Status": p.status,
         "Reference": p.reference || "N/A",
-        "Processed At": p.processedAt ? p.processedAt.toLocaleDateString() : "N/A"
+        "Processed At": formatSafe(p.processedAt, "dd/MM/yyyy")
       }));
       break;
 
@@ -122,7 +123,7 @@ export async function getReportData(vendorId: string, type: ReportType, startDat
         orderBy: { createdAt: "desc" }
       });
       data = taxBookings.map(b => ({
-        "Date": b.createdAt.toLocaleDateString(),
+        "Date": formatSafe(b.createdAt, "dd/MM/yyyy"),
         "Booking #": b.bookingNumber,
         "Total Amount": Number(b.totalAmount),
         "GST/Tax": Number(b.taxAmount),
@@ -142,7 +143,7 @@ export async function generatePDFBuffer(title: string, data: any[], businessName
   doc.setFontSize(12);
   doc.text(`Vendor: ${businessName}`, 14, 30);
   doc.text(`Report: ${title}`, 14, 37);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 44);
+  doc.text(`Generated on: ${formatSafe(new Date(), "dd/MM/yyyy")}`, 14, 44);
 
   if (data.length > 0) {
     const headers = Object.keys(data[0]);

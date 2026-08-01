@@ -1,7 +1,7 @@
 import { APP_CONFIG } from "@/config/app";
 import { Metadata } from "next";
 import VendorProfileClient from "./VendorProfileClient";
-import { getVendorById, getEventTypes, getMarketplaceCategories } from "@/lib/marketplace";
+import { getVendorById, getEventTypes } from "@/lib/marketplace";
 
 async function getVendorData(id: string) {
   try {
@@ -50,10 +50,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function VendorProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
-  const [data, eventTypes, categories] = await Promise.all([
+
+  // Phase 2: Parallel fetch for hydration
+  const [data, eventTypes] = await Promise.all([
     getVendorData(resolvedParams.id),
     getEventTypes(),
-    getMarketplaceCategories()
   ]);
 
   if (!data?.vendor) {
@@ -69,8 +70,7 @@ export default async function VendorProfilePage({ params }: { params: Promise<{ 
     <VendorProfileClient
       vendor={data.vendor}
       similarVendors={data.similarVendors || []}
-      initialEventTypes={eventTypes}
-      initialCategories={categories}
+      initialEventTypes={JSON.parse(JSON.stringify(eventTypes))}
     />
   );
 }

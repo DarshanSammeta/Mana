@@ -1,0 +1,8 @@
+- `[ ]` Clean up navigation configuration files (delete `mainNavigation.ts`)
+- `[ ]` Refactor `MainNavbar.tsx` for exact order and role-based visibility
+- `[ ]` Ensure `SubNavbar.tsx` follows the Left/Right split (Categories/Quick Links)
+- `[ ]` Update `Navbar.tsx` to orchestrate the final two-row layout
+- `[ ]` Run `npm run lint` and fix any issues
+- `[ ]` Run `npx tsc --noEmit` and fix any issues
+- `[ ]` Run `npm run build` and ensure success
+- `[ ]` Final manual verification for all roles (Guest, Customer, Vendor)

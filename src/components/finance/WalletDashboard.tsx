@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import { formatSafe } from '@/lib/utils/date';
 
 interface Transaction {
   id: string;
@@ -109,7 +110,7 @@ export const WalletDashboard: React.FC = () => {
                 <div>
                   <p className="text-sm font-bold text-gray-900">{tx.description}</p>
                   <div className="flex items-center mt-0.5 text-xs text-gray-400">
-                    <span className="mr-3">{new Date(tx.createdAt).toLocaleDateString()}</span>
+                    <span className="mr-3">{formatSafe(tx.createdAt)}</span>
                     {tx.bookingNumber && (
                         <span className="flex items-center">
                             <FileText className="w-3 h-3 mr-1" /> {tx.bookingNumber}

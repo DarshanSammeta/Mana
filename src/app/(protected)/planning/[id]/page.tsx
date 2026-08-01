@@ -11,6 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { GuestList } from '@/components/event-planning/GuestList';
 
+import { formatSafe } from '@/lib/utils/date';
+
 export default function WorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { workspace, isLoading, updateChecklist, suggestions } = useEventWorkspace(id);
@@ -37,7 +39,7 @@ export default function WorkspacePage({ params }: { params: Promise<{ id: string
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">{workspace.title}</h1>
-          <p className="text-muted-foreground">{workspace.eventType} • {new Date(workspace.eventDate).toLocaleDateString()}</p>
+          <p className="text-muted-foreground">{workspace.eventType} • {formatSafe(workspace.eventDate)}</p>
         </div>
       </div>
 

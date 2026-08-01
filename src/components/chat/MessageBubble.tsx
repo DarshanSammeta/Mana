@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { formatSafe } from "@/lib/utils/date";
 import { Check, CheckCheck, Paperclip } from "lucide-react";
 import Image from "next/image";
 
@@ -57,7 +57,7 @@ export const MessageBubble = ({ message, isOwn }: MessageBubbleProps) => {
       </div>
       <div className="flex items-center gap-2 mt-1 px-1">
         <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
-            {format(new Date(message.createdAt), "h:mm a")}
+            {formatSafe(message.createdAt, "h:mm a")}
         </span>
         {isOwn && (
             <div className="flex">
