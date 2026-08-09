@@ -4,12 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { withErrorHandler } from "@/lib/error-handler";
 import os from "os";
 
+import { verifyAdminRequest } from "@/lib/auth";
+
 export async function GET(req: Request) {
-  return withErrorHandler(async (_innerReq: Request) => {
-    // const token = innerReq.headers.get("authorization")?.split(" ")[1];
-    // if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    // const payload = verifyAccessToken(token);
-    // if (!payload || payload.role !== "ADMIN") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  return withErrorHandler(async () => {
+    const admin = await verifyAdminRequest(req);
+    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const redis = getIoRedis();
     let redisStatus = "OFFLINE";

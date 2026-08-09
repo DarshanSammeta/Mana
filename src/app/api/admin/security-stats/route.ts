@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { verifyAdminRequest } from "@/lib/auth";
 
 export async function GET(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-  const payload = await verifyAccessToken(token);
-  if (!payload || payload.role !== "ADMIN") {
+  const admin = await verifyAdminRequest(req);
+  if (!admin) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 

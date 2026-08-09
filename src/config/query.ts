@@ -9,8 +9,16 @@ export const QUERY_CLIENT_CONFIG: QueryClientConfig = {
       refetchOnMount: false,
       refetchOnReconnect: false, // Reduced for performance
       retry: (failureCount, error: any) => {
-        if (error?.response?.status === 401 || error?.response?.status === 404) return false;
-        return failureCount < 1; // Faster fail-fast in production
+        // Stop retrying immediately for authentication and "not found" errors
+        const status = error?.response?.status;
+        const errorCode = error?.response?.data?.code || error?.code;
+
+        const isAuthError = status === 401 || status === 403 ||
+                           (errorCode && (errorCode.startsWith("ERR_JWT_") || errorCode === "UNAUTHORIZED" || errorCode === "TOKEN_EXPIRED"));
+
+        if (isAuthError || status === 404) return false;
+
+        return failureCount < 1; // Default to one retry for other transient errors
       },
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     },

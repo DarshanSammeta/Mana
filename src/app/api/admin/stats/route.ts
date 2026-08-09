@@ -68,7 +68,7 @@ export async function GET(req: Request) {
         where: { status: "PENDING" },
         _sum: { amount: true }
       }),
-      prisma.booking.count({ where: { status: "EMERGENCY" } }), // Placeholder for active SOS
+      prisma.event_incident_report.count({ where: { status: "OPEN" } }),
       prisma.booking.findMany({
         take: 10,
         orderBy: { createdAt: "desc" },

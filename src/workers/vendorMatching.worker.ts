@@ -4,6 +4,9 @@ import { BookingJobData, VENDOR_MATCHING_QUEUE } from "../lib/queue";
 
 const connection = getIoRedis()!;
 
+console.log(`[Worker] Initializing Vendor Matching Worker...`);
+console.log(`[Worker] Queue: ${VENDOR_MATCHING_QUEUE}`);
+
 const worker = new Worker(
   VENDOR_MATCHING_QUEUE,
   async (job: Job<BookingJobData>) => {

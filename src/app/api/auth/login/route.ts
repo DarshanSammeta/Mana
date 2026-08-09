@@ -13,6 +13,13 @@ import { loginSchema } from "@/validations/auth";
 export async function POST(req: Request) {
   return withErrorHandler(async () => {
     const body = await req.json();
+
+    console.log("[API LOGIN] Received body", {
+      email: body.email,
+      role: body.role,
+      hasPassword: !!body.password
+    });
+
     const validated = loginSchema.parse(body);
     const requestedRole = validated.role || "CUSTOMER";
 
@@ -54,6 +61,12 @@ export async function POST(req: Request) {
           }
         },
       },
+    });
+
+    console.log("[API LOGIN] Prisma Lookup Result", {
+      userFound: !!user,
+      userRole: user?.role,
+      userEmail: user?.email
     });
 
     if (!user) {

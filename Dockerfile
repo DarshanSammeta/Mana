@@ -1,60 +1,35 @@
-# Base image
-FROM node:20-alpine AS base
-
-# -----------------------------
-# Dependencies
-# -----------------------------
-FROM base AS deps
-
-RUN apk add --no-cache libc6-compat openssl
+# --- STAGE 1: Build ---
+FROM node:20-alpine AS builder
 
 WORKDIR /app
+RUN apk add --no-cache libc6-compat
 
-COPY package.json package-lock.json* ./
-COPY prisma ./prisma
+COPY package*.json ./
+COPY prisma ./prisma/
 
-RUN npm ci --legacy-peer-deps
+RUN npm ci
 
-# -----------------------------
-# Builder
-# -----------------------------
-FROM base AS builder
-
-WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-RUN npx prisma generate --schema=./prisma/schema.prisma
-
-# Compile custom server and build Next.js
-RUN npx esbuild server.ts --bundle --platform=node --outfile=server.js --external:next --external:socket.io --external:express
+RUN npx prisma generate
 RUN npm run build
 
-# -----------------------------
-# Runner
-# -----------------------------
-FROM base AS runner
+# --- STAGE 2: Runtime ---
+FROM node:20-alpine
 
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
+RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/server.js ./server.js
-
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/public ./public
 
 USER nextjs
+
+ENV PORT=3000
+ENV NODE_ENV=production
 
 EXPOSE 3000
 

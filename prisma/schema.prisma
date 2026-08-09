@@ -102,9 +102,8 @@ model booking {
   audit_log               audit_log[]
   coupon                  coupon?                   @relation(fields: [couponId], references: [id], map: "Booking_couponId_fkey")
   customerprofile         customerprofile           @relation(fields: [customerProfileId], references: [id], map: "Booking_customerProfileId_fkey")
-  order                   order?                    @relation(fields: [orderId], references: [id])
   vendorprofile           vendorprofile?            @relation(fields: [vendorId], references: [id], map: "Booking_vendorId_fkey")
-  counterquote            counterquote[]
+  order                   order?                    @relation(fields: [orderId], references: [id])
   booking_addon           booking_addon[]
   booking_checklist       booking_checklist[]
   booking_document        booking_document[]
@@ -115,6 +114,7 @@ model booking {
   bookingstatuslog        bookingstatuslog[]
   cancellation_record     cancellation_record?
   conversation            conversation?
+  counterquote            counterquote[]
   dispute                 dispute?
   eventcheckin            eventcheckin?
   invoice                 invoice?
@@ -224,16 +224,13 @@ model cartitem {
   location      String?
   notes         String?
   addons        Json?
-
-  // Structured Pricing Snapshots
   packagePrice  Decimal?  @db.Decimal(10, 2)
   addonPrice    Decimal?  @db.Decimal(10, 2)
   gst           Decimal?  @db.Decimal(10, 2)
   platformFee   Decimal?  @db.Decimal(10, 2)
   discount      Decimal?  @db.Decimal(10, 2)
   totalPrice    Decimal?  @db.Decimal(10, 2)
-  priceSnapshot Decimal?  @db.Decimal(10, 2) // Legacy
-
+  priceSnapshot Decimal?  @db.Decimal(10, 2)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   cart          cart      @relation(fields: [cartId], references: [id], onDelete: Cascade, map: "CartItem_cartId_fkey")
@@ -579,23 +576,23 @@ model Renamedpackage {
 }
 
 model payment {
-  id                String         @id @default(cuid())
-  bookingId         String
-  amount            Decimal        @db.Decimal(10, 2)
-  currency          String         @default("INR")
-  status            payment_status @default(PENDING)
-  razorpayOrderId   String?        @unique(map: "Payment_razorpayOrderId_key")
-  razorpayPaymentId String?        @unique(map: "Payment_razorpayPaymentId_key")
-  razorpaySignature String?
-  method            String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime
-  paymentType       String?        @default("FULL")
-  orderId           String?
-  booking           booking        @relation(fields: [bookingId], references: [id], map: "Payment_bookingId_fkey")
-  order             order?         @relation(fields: [orderId], references: [id])
+  id                  String                @id @default(cuid())
+  bookingId           String
+  amount              Decimal               @db.Decimal(10, 2)
+  currency            String                @default("INR")
+  status              payment_status        @default(PENDING)
+  razorpayOrderId     String?               @unique(map: "Payment_razorpayOrderId_key")
+  razorpayPaymentId   String?               @unique(map: "Payment_razorpayPaymentId_key")
+  razorpaySignature   String?
+  method              String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  paymentType         String?               @default("FULL")
+  orderId             String?
+  booking             booking               @relation(fields: [bookingId], references: [id], map: "Payment_bookingId_fkey")
+  order               order?                @relation(fields: [orderId], references: [id])
+  payment_split       payment_split?
   payment_transaction payment_transaction[]
-  payment_split     payment_split?
 
   @@index([bookingId, status, createdAt])
   @@index([bookingId], map: "Payment_bookingId_idx")
@@ -613,7 +610,6 @@ model payment_transaction {
   errorDetails          Json?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-
   payment               payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
   @@index([paymentId])
@@ -690,23 +686,20 @@ model pricingrule {
 }
 
 model refreshtoken {
-  id         String   @id @default(cuid())
-  tokenHash  String   @unique(map: "RefreshToken_tokenHash_key") @db.VarChar(255)
+  id         String    @id @default(cuid())
   userId     String
   expiryDate DateTime
-  createdAt  DateTime @default(now())
-  lastUsedAt DateTime @default(now())
-  revokedAt  DateTime?
-  replacedBy String?    // ID of the token that replaced this one
-
-  // Session Context
-  ipAddress  String?
-  userAgent  String?
+  createdAt  DateTime  @default(now())
   browser    String?
-  os         String?
   deviceName String?
-
-  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "RefreshToken_userId_fkey")
+  ipAddress  String?
+  lastUsedAt DateTime  @default(now())
+  os         String?
+  replacedBy String?
+  revokedAt  DateTime?
+  tokenHash  String    @unique(map: "RefreshToken_tokenHash_key") @db.VarChar(255)
+  userAgent  String?
+  user       user      @relation(fields: [userId], references: [id], onDelete: Cascade, map: "RefreshToken_userId_fkey")
 
   @@index([userId], map: "RefreshToken_userId_idx")
   @@index([expiryDate])
@@ -832,9 +825,9 @@ model user {
   deviceId                String?
   fcmToken                String?
   lastSeen                DateTime?
-  twoFactorEnabled        Boolean                   @default(false)
   language                String                    @default("en")
   timezone                String                    @default("UTC")
+  twoFactorEnabled        Boolean                   @default(false)
   activitylog             activitylog[]
   auditlog                auditlog[]
   conversationparticipant conversationparticipant[]
@@ -864,7 +857,6 @@ model customerprofile {
   updatedAt            DateTime               @updatedAt
   addresses            address[]
   booking              booking[]
-  order                order[]
   cart                 cart?
   customer_crm         customer_crm_data?
   user                 user                   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -875,6 +867,7 @@ model customerprofile {
   event_workspaces     event_workspace[]
   point_transactions   loyalty_transaction[]
   marketing_analytics  marketing_analytics[]
+  order                order[]
   payment_split        payment_split[]
   recently_viewed      recently_viewed[]
   referral_received    referral?              @relation("Referred")
@@ -1420,7 +1413,6 @@ model vendorprofile {
   aadhaarNumber         String?
   categoryId            String?
   panNumber             String?
-  businessType          String?                          @default("Individual")
   cancellationPolicy    String?
   experienceYears       Int                              @default(0)
   approvedAt            DateTime?                        @db.Timestamptz(6)
@@ -1431,10 +1423,11 @@ model vendorprofile {
   suspendedAt           DateTime?                        @db.Timestamptz(6)
   suspendedBy           String?
   suspensionReason      String?
-  website               String?
-  socialLinks           Json?
-  workingHours          Json?
+  businessType          String?                          @default("Individual")
   publicVisibility      Boolean                          @default(true)
+  socialLinks           Json?
+  website               String?
+  workingHours          Json?
   availability          availability[]
   booking               booking[]
   bookingassignment     bookingassignment[]
@@ -1446,6 +1439,7 @@ model vendorprofile {
   recently_viewed       recently_viewed[]
   recurringavailability recurringavailability[]
   reportschedule        reportschedule?
+  reservations          reservation[]
   review                review[]
   service               service[]
   settlement            settlement[]
@@ -1459,7 +1453,6 @@ model vendorprofile {
   vendorscore           vendorscore?
   vendorsubscription    vendorsubscription?
   vendorteam            vendorteam[]
-  reservations          reservation[]
 
   @@index([verificationStatus])
   @@index([userId, verificationStatus])
@@ -1552,8 +1545,6 @@ model order {
   customerProfileId String
   status            order_status    @default(DRAFT)
   idempotencyKey    String?         @unique
-
-  // Financial Summary (Structured)
   packageAmount     Decimal         @default(0.00) @db.Decimal(10, 2)
   addonAmount       Decimal         @default(0.00) @db.Decimal(10, 2)
   discountAmount    Decimal         @default(0.00) @db.Decimal(10, 2)
@@ -1562,15 +1553,12 @@ model order {
   totalAmount       Decimal         @default(0.00) @db.Decimal(10, 2)
   advanceAmount     Decimal         @default(0.00) @db.Decimal(10, 2)
   balanceAmount     Decimal         @default(0.00) @db.Decimal(10, 2)
-
   couponId          String?
-  financialSnapshot Json?           // Extended metadata
-
+  financialSnapshot Json?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
-
-  customer          customerprofile @relation(fields: [customerProfileId], references: [id])
   bookings          booking[]
+  customer          customerprofile @relation(fields: [customerProfileId], references: [id])
   order_item        order_item[]
   payments          payment[]
   reservations      reservation[]
@@ -1581,51 +1569,44 @@ model order {
 }
 
 model order_item {
-  id            String   @id @default(cuid())
-  orderId       String
-  vendorId      String
-  serviceId     String
-  packageId     String
-  quantity      Int      @default(1)
-
-  eventDate     DateTime
-  eventTime     String?
-  guestCount    Int
-  location      String
-  notes         String?
-  addons        Json?
-
-  // Financial Snapshot per Item
-  packageAmount Decimal  @db.Decimal(10, 2)
-  addonAmount   Decimal  @default(0.00) @db.Decimal(10, 2)
-  discountAmount Decimal @default(0.00) @db.Decimal(10, 2)
-  gstAmount     Decimal  @default(0.00) @db.Decimal(10, 2)
-  platformFee   Decimal  @default(0.00) @db.Decimal(10, 2)
-  totalAmount   Decimal  @db.Decimal(10, 2)
-
-  priceSnapshot Decimal  @db.Decimal(10, 2) // Legacy compatibility
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  order         order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  orderId        String
+  vendorId       String
+  serviceId      String
+  packageId      String
+  quantity       Int      @default(1)
+  eventDate      DateTime
+  eventTime      String?
+  guestCount     Int
+  location       String
+  notes          String?
+  addons         Json?
+  packageAmount  Decimal  @db.Decimal(10, 2)
+  addonAmount    Decimal  @default(0.00) @db.Decimal(10, 2)
+  discountAmount Decimal  @default(0.00) @db.Decimal(10, 2)
+  gstAmount      Decimal  @default(0.00) @db.Decimal(10, 2)
+  platformFee    Decimal  @default(0.00) @db.Decimal(10, 2)
+  totalAmount    Decimal  @db.Decimal(10, 2)
+  priceSnapshot  Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  order          order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([vendorId])
 }
 
 model reservation {
-  id            String             @id @default(cuid())
-  vendorId      String
-  eventDate     DateTime
-  orderId       String?
-  expiresAt     DateTime
-  status        reservation_status @default(ACTIVE)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-
-  order         order?             @relation(fields: [orderId], references: [id])
-  vendor        vendorprofile      @relation(fields: [vendorId], references: [id])
+  id        String             @id @default(cuid())
+  vendorId  String
+  eventDate DateTime
+  orderId   String?
+  expiresAt DateTime
+  status    reservation_status @default(ACTIVE)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  order     order?             @relation(fields: [orderId], references: [id])
+  vendor    vendorprofile      @relation(fields: [vendorId], references: [id])
 
   @@index([vendorId, eventDate])
   @@index([expiresAt])

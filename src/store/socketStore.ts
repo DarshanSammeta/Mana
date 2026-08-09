@@ -49,13 +49,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       // 2. Initialize server-side socket if using API route fallback
       // In production with custom server, this is redundant but safe.
       // We append EIO=4 to avoid 400 errors from Socket.IO server expecting protocol version
-      await fetch(`/api/socket/io?EIO=4&transport=polling&t=${Date.now()}`).catch(() => {
+      const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || "/api/socket/io";
+      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (typeof window !== "undefined" ? window.location.origin : "");
+
+      await fetch(`${socketUrl}${socketPath}?EIO=4&transport=polling&t=${Date.now()}`).catch(() => {
         // Ignore fetch errors, let socket attempt connection
       });
 
-      const socket = io(window.location.origin, {
+      const socket = io(socketUrl, {
         auth: { token },
-        path: "/api/socket/io",
+        path: socketPath,
         addTrailingSlash: false,
         reconnection: true,
         reconnectionAttempts: Infinity, // Production resilience

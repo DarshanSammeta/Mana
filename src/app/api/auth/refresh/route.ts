@@ -8,6 +8,14 @@ export async function POST(_req: Request) {
     const cookieStore = await cookies();
     const refreshToken = cookieStore.get("refreshToken")?.value;
 
+    // Safe diagnostic logging — never print token or cookie contents
+    const cookieHeader = (_req.headers && typeof _req.headers.get === 'function') ? _req.headers.get('cookie') : undefined;
+    console.log("[BACKEND REFRESH ENTRY]", {
+      hasCookieHeader: Boolean(cookieHeader),
+      cookieLength: cookieHeader ? cookieHeader.length : 0,
+      hasRefreshToken: Boolean(refreshToken),
+    });
+
     if (!refreshToken) {
       return NextResponse.json({ message: "Refresh token missing" }, { status: 401 });
     }
@@ -18,14 +26,13 @@ export async function POST(_req: Request) {
       return NextResponse.json({ message: "Invalid or expired refresh token" }, { status: 401 });
     }
 
-    const { accessToken } = result;
+    const { accessToken, refreshToken: newRefreshToken } = result;
 
     const response = NextResponse.json({
       accessToken: accessToken,
     });
 
-    return SessionService.setSessionCookies(response, accessToken);
+    return SessionService.setSessionCookies(response, accessToken, newRefreshToken);
 
-    return response;
   }, _req);
 }

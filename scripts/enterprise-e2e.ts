@@ -1,5 +1,5 @@
 import axios from "axios";
-import { signAccessToken } from "../src/lib/jwt";
+import { signAccessToken } from "../src/lib/auth/token-logic";
 import { PrismaClient } from "@prisma/client";
 import * as dotenv from "dotenv";
 dotenv.config();
@@ -24,9 +24,9 @@ async function main() {
 
     if (!customerUser || !vendorUser || !adminUser) throw new Error("Seed data missing.");
 
-    const cHeaders = { headers: { Authorization: `Bearer ${signAccessToken({ userId: customerUser.id, role: "CUSTOMER" })}` } };
-    const vHeaders = { headers: { Authorization: `Bearer ${signAccessToken({ userId: vendorUser.id, role: "VENDOR", verificationStatus: "APPROVED" })}` } };
-    const aHeaders = { headers: { Authorization: `Bearer ${signAccessToken({ userId: adminUser.id, role: "ADMIN" })}` } };
+    const cHeaders = { headers: { Authorization: `Bearer ${await signAccessToken({ userId: customerUser.id, role: "CUSTOMER" })}` } };
+    const vHeaders = { headers: { Authorization: `Bearer ${await signAccessToken({ userId: vendorUser.id, role: "VENDOR", verificationStatus: "APPROVED" })}` } };
+    const aHeaders = { headers: { Authorization: `Bearer ${await signAccessToken({ userId: adminUser.id, role: "ADMIN" })}` } };
 
     console.log("[E2E] Testing Customer Journey...");
     const searchRes = await axios.get(`${BASE_URL}/api/marketplace/search?query=wedding`);

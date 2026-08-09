@@ -21,7 +21,8 @@ export async function POST(_req: Request) {
       path: "/",
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict" as const,
+      sameSite: "lax" as const,
+      domain: undefined,
     };
 
     response.cookies.set("accessToken", "", cookieOptions);

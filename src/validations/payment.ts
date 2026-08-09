@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const razorpayOrderSchema = z.object({
-  amount: z.number().positive(),
+  amount: z.coerce.number().positive(),
   bookingId: z.string().optional(),
   currency: z.string().default("INR"),
   paymentType: z.enum(["FULL", "ADVANCE", "BALANCE", "SUBSCRIPTION"]).default("FULL"),

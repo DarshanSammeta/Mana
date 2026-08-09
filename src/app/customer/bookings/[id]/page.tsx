@@ -137,7 +137,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
     });
   };
 
-  const handlePayBalance = async () => {
+  const handlePayment = async () => {
     try {
       const razorpayLoaded = await loadRazorpay();
       if (!razorpayLoaded) {
@@ -145,10 +145,14 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
         return;
       }
 
+      const isAdvance = booking.status === "ADVANCE_PAYMENT_PENDING";
+      const paymentType = isAdvance ? "ADVANCE" : "BALANCE";
+      const amount = isAdvance ? Number(booking.advanceAmount) : Number(booking.balanceAmount);
+
       const orderRes = await customerService.createRazorpayOrder({
-        amount: Number(booking.balanceAmount),
+        amount,
         bookingId: booking.id,
-        paymentType: "BALANCE"
+        paymentType
       });
 
       const options = {
@@ -156,7 +160,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
         amount: orderRes.amount,
         currency: orderRes.currency,
         name: "Mana Events",
-        description: `Balance Payment for #${booking.bookingNumber}`,
+        description: `${isAdvance ? 'Advance' : 'Balance'} Payment for #${booking.bookingNumber}`,
         order_id: orderRes.id,
         handler: async (response: any) => {
           try {
@@ -166,7 +170,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
               razorpay_signature: response.razorpay_signature,
               bookingId: booking.id,
             });
-            toast.success("Balance paid successfully!");
+            toast.success(`${isAdvance ? 'Advance' : 'Balance'} paid successfully!`);
             fetchBookingDetails();
           } catch {
             toast.error("Verification failed");
@@ -183,7 +187,7 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
     } catch {
-      toast.error("Failed to initiate balance payment");
+      toast.error(`Failed to initiate ${booking.status === "ADVANCE_PAYMENT_PENDING" ? 'advance' : 'balance'} payment`);
     }
   };
   if (loading) return <div className="p-8"><Skeleton className="h-[600px] w-full rounded-[2.5rem]" /></div>;
@@ -525,9 +529,26 @@ export default function BookingDetailsPage({ params }: { params: Promise<{ id: s
                               <p className="text-xs text-slate-400 mt-4 font-bold uppercase tracking-widest leading-relaxed">Please settle the advance payment to secure the vendor for your event date. This amount is refundable as per policy.</p>
                               <Button
                                  className="w-full bg-white text-slate-900 hover:bg-gray-100 font-black h-16 rounded-2xl mt-8 shadow-xl transition-all hover:-translate-y-1 text-lg"
-                                 onClick={handlePayBalance} // We can reuse the payment logic for advance too
+                                 onClick={handlePayment}
                               >
                                  PAY ADVANCE NOW
+                              </Button>
+                           </div>
+                        </div>
+                     )}
+
+                     {booking.status === "EVENT_COMPLETED" && booking.paymentStage !== "FULLY_PAID" && (
+                        <div className="mb-8 p-8 bg-emerald-900 rounded-[2.5rem] text-white space-y-8 shadow-2xl relative overflow-hidden">
+                           <div className="absolute top-0 right-0 p-8 opacity-10"><CheckCircle2 className="h-32 w-32" /></div>
+                           <div className="relative z-10">
+                              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-2">Final Settlement (70%)</p>
+                              <h4 className="text-5xl font-black italic tracking-tighter">₹{Number(booking.balanceAmount).toLocaleString()}</h4>
+                              <p className="text-xs text-emerald-100/60 mt-4 font-bold uppercase tracking-widest leading-relaxed">Event completed successfully! Please settle the remaining balance to close this booking.</p>
+                              <Button
+                                 className="w-full bg-white text-emerald-900 hover:bg-emerald-50 font-black h-16 rounded-2xl mt-8 shadow-xl transition-all hover:-translate-y-1 text-lg"
+                                 onClick={handlePayment}
+                              >
+                                 PAY BALANCE NOW
                               </Button>
                            </div>
                         </div>

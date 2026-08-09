@@ -75,8 +75,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!accessToken) return;
 
     const checkAndRefresh = async () => {
+      // Re-check accessToken inside closure to ensure we don't fire if session just died
+      const currentToken = useAuthStore.getState().accessToken;
+      if (!currentToken) return;
+
       try {
-        const decoded = decodeJwt(accessToken);
+        const decoded = decodeJwt(currentToken);
         if (!decoded.exp) return;
 
         const now = Math.floor(Date.now() / 1000);
@@ -85,7 +89,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Threshold: Refresh if less than 2 minutes (120s) remain
         if (remaining > 0 && remaining < 120) {
           console.log("[AuthProvider] Proactive refresh triggered", { remaining });
-          await apiClient.post("/auth/refresh");
+          try {
+            await apiClient.post("/auth/refresh");
+          } catch (refreshError: any) {
+            console.error("[AuthProvider] Refresh heartbeat failed:", refreshError);
+            const status = refreshError.response?.status;
+            // Only force logout on specific auth rejection (401/403)
+            if (status === 401 || status === 403) {
+              console.warn("[AuthProvider] Heartbeat confirmed session death. Logging out.");
+              handleLogout();
+            }
+          }
         }
       } catch (error) {
         console.error("[AuthProvider] Heartbeat check failed", error);
@@ -93,7 +107,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const interval = setInterval(checkAndRefresh, 60000);
-    return () => clearInterval(interval);
+    return () => {
+        console.log("[AuthProvider] Cleaning up heartbeat interval");
+        clearInterval(interval);
+    };
   }, [accessToken]);
 
   const handleLogout = () => {

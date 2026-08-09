@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createServer } from "http";
+import { createServer, IncomingMessage, ServerResponse } from "http";
 import { parse } from "url";
 import next from "next";
 import { Server as ServerIO } from "socket.io";
@@ -7,43 +7,80 @@ import { Server as ServerIO } from "socket.io";
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
 const port = parseInt(process.env.PORT || "3000", 10);
+const skipNextApp = process.env.SKIP_NEXT_APP === "true";
 
-console.log('[Server] Initializing...');
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
+// Initialize Next.js only if not in sidecar-only mode
+const app = !skipNextApp ? next({ dev, hostname, port }) : null;
+const handle = app?.getRequestHandler();
 
-console.log('[Server] Preparing app...');
-app.prepare().then(() => {
-  console.log('[Server] App prepared. Creating HTTP server...');
-  const httpServer = createServer((req, res) => {
-    const parsedUrl = parse(req.url!, true);
-    handle(req, res, parsedUrl);
+const startServer = async () => {
+  if (app) {
+    await app.prepare();
+  }
+
+  const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    // 1. HEALTH CHECKS (Must work in both Vercel and Sidecar)
+    if (req.url === "/health" || req.url === "/live" || req.url === "/api/health") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      return res.end("OK");
+    }
+
+    if (req.url === "/ready") {
+      try {
+        const { prisma } = await import("./src/lib/prisma");
+        const { ping } = await import("./src/lib/redis");
+
+        // Timeout check to prevent pod death during spikes
+        const check = Promise.all([
+          prisma.$queryRaw`SELECT 1`,
+          ping()
+        ]);
+
+        const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout")), 3000));
+
+        await Promise.race([check, timeout]);
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        return res.end("READY");
+      } catch (e) {
+        res.writeHead(503, { "Content-Type": "text/plain" });
+        return res.end("UNREADY");
+      }
+    }
+
+    // 2. Next.js Request Handling
+    if (handle) {
+      const parsedUrl = parse(req.url!, true);
+      handle(req, res, parsedUrl);
+    } else {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("ManaEvents Sidecar: Next.js is disabled on this instance.");
+    }
   });
 
-  // TODO: Implement Redis Adapter for Socket.IO when horizontal scaling is required.
-  // This will allow event broadcasting across multiple server instances.
-  // const { createAdapter } = await import("@socket.io/redis-adapter");
-  // const { getIoRedis } = await import("./src/lib/redis");
-  // io.adapter(createAdapter(getIoRedis(), getIoRedis().duplicate()));
+  // 3. Socket.IO Implementation (Preserved Business Logic)
+  const allowedOrigins = (process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map(o => o.trim())
+    .filter(Boolean);
 
-  const allowedOrigins = [
-    process.env.NEXT_PUBLIC_APP_URL,
-    process.env.APP_URL,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-  ].filter(Boolean) as string[];
+  if (allowedOrigins.length === 0) {
+    allowedOrigins.push(
+      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:5173",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000"
+    );
+  }
+
+  const socketPath = process.env.SOCKET_PATH || process.env.NEXT_PUBLIC_SOCKET_PATH || "/api/socket/io";
 
   const io = new ServerIO(httpServer, {
-    path: "/api/socket/io",
+    path: socketPath,
     addTrailingSlash: false,
     cors: {
       origin: (origin, callback) => {
         if (!origin || allowedOrigins.some(o => o.startsWith(origin) || origin.startsWith(o))) {
           callback(null, true);
         } else {
-          console.warn(`[Socket-IO] Blocked connection from unauthorized origin: ${origin}`);
           callback(new Error("Not allowed by CORS"));
         }
       },
@@ -51,83 +88,59 @@ app.prepare().then(() => {
       credentials: true,
     },
     transports: ["polling", "websocket"],
-    pingTimeout: 60000,
-    pingInterval: 25000,
   });
 
-  // PRIORITY 5: Socket.IO Security Middleware
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token || socket.handshake.query.token;
-      if (!token) {
-        console.warn("[Socket-IO Auth] Connection rejected: Token missing");
-        return next(new Error("Authentication error: Token missing"));
-      }
-
-      // We need a way to verify the token in server.ts
-      // Since server.ts is compiled separately, we must ensure it can access the secret.
-      const { verifyAccessToken } = await import("./src/lib/auth-core");
+      if (!token) return next(new Error("Unauthorized"));
+      const { verifyAccessToken } = await import("./src/lib/auth/token-logic");
       const payload = await verifyAccessToken(token);
-
-      if (!payload) {
-        console.error("[Socket-IO Auth] Connection rejected: Invalid token or verification failed");
-        return next(new Error("Authentication error: Invalid token"));
-      }
-
-      // Attach user info to socket
+      if (!payload) return next(new Error("Invalid token"));
       (socket as any).userId = payload.userId;
       (socket as any).userRole = payload.role;
-
-      console.log(`[Socket-IO Auth] Success for user: ${payload.userId}`);
       next();
-    } catch (err: any) {
-      console.error("[Socket-IO Auth] Internal Error:", err.message);
-      next(new Error("Authentication internal error"));
+    } catch (err) {
+      next(new Error("Auth Error"));
     }
   });
 
-  // Attach io to global so API routes can access it if needed
   (global as any).io = io;
 
   io.on("connection", (socket) => {
     const userId = (socket as any).userId;
-    console.log(`[Socket-IO] Authenticated connection: ${socket.id} (User: ${userId})`);
-
-    // Secure Room Joins
     socket.join(`user:${userId}`);
-    if ((socket as any).userRole === "ADMIN") {
-        socket.join("admin:all");
+    if ((socket as any).userRole === "ADMIN") socket.join("admin:all");
+
+    // Log connection for sidecar monitoring
+    if (skipNextApp) {
+      console.log(`[Sidecar] User ${userId} connected to room: user:${userId}`);
     }
-
-    // Minimal connection logic for verification
-    socket.on("ping", (cb) => {
-      if (typeof cb === "function") cb("pong");
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.log(`[Socket-IO] Socket ${socket.id} disconnected: ${reason}`);
-    });
   });
 
   httpServer.listen(port, () => {
-    console.log(`> Ready on http://${hostname}:${port}`);
-    console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[Server] JWT Secret present: ${!!process.env.JWT_ACCESS_SECRET}`);
-    console.log(`[Socket-IO] Server attached to raw HTTP upgrade events`);
-  });
-
-  // Global error handling for the HTTP server to catch ECONNRESET and other common errors
-  httpServer.on("error", (err: any) => {
-    if (err.code === "ECONNRESET") {
-      console.warn("[Server] ECONNRESET detected (client closed connection abruptly). Ignoring.");
-    } else {
-      console.error("[Server] Critical Error:", err);
+    console.log(`> ManaEvents ${skipNextApp ? "Sidecar" : "Server"} running on port ${port}`);
+    if (skipNextApp) {
+      console.log(`> Mode: Socket.IO & Health Only`);
+      console.log(`> Path: ${socketPath}`);
     }
   });
 
-  httpServer.on("upgrade", (req, socket, head) => {
-    if (req.url?.startsWith("/api/socket/io")) {
-       // Socket.io handles this internally when initialized with httpServer
-    }
-  });
+  const shutdown = () => {
+    console.log("Shutting down gracefully...");
+    httpServer.close(async () => {
+      const { prisma } = await import("./src/lib/prisma");
+      await prisma.$disconnect();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 20000);
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+};
+
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });

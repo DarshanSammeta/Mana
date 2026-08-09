@@ -90,12 +90,18 @@ export function handleApiError(error: any, requestId?: string, ipAddress?: strin
     );
   }
 
-  if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+  const isJoseError = error.code && (error.code.startsWith("ERR_JWT_") || error.code.startsWith("ERR_JWS_"));
+  const isLegacyJwtError = error.name === "JsonWebTokenError" || error.name === "TokenExpiredError";
+
+  if (isJoseError || isLegacyJwtError) {
+    const isExpired = error.code === "ERR_JWT_EXPIRED" || error.name === "TokenExpiredError";
     return NextResponse.json(
       {
-        message: "Session expired or invalid. Please login again.",
+        message: isExpired
+          ? "Session expired. Please login again."
+          : "Invalid session. Please login again.",
         error: "Unauthorized",
-        code: "UNAUTHORIZED",
+        code: isExpired ? "TOKEN_EXPIRED" : "UNAUTHORIZED",
         requestId,
       },
       { status: 401 }

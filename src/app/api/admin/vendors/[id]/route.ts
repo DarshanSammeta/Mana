@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/auth";
+import { verifyAdminRequest } from "@/lib/auth";
 import { withErrorHandler } from "@/lib/error-handler";
-
-async function checkAdmin(req: Request) {
-  const token = req.headers.get("authorization")?.split(" ")[1];
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  if (!payload || payload.role !== "ADMIN") return null;
-  return payload;
-}
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return withErrorHandler(async () => {
     const { id } = await params; // Vendor Profile ID
 
-    const admin = await checkAdmin(req);
+    const admin = await verifyAdminRequest(req);
     if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const vendor = await prisma.vendorprofile.findUnique({
@@ -42,6 +34,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ message: "Vendor not found" }, { status: 404 });
     }
 
-    return NextResponse.json(vendor);
+    const data = {
+        ...vendor,
+        business_name: vendor.businessName,
+        owner_name: vendor.user?.fullName || "—",
+        email: vendor.user?.email || "—",
+        phone: vendor.user?.mobileNumber || "—",
+        address: `${vendor.address || ''} ${vendor.city || ''} ${vendor.state || ''}`.trim() || "—",
+        status: vendor.verificationStatus === 'SUSPENDED' ? 'suspended' : 'active',
+        kyc_status: vendor.verificationStatus.toLowerCase(),
+        total_bookings: vendor.totalBookings ?? 0,
+        created_at: vendor.createdAt
+    };
+
+    return NextResponse.json(data);
   }, req);
 }

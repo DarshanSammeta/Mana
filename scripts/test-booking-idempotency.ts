@@ -3,7 +3,7 @@ loadEnvConfig(process.cwd());
 
 import { PrismaClient } from "@prisma/client";
 import axios from "axios";
-import { signAccessToken } from "../src/lib/jwt";
+import { signAccessToken } from "../src/lib/auth/token-logic";
 
 const prisma = new PrismaClient();
 const BASE_URL = process.env.APP_URL || "http://localhost:3000";
@@ -26,7 +26,7 @@ async function main() {
 
     if (!vendor || !vendor.service[0] || !vendor.service[0].Renamedpackage[0]) throw new Error("Vendor or package missing.");
 
-    const token = signAccessToken({ userId: customer.id, role: "CUSTOMER" });
+    const token = await signAccessToken({ userId: customer.id, role: "CUSTOMER" });
     const headers = { Authorization: `Bearer ${token}` };
 
     const idempotencyKey = `test-key-${Date.now()}`;

@@ -32,7 +32,7 @@ export async function processSuccessfulPayment(payment: any) {
     const milestoneData: any = {};
 
     if (paymentType === "ADVANCE") {
-      newStatus = booking_status.ADVANCE_PAID;
+      newStatus = booking_status.CONFIRMED; // Changed from ADVANCE_PAID to CONFIRMED
       milestoneData.advancePaidAt = new Date();
       milestoneData.paymentStage = "ADVANCE_PAID";
     } else if (paymentType === "BALANCE") {
@@ -45,6 +45,28 @@ export async function processSuccessfulPayment(payment: any) {
       milestoneData.balancePaidAt = new Date();
       milestoneData.paymentStage = "FULLY_PAID";
     }
+
+    // --- NEW: SERVER-SIDE AMOUNT VERIFICATION ---
+    const bookingForValidation = await tx.booking.findUnique({
+      where: { id: bookingId },
+      select: { advanceAmount: true, balanceAmount: true, totalAmount: true }
+    });
+
+    if (!bookingForValidation) throw new Error("Booking not found for validation");
+
+    const expectedAmount = paymentType === "ADVANCE" ? bookingForValidation.advanceAmount :
+                           (paymentType === "BALANCE" ? bookingForValidation.balanceAmount : bookingForValidation.totalAmount);
+
+    if (!expectedAmount) throw new Error(`Expected amount not defined for payment type: ${paymentType}`);
+
+    const paidAmount = new Decimal(payment.amount / 100);
+    const diff = Math.abs(paidAmount.minus(new Decimal(expectedAmount.toString())).toNumber());
+
+    if (diff > 0.01) {
+      logger.error(`[PaymentService] Amount mismatch for booking ${bookingId}. Expected: ${expectedAmount}, Paid: ${paidAmount}`);
+      throw new Error(`Payment amount mismatch. Expected ₹${expectedAmount}, but received ₹${paidAmount}.`);
+    }
+    // --------------------------------------------
 
     // 3. Update Booking via State Machine
     const { TimelineService } = await import("@/services/server/timeline.service");
@@ -168,7 +190,7 @@ export async function processSuccessfulPayment(payment: any) {
     }
 
     return { booking, vendorShare, adminShare, totalAmount, commissionRate };
-  });
+  }, { timeout: 30000 });
 
   // 7. Async Side Effects
   try {

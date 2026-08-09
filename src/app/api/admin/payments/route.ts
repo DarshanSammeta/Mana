@@ -62,13 +62,20 @@ export async function GET(req: Request) {
       },
     });
 
+    const rows = payments.map(p => ({
+        id: p.id,
+        booking_id: p.bookingId,
+        customer: p.customer?.user?.fullName || "UNKNOWN",
+        method: p.payment?.method || "razorpay",
+        amount: Number(p.totalAmount || 0),
+        commission: Number(p.adminShare || 0),
+        paid_at: p.createdAt,
+        status: (p.payment?.status || "success").toLowerCase()
+    }));
+
     return NextResponse.json({
-      payments,
-      pagination: {
-        total,
-        pages: Math.ceil(total / limit),
-        currentPage: page,
-      },
+      rows,
+      total,
       stats: {
         totalVolume: stats._sum.totalAmount || 0,
         totalCommission: stats._sum.adminShare || 0,

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { BUSINESS_CONFIG } from "@/constants/config";
 import apiClient from "@/lib/apiClient";
 
@@ -91,6 +92,7 @@ interface CheckoutState {
   pricing: PricingState;
   paymentMethod: string | null;
   isPricingLoading: boolean;
+  isAgreed: boolean;
 
   // Metadata for Event Summary
   serviceImage: string | null;
@@ -101,6 +103,7 @@ interface CheckoutState {
   // Actions
   setIsStarted: (isStarted: boolean) => void;
   setStep: (step: CheckoutStep) => void;
+  setIsAgreed: (agreed: boolean) => void;
   setStatus: (status: 'DRAFT' | 'IN_PROGRESS' | 'READY_FOR_PAYMENT' | 'CONFIRMED') => void;
   setCheckoutItems: (items: CheckoutItem[]) => void;
   setEventType: (id: string | null, name: string | null) => void;
@@ -182,6 +185,7 @@ const initialPricing: PricingState = {
 };
 
 export const useCheckoutStore = create<CheckoutState>()(
+  persist(
     (set, get) => ({
       isStarted: false,
       step: 1,
@@ -191,6 +195,7 @@ export const useCheckoutStore = create<CheckoutState>()(
       pricing: initialPricing,
       paymentMethod: null,
       isPricingLoading: false,
+      isAgreed: false,
 
       serviceImage: null,
       serviceName: null,
@@ -200,6 +205,8 @@ export const useCheckoutStore = create<CheckoutState>()(
       setIsStarted: (isStarted) => set({ isStarted }),
 
       setStep: (step) => set({ step }),
+
+      setIsAgreed: (isAgreed) => set({ isAgreed }),
 
       setStatus: (status) => set({ status }),
 
@@ -395,10 +402,30 @@ export const useCheckoutStore = create<CheckoutState>()(
         pricing: initialPricing,
         paymentMethod: null,
         isPricingLoading: false,
+        isAgreed: false,
         serviceImage: null,
         serviceName: null,
         vendorName: null,
         status: 'DRAFT',
       }),
-    })
+    }),
+    {
+      name: "mana-checkout-storage",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        isStarted: state.isStarted,
+        step: state.step,
+        selection: state.selection,
+        items: state.items,
+        eventDetails: state.eventDetails,
+        pricing: state.pricing,
+        paymentMethod: state.paymentMethod,
+        isAgreed: state.isAgreed,
+        serviceName: state.serviceName,
+        vendorName: state.vendorName,
+        serviceImage: state.serviceImage,
+        status: state.status,
+      }),
+    }
+  )
 );

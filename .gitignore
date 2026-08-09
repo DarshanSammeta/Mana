@@ -36,3 +36,13 @@ Thumbs.db
 
 # Misc
 *.log
+.vercel
+.env*
+
+
+
+# Local artifacts / debugging
+.artifacts/
+scratch/
+response_*.json
+worker.js

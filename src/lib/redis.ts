@@ -103,6 +103,17 @@ export async function setCachedData(
   return result === "OK";
 }
 
+export async function setNX(
+  key: string,
+  value: string,
+  seconds: number
+): Promise<boolean> {
+  const result = await executeRedis("setnx", (client) =>
+    client.set(key, value, { nx: true, ex: seconds })
+  );
+  return result === "OK";
+}
+
 export async function incrementCounter(key: string): Promise<number | null> {
   return await executeRedis("incr", (client) => client.incr(key));
 }
@@ -119,6 +130,26 @@ export async function getTTL(key: string): Promise<number | null> {
 export async function deleteCache(key: string): Promise<boolean> {
   const result = await executeRedis("del", (client) => client.del(key));
   return typeof result === 'number' && result > 0;
+}
+
+/**
+ * ATOMIC COMPARE AND DELETE (LUA)
+ * Ensures only the owner of a lock can delete it.
+ */
+export async function compareAndDel(key: string, value: string): Promise<boolean> {
+  const script = `
+    if redis.call("get", KEYS[1]) == ARGV[1] then
+      return redis.call("del", KEYS[1])
+    else
+      return 0
+    end
+  `;
+
+  const result = await executeRedis("eval", (client) =>
+    client.eval(script, [key], [value])
+  );
+
+  return result === 1;
 }
 
 export async function deleteCachePattern(pattern: string): Promise<void> {
@@ -234,6 +265,8 @@ export async function ping(): Promise<boolean> {
 export const safeRedis = {
   get: getCachedData,
   set: setCachedData,
+  setNX: setNX,
+  compareAndDel: compareAndDel,
   incr: incrementCounter,
   expire: expireKey,
   ttl: getTTL,

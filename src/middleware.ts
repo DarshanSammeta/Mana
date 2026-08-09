@@ -38,6 +38,10 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/health") ||
     pathname.startsWith("/api/ready") ||
+    pathname.startsWith("/api/inngest") ||
+    pathname.startsWith("/api/webhooks") ||
+    pathname.startsWith("/api/cron") ||
+    pathname.startsWith("/api/maps") ||
     pathname.startsWith("/api/socket") ||
     pathname.startsWith("/api/marketplace") ||
     pathname.startsWith("/api/categories") ||
@@ -73,13 +77,23 @@ export async function middleware(req: NextRequest) {
       const payload = await verifyAccessToken(token);
 
       if (!payload) {
-          console.warn(`[TRACE] Middleware: Invalid token for ${pathname}`);
-          if (pathname.startsWith("/api/")) {
-              return NextResponse.json({ message: "Invalid token" }, { status: 401, headers: getCorsHeaders(origin) });
+          // Allow refresh endpoint to handle expired access tokens
+          if (pathname === "/api/auth/refresh") {
+              return NextResponse.next({
+                  request: { headers: requestHeaders },
+              });
           }
-          const url = new URL("/login", req.url);
-          url.searchParams.set("message", "Session expired.");
-          return NextResponse.redirect(url);
+
+          console.warn(`[TRACE] Middleware: Invalid/Expired token for ${pathname}`);
+
+          if (pathname.startsWith("/api/")) {
+              return NextResponse.json(
+                  { message: "Unauthorized" },
+                  { status: 401, headers: getCorsHeaders(origin) }
+              );
+          }
+
+          return NextResponse.redirect(new URL("/login", req.url));
       }
 
       // Pass auth details to API routes

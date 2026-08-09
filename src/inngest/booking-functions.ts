@@ -349,7 +349,8 @@ export const handleBookingStatusChange = inngest.createFunction(
     // Standard Notification side-effects
     await step.run("send-status-notifications", async () => {
         const { NotificationTriggers } = await import("@/lib/notifications");
-        if (status === "ADVANCE_PAID") {
+        // Trigger specific notification for advance payment even if status is CONFIRMED
+        if (status === "ADVANCE_PAID" || (status === "CONFIRMED" && booking.paymentStage === "ADVANCE_PAID")) {
             await NotificationTriggers.advancePaid(booking);
         } else {
             await NotificationTriggers.bookingStatusUpdated(booking, status);

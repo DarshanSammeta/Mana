@@ -15,7 +15,7 @@ export function getCorsHeaders(origin: string | null) {
   return {
     "Access-Control-Allow-Origin": isAllowed ? origin! : ALLOWED_ORIGINS[0] || "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-request-id, x-correlation-id",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-request-id, x-correlation-id, x-user-id, x-user-role",
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "86400",
   };

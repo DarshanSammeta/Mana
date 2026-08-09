@@ -37,14 +37,16 @@ function CheckoutContent() {
     items,
     eventDetails,
     pricing,
+    selection,
     paymentMethod,
+    isAgreed,
     setPaymentMethod,
+    setIsAgreed,
     resetCheckout,
     fetchServerPricing
   } = useCheckoutStore();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAgreed, setIsAgreed] = useState(false);
   const [couponCode, setCouponCode] = useState("");
 
   // Diagnostic logging for checkout state
@@ -55,9 +57,10 @@ function CheckoutContent() {
         paymentMethod,
         itemCount: items.length,
         hasGuestCount: !!eventDetails.guestCount,
-        hasDate: !!eventDetails.date
+        hasDate: !!eventDetails.date,
+        idempotencyKey: selection.idempotencyKey
     });
-  }, [isSubmitting, isAgreed, paymentMethod, items, eventDetails]);
+  }, [isSubmitting, isAgreed, paymentMethod, items, eventDetails, selection.idempotencyKey]);
 
   // Sync pricing on mount if session exists
   useEffect(() => {
@@ -81,7 +84,7 @@ function CheckoutContent() {
         })),
         eventDetails: { ...eventDetails },
         couponCode,
-        idempotencyKey: crypto.randomUUID()
+        idempotencyKey: selection.idempotencyKey
       });
 
       const orderRes = await customerService.createRazorpayOrder({

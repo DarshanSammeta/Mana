@@ -13,13 +13,38 @@ export const ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN", "SUPPORT_ADMIN", "CONTENT_AD
  * Verifies if the request is from an authorized Admin.
  */
 export async function verifyAdminRequest(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  let token: string | undefined;
 
-  const token = authHeader.split(" ")[1];
+  // 1. Authorization header
+  const authHeader = req.headers.get("authorization");
+
+  if (authHeader?.startsWith("Bearer ")) {
+    token = authHeader.substring(7);
+  }
+
+  // 2. Fallback to accessToken cookie
+  if (!token) {
+    const cookieHeader = req.headers.get("cookie");
+
+    if (cookieHeader) {
+      const match = cookieHeader.match(/(?:^|;\s*)accessToken=([^;]+)/);
+      if (match) {
+        token = decodeURIComponent(match[1]);
+      }
+    }
+  }
+
+  if (!token) {
+    return null;
+  }
+
   const payload = await verifyAccessTokenCore(token);
 
-  if (!payload || !ADMIN_ROLES.includes(payload.role?.toUpperCase())) {
+  if (!payload) {
+    return null;
+  }
+
+  if (!ADMIN_ROLES.includes(payload.role?.toUpperCase())) {
     return null;
   }
 

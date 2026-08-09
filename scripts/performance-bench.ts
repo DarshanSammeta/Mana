@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import axios from "axios";
-import { signAccessToken } from "../src/lib/jwt";
+import { signAccessToken } from "../src/lib/auth/token-logic";
 import * as dotenv from "dotenv";
 dotenv.config();
 
@@ -41,8 +41,8 @@ async function main() {
     return;
   }
 
-  const customerToken = signAccessToken({ userId: customer.id, role: "CUSTOMER" });
-  const vendorToken = signAccessToken({ userId: vendor.id, role: "VENDOR" });
+  const customerToken = await signAccessToken({ userId: customer.id, role: "CUSTOMER" });
+  const vendorToken = await signAccessToken({ userId: vendor.id, role: "VENDOR" });
 
   const authHeaders = (token: string) => ({
     headers: { Authorization: `Bearer ${token}` }

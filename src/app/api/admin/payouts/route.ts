@@ -34,12 +34,29 @@ export async function GET(req: Request) {
               }
             }
           }
+        },
+        settlement: {
+          select: {
+            periodStart: true,
+            periodEnd: true
+          }
         }
       },
       orderBy: { createdAt: "desc" }
     });
 
-    return NextResponse.json(payouts);
+    const rows = payouts.map(p => ({
+        id: p.id,
+        vendor_id: p.vendorId,
+        vendor: p.vendorprofile.businessName,
+        period_start: p.settlement?.periodStart || p.createdAt,
+        period_end: p.settlement?.periodEnd || p.createdAt,
+        amount: Number(p.amount),
+        requested_at: p.createdAt,
+        status: p.status.toLowerCase()
+    }));
+
+    return NextResponse.json({ rows, total: rows.length });
   }, req);
 }
 

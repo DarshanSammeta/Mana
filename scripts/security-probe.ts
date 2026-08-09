@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import axios from "axios";
-import { signAccessToken } from "../src/lib/jwt";
+import { signAccessToken } from "../src/lib/auth/token-logic";
 import * as dotenv from "dotenv";
 dotenv.config();
 
@@ -18,7 +18,7 @@ async function main() {
 
   const attacker = customers[0];
   const victim = customers[1];
-  const attackerToken = signAccessToken({ userId: attacker.id, role: "CUSTOMER" });
+  const attackerToken = await signAccessToken({ userId: attacker.id, role: "CUSTOMER" });
 
   const victimBooking = await prisma.booking.findFirst({ where: { customerprofile: { userId: victim.id } } });
 

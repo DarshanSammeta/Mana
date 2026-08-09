@@ -182,7 +182,7 @@ export class TimelineService {
     } else {
         return await getPrisma().$transaction(async (tx) => {
             return await executeTransition(tx);
-        });
+        }, { timeout: 30000 });
     }
   }
 

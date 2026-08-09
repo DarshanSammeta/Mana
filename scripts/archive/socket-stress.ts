@@ -1,5 +1,5 @@
 import { io } from "socket.io-client";
-import { signAccessToken } from "../../src/lib/jwt";
+import { signAccessToken } from "../../src/lib/auth/token-logic";
 import { PrismaClient } from "@prisma/client";
 import * as dotenv from "dotenv";
 dotenv.config();
@@ -17,8 +17,9 @@ async function main() {
 
   for (const user of users) {
     const token = signAccessToken({ userId: user.id, role: user.role });
+    const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || "/api/socket/io";
     const socket = io(SOCKET_URL, {
-      path: "/api/socket/io",
+      path: socketPath,
       auth: { token },
       transports: ["polling", "websocket"]
     });
