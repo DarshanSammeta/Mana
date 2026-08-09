@@ -9,7 +9,7 @@ RUN apt-get update \
 COPY package*.json ./
 COPY prisma ./prisma
 
-RUN npm ci
+RUN npm ci --include=optional
 
 COPY . .
 
